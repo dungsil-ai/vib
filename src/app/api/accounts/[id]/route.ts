@@ -3,17 +3,18 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) {
     return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
   }
 
+  const { id } = await params
   const { name, code, type, description } = await request.json()
 
   try {
     const account = await prisma.account.updateMany({
-      where: { id: params.id, userId: session.user.id },
+      where: { id, userId: session.user.id },
       data: { name, code, type, description },
     })
     if (account.count === 0) {
@@ -25,14 +26,15 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
   }
 }
 
-export async function DELETE(_request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) {
     return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
   }
 
+  const { id } = await params
   const account = await prisma.account.deleteMany({
-    where: { id: params.id, userId: session.user.id },
+    where: { id, userId: session.user.id },
   })
   if (account.count === 0) {
     return NextResponse.json({ error: '계정을 찾을 수 없습니다.' }, { status: 404 })
