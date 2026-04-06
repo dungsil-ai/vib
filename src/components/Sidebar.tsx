@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut } from 'next-auth/react'
+import { Icon } from '@iconify/react'
 
 interface SidebarProps {
   user: {
@@ -12,10 +13,10 @@ interface SidebarProps {
 }
 
 const navItems = [
-  { href: '/dashboard', label: '대시보드', icon: '📊' },
-  { href: '/accounts', label: '계정 관리', icon: '📋' },
-  { href: '/transactions', label: '거래 내역', icon: '💳' },
-  { href: '/budget', label: '예산 관리', icon: '💰' },
+  { href: '/dashboard', label: '대시보드', icon: 'lucide:layout-dashboard' },
+  { href: '/accounts', label: '계정 관리', icon: 'lucide:book-open' },
+  { href: '/transactions', label: '거래 내역', icon: 'lucide:credit-card' },
+  { href: '/budget', label: '예산 관리', icon: 'lucide:piggy-bank' },
 ]
 
 export function Sidebar({ user }: SidebarProps) {
@@ -24,7 +25,10 @@ export function Sidebar({ user }: SidebarProps) {
   return (
     <aside className="w-64 bg-white shadow-lg flex flex-col">
       <div className="p-6 border-b">
-        <h1 className="text-xl font-bold text-blue-600">💼 가계부</h1>
+        <h1 className="flex items-center gap-2 text-xl font-bold text-blue-600">
+          <Icon icon="lucide:briefcase" aria-hidden="true" />
+          가계부
+        </h1>
         <p className="text-xs text-gray-500 mt-1">복식부기 방식</p>
       </div>
       
@@ -39,7 +43,7 @@ export function Sidebar({ user }: SidebarProps) {
                 : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
             }`}
           >
-            <span>{item.icon}</span>
+            <Icon icon={item.icon} className="text-base shrink-0" aria-hidden="true" />
             {item.label}
           </Link>
         ))}
@@ -52,8 +56,9 @@ export function Sidebar({ user }: SidebarProps) {
         </div>
         <button
           onClick={() => signOut({ callbackUrl: '/auth/login' })}
-          className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg"
+          className="flex items-center gap-2 w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg"
         >
+          <Icon icon="lucide:log-out" className="text-base shrink-0" aria-hidden="true" />
           로그아웃
         </button>
       </div>
