@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { serializeData } from '@/lib/serialize'
 
 export async function GET() {
   const session = await getServerSession(authOptions)
@@ -29,8 +30,8 @@ export async function GET() {
   let totalEquity = 0
 
   for (const account of accounts) {
-    const totalDebits = account.debitEntries.reduce((sum, e) => sum + e.amount, 0)
-    const totalCredits = account.creditEntries.reduce((sum, e) => sum + e.amount, 0)
+    const totalDebits = account.debitEntries.reduce((sum, e) => sum + Number(e.amount), 0)
+    const totalCredits = account.creditEntries.reduce((sum, e) => sum + Number(e.amount), 0)
     let balance = 0
     if (account.type === 'ASSET' || account.type === 'EXPENSE') {
       balance = totalDebits - totalCredits
@@ -80,7 +81,7 @@ export async function GET() {
         actual: 0,
       }
     }
-    expenseByAccount[accId].actual += entry.amount
+    expenseByAccount[accId].actual += Number(entry.amount)
   }
 
   const budgets = await prisma.budget.findMany({
@@ -92,16 +93,19 @@ export async function GET() {
     accountId: b.accountId,
     name: b.account.name,
     code: b.account.code,
-    budget: b.amount,
+    budget: Number(b.amount),
     actual: expenseByAccount[b.accountId]?.actual || 0,
   }))
 
-  return NextResponse.json({
-    totalAssets,
-    totalLiabilities,
-    totalEquity,
-    netWorth: totalAssets - totalLiabilities,
-    recentTransactions,
-    budgetOverview,
-  })
+  return NextResponse.json(
+    serializeData({
+      totalAssets,
+      totalLiabilities,
+      totalEquity,
+      netWorth: totalAssets - totalLiabilities,
+      recentTransactions,
+      budgetOverview,
+    }),
+  )
 }
+

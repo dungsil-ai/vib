@@ -50,22 +50,14 @@ export default function BudgetPage() {
     const expenseAccounts = accs.filter(a => a.type === 'EXPENSE')
     const budgetMap = new Map(buds.map(b => [b.accountId, b]))
 
-    const txRes = await fetch('/api/transactions')
+    const txRes = await fetch(`/api/transactions?year=${year}&month=${month}`)
     const transactions = await txRes.json()
-    const startOfMonth = new Date(year, month - 1, 1)
-    const endOfMonth = new Date(year, month, 0, 23, 59, 59)
     
     const actuals: Record<string, number> = {}
     for (const tx of transactions) {
-      const txDate = new Date(tx.date)
-      if (txDate >= startOfMonth && txDate <= endOfMonth) {
-        for (const entry of tx.entries) {
-          if (entry.debitAccount.type === 'EXPENSE') {
-            const accId = expenseAccounts.find((a: Account) => a.name === entry.debitAccount.name)?.id
-            if (accId) {
-              actuals[accId] = (actuals[accId] || 0) + entry.amount
-            }
-          }
+      for (const entry of tx.entries) {
+        if (entry.debitAccount.type === 'EXPENSE') {
+          actuals[entry.debitAccountId] = (actuals[entry.debitAccountId] || 0) + entry.amount
         }
       }
     }

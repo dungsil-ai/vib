@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@iconify/react": "^6.0.2",
+    "@prisma/client": "^5.22.0",
     "bcryptjs": "^3.0.3",
     "next": "^16.2.2",
     "next-auth": "^4.24.13",
@@ -19,7 +20,6 @@
     "react-dom": "^18"
   },
   "devDependencies": {
-    "@prisma/client": "^5.22.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20",
     "@types/react": "^18",

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { serializeData } from '@/lib/serialize'
 
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -11,11 +12,28 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url)
   const limit = parseInt(searchParams.get('limit') || '50')
+  const yearParam = searchParams.get('year')
+  const monthParam = searchParams.get('month')
+
+  // When year/month are supplied, filter by date range and return all matching rows
+  // (no limit), so the budget page gets accurate monthly totals regardless of volume.
+  let dateFilter: { gte?: Date; lte?: Date } | undefined
+  if (yearParam && monthParam) {
+    const y = parseInt(yearParam)
+    const m = parseInt(monthParam)
+    dateFilter = {
+      gte: new Date(y, m - 1, 1),
+      lte: new Date(y, m, 0, 23, 59, 59, 999),
+    }
+  }
 
   const transactions = await prisma.transaction.findMany({
-    where: { userId: session.user.id },
+    where: {
+      userId: session.user.id,
+      ...(dateFilter ? { date: dateFilter } : {}),
+    },
     orderBy: { date: 'desc' },
-    take: limit,
+    ...(dateFilter ? {} : { take: limit }),
     include: {
       entries: {
         include: {
@@ -26,7 +44,7 @@ export async function GET(request: NextRequest) {
     },
   })
 
-  return NextResponse.json(transactions)
+  return NextResponse.json(serializeData(transactions))
 }
 
 export async function POST(request: NextRequest) {
@@ -41,9 +59,29 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: '필수 필드를 입력해주세요.' }, { status: 400 })
   }
 
-  const totalAmount = entries.reduce((sum: number, e: { amount: number }) => sum + e.amount, 0)
-  if (totalAmount <= 0) {
-    return NextResponse.json({ error: '거래 금액은 0보다 커야 합니다.' }, { status: 400 })
+  // Per-entry validations
+  for (const entry of entries) {
+    if (Number(entry.amount) <= 0) {
+      return NextResponse.json({ error: '거래 금액은 0보다 커야 합니다.' }, { status: 400 })
+    }
+    if (entry.debitAccountId === entry.creditAccountId) {
+      return NextResponse.json({ error: '차변 계정과 대변 계정은 달라야 합니다.' }, { status: 400 })
+    }
+  }
+
+  // Verify that all referenced accounts belong to the authenticated user
+  const accountIds = [
+    ...new Set([
+      ...entries.map((e: { debitAccountId: string }) => e.debitAccountId),
+      ...entries.map((e: { creditAccountId: string }) => e.creditAccountId),
+    ]),
+  ]
+  const ownedAccounts = await prisma.account.findMany({
+    where: { id: { in: accountIds }, userId: session.user.id },
+    select: { id: true },
+  })
+  if (ownedAccounts.length !== accountIds.length) {
+    return NextResponse.json({ error: '잘못된 계정이 포함되어 있습니다.' }, { status: 403 })
   }
 
   try {
@@ -75,9 +113,10 @@ export async function POST(request: NextRequest) {
         },
       },
     })
-    return NextResponse.json(transaction, { status: 201 })
+    return NextResponse.json(serializeData(transaction), { status: 201 })
   } catch (error) {
     console.error(error)
     return NextResponse.json({ error: '거래 생성에 실패했습니다.' }, { status: 400 })
   }
 }
+

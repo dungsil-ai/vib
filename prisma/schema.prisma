@@ -52,7 +52,7 @@ model Entry {
   debitAccount    Account     @relation("DebitAccount", fields: [debitAccountId], references: [id])
   creditAccountId String
   creditAccount   Account     @relation("CreditAccount", fields: [creditAccountId], references: [id])
-  amount          Float
+  amount          Decimal
   description     String?
   createdAt       DateTime    @default(now())
 }
@@ -65,7 +65,7 @@ model Budget {
   account   Account  @relation(fields: [accountId], references: [id])
   year      Int
   month     Int
-  amount    Float
+  amount    Decimal
   createdAt DateTime @default(now())
   
   @@unique([userId, accountId, year, month])

@@ -19,8 +19,8 @@ export async function GET() {
   })
 
   const accountsWithBalance = accounts.map(account => {
-    const totalDebits = account.debitEntries.reduce((sum, e) => sum + e.amount, 0)
-    const totalCredits = account.creditEntries.reduce((sum, e) => sum + e.amount, 0)
+    const totalDebits = account.debitEntries.reduce((sum, e) => sum + Number(e.amount), 0)
+    const totalCredits = account.creditEntries.reduce((sum, e) => sum + Number(e.amount), 0)
     
     let balance = 0
     if (account.type === 'ASSET' || account.type === 'EXPENSE') {

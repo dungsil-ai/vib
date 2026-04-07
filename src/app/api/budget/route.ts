@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { serializeData } from '@/lib/serialize'
 
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -18,7 +19,7 @@ export async function GET(request: NextRequest) {
     include: { account: { select: { name: true, code: true, type: true } } },
   })
 
-  return NextResponse.json(budgets)
+  return NextResponse.json(serializeData(budgets))
 }
 
 export async function POST(request: NextRequest) {
@@ -31,6 +32,15 @@ export async function POST(request: NextRequest) {
 
   if (!accountId || !year || !month || amount === undefined) {
     return NextResponse.json({ error: '필수 필드를 입력해주세요.' }, { status: 400 })
+  }
+
+  // Verify the account belongs to the authenticated user
+  const account = await prisma.account.findFirst({
+    where: { id: accountId, userId: session.user.id },
+    select: { id: true },
+  })
+  if (!account) {
+    return NextResponse.json({ error: '계정을 찾을 수 없습니다.' }, { status: 404 })
   }
 
   try {
@@ -52,9 +62,10 @@ export async function POST(request: NextRequest) {
         amount,
       },
     })
-    return NextResponse.json(budget)
+    return NextResponse.json(serializeData(budget))
   } catch (error) {
     console.error(error)
     return NextResponse.json({ error: '예산 설정에 실패했습니다.' }, { status: 400 })
   }
 }
+
