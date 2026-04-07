@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 
 interface Account {
   id: string
@@ -30,6 +30,39 @@ function formatCurrency(amount: number) {
   return new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW' }).format(amount)
 }
 
+async function loadBudgetData(year: number, month: number) {
+  const [accRes, budRes] = await Promise.all([
+    fetch('/api/accounts'),
+    fetch(`/api/budget?year=${year}&month=${month}`),
+  ])
+  const accs: Account[] = await accRes.json()
+  const buds: Budget[] = await budRes.json()
+
+  const expenseAccounts = accs.filter(a => a.type === 'EXPENSE')
+  const budgetMap = new Map(buds.map(b => [b.accountId, b]))
+
+  const txRes = await fetch(`/api/transactions?year=${year}&month=${month}`)
+  const transactions = await txRes.json()
+
+  const actuals: Record<string, number> = {}
+  for (const tx of transactions) {
+    for (const entry of tx.entries) {
+      if (entry.debitAccount.type === 'EXPENSE') {
+        actuals[entry.debitAccountId] = (actuals[entry.debitAccountId] || 0) + entry.amount
+      }
+    }
+  }
+
+  const rows = expenseAccounts.map(acc => ({
+    account: acc,
+    budget: budgetMap.get(acc.id) || null,
+    editAmount: budgetMap.get(acc.id)?.amount.toString() || '',
+    editing: false,
+  }))
+
+  return { rows, actuals }
+}
+
 export default function BudgetPage() {
   const now = new Date()
   const [year, setYear] = useState(now.getFullYear())
@@ -38,43 +71,20 @@ export default function BudgetPage() {
   const [loading, setLoading] = useState(true)
   const [actualExpenses, setActualExpenses] = useState<Record<string, number>>({})
 
-  const fetchData = useCallback(async () => {
-    setLoading(true)
-    const [accRes, budRes] = await Promise.all([
-      fetch('/api/accounts'),
-      fetch(`/api/budget?year=${year}&month=${month}`),
-    ])
-    const accs: Account[] = await accRes.json()
-    const buds: Budget[] = await budRes.json()
-
-    const expenseAccounts = accs.filter(a => a.type === 'EXPENSE')
-    const budgetMap = new Map(buds.map(b => [b.accountId, b]))
-
-    const txRes = await fetch(`/api/transactions?year=${year}&month=${month}`)
-    const transactions = await txRes.json()
-    
-    const actuals: Record<string, number> = {}
-    for (const tx of transactions) {
-      for (const entry of tx.entries) {
-        if (entry.debitAccount.type === 'EXPENSE') {
-          actuals[entry.debitAccountId] = (actuals[entry.debitAccountId] || 0) + entry.amount
-        }
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      setLoading(true)
+      const { rows: newRows, actuals } = await loadBudgetData(year, month)
+      if (!cancelled) {
+        setRows(newRows)
+        setActualExpenses(actuals)
+        setLoading(false)
       }
     }
-    setActualExpenses(actuals)
-
-    setRows(
-      expenseAccounts.map(acc => ({
-        account: acc,
-        budget: budgetMap.get(acc.id) || null,
-        editAmount: budgetMap.get(acc.id)?.amount.toString() || '',
-        editing: false,
-      }))
-    )
-    setLoading(false)
+    void load()
+    return () => { cancelled = true }
   }, [year, month])
-
-  useEffect(() => { fetchData() }, [fetchData])
 
   const startEditing = (index: number) => {
     const updated = [...rows]
@@ -101,10 +111,9 @@ export default function BudgetPage() {
     })
 
     if (res.ok) {
-      const updated = [...rows]
-      updated[index].editing = false
-      setRows(updated)
-      await fetchData()
+      const { rows: newRows, actuals } = await loadBudgetData(year, month)
+      setRows(newRows)
+      setActualExpenses(actuals)
     }
   }
 
