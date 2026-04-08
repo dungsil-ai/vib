@@ -52,6 +52,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ message: '회원가입이 완료되었습니다.' }, { status: 201 })
   } catch (error) {
+    if (error instanceof Error && 'code' in error && (error as { code: string }).code === 'P2002') {
+      return NextResponse.json({ error: '이미 사용 중인 이메일입니다.' }, { status: 400 })
+    }
     console.error('Register error:', error)
     return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
   }

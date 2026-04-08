@@ -15,23 +15,42 @@ export async function GET() {
   const year = now.getFullYear()
   const month = now.getMonth() + 1
   const startOfMonth = new Date(year, month - 1, 1)
-  const endOfMonth = new Date(year, month, 0, 23, 59, 59)
+  const endOfMonth = new Date(year, month, 0, 23, 59, 59, 999)
 
   const accounts = await prisma.account.findMany({
     where: { userId },
-    include: {
-      debitEntries: { select: { amount: true } },
-      creditEntries: { select: { amount: true } },
-    },
+    select: { id: true, type: true },
   })
+
+  const accountIds = accounts.map(a => a.id)
+
+  const [debitSums, creditSums] = await Promise.all([
+    prisma.entry.groupBy({
+      by: ['debitAccountId'],
+      where: { debitAccountId: { in: accountIds } },
+      _sum: { amount: true },
+    }),
+    prisma.entry.groupBy({
+      by: ['creditAccountId'],
+      where: { creditAccountId: { in: accountIds } },
+      _sum: { amount: true },
+    }),
+  ])
+
+  const debitByAccount = new Map(
+    debitSums.map(r => [r.debitAccountId, Number(r._sum.amount ?? 0)]),
+  )
+  const creditByAccount = new Map(
+    creditSums.map(r => [r.creditAccountId, Number(r._sum.amount ?? 0)]),
+  )
 
   let totalAssets = 0
   let totalLiabilities = 0
   let totalEquity = 0
 
   for (const account of accounts) {
-    const totalDebits = account.debitEntries.reduce((sum, e) => sum + Number(e.amount), 0)
-    const totalCredits = account.creditEntries.reduce((sum, e) => sum + Number(e.amount), 0)
+    const totalDebits = debitByAccount.get(account.id) ?? 0
+    const totalCredits = creditByAccount.get(account.id) ?? 0
     let balance = 0
     if (account.type === 'ASSET' || account.type === 'EXPENSE') {
       balance = totalDebits - totalCredits

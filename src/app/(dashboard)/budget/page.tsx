@@ -35,6 +35,8 @@ async function loadBudgetData(year: number, month: number) {
     fetch('/api/accounts'),
     fetch(`/api/budget?year=${year}&month=${month}`),
   ])
+  if (!accRes.ok) throw new Error(`계정 목록을 불러오지 못했습니다. (${accRes.status})`)
+  if (!budRes.ok) throw new Error(`예산 데이터를 불러오지 못했습니다. (${budRes.status})`)
   const accs: Account[] = await accRes.json()
   const buds: Budget[] = await budRes.json()
 
@@ -42,6 +44,7 @@ async function loadBudgetData(year: number, month: number) {
   const budgetMap = new Map(buds.map(b => [b.accountId, b]))
 
   const txRes = await fetch(`/api/transactions?year=${year}&month=${month}`)
+  if (!txRes.ok) throw new Error(`거래 데이터를 불러오지 못했습니다. (${txRes.status})`)
   const transactions = await txRes.json()
 
   const actuals: Record<string, number> = {}
@@ -69,17 +72,26 @@ export default function BudgetPage() {
   const [month, setMonth] = useState(now.getMonth() + 1)
   const [rows, setRows] = useState<BudgetRow[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [actualExpenses, setActualExpenses] = useState<Record<string, number>>({})
 
   useEffect(() => {
     let cancelled = false
     async function load() {
       setLoading(true)
-      const { rows: newRows, actuals } = await loadBudgetData(year, month)
-      if (!cancelled) {
-        setRows(newRows)
-        setActualExpenses(actuals)
-        setLoading(false)
+      setError(null)
+      try {
+        const { rows: newRows, actuals } = await loadBudgetData(year, month)
+        if (!cancelled) {
+          setRows(newRows)
+          setActualExpenses(actuals)
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : '데이터를 불러오는 중 오류가 발생했습니다.')
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
       }
     }
     void load()
@@ -125,6 +137,10 @@ export default function BudgetPage() {
 
   if (loading) {
     return <div className="flex items-center justify-center h-full"><div className="text-gray-500">로딩 중...</div></div>
+  }
+
+  if (error) {
+    return <div className="flex items-center justify-center h-full"><div className="text-red-500">{error}</div></div>
   }
 
   const totalBudget = rows.reduce((sum, r) => sum + Number(r.budget?.amount || 0), 0)

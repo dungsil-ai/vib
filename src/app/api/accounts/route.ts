@@ -85,17 +85,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: '올바른 계정 유형을 선택해주세요.' }, { status: 400 })
   }
 
-  // Auto-generate the code: find the max code with this type's prefix and increment
+  // Auto-generate the code: find the highest existing code with this type's prefix and increment
   const prefix = String(TYPE_CODE_PREFIX[type]).slice(0, 1)
-  const existing = await prisma.account.findMany({
+  const base = TYPE_CODE_PREFIX[type]
+  const maxAccount = await prisma.account.findFirst({
     where: { userId, code: { startsWith: prefix } },
+    orderBy: { code: 'desc' },
     select: { code: true },
   })
-  const base = TYPE_CODE_PREFIX[type]
-  const nextNum = existing.reduce((max, a) => {
-    const n = parseInt(a.code, 10)
-    return Number.isFinite(n) && n > max ? n : max
-  }, base) + 1
+  const maxCode = maxAccount ? parseInt(maxAccount.code, 10) : base
+  const nextNum = (Number.isFinite(maxCode) ? maxCode : base) + 1
   const code = String(nextNum)
 
   try {
@@ -103,7 +102,10 @@ export async function POST(request: NextRequest) {
       data: { userId, name, code, type, description },
     })
     return NextResponse.json(account, { status: 201 })
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && (error as { code: string }).code === 'P2002') {
+      return NextResponse.json({ error: '이미 존재하는 계정 코드입니다.' }, { status: 409 })
+    }
     return NextResponse.json({ error: '계정 생성에 실패했습니다.' }, { status: 400 })
   }
 }

@@ -29,6 +29,9 @@ export async function GET(request: NextRequest) {
 
   // When year/month are supplied, validate and filter by date range;
   // return all matching rows (no limit) so budget page gets accurate monthly totals.
+  if ((yearParam && !monthParam) || (!yearParam && monthParam)) {
+    return NextResponse.json({ error: 'year와 month를 함께 입력해주세요.' }, { status: 400 })
+  }
   let dateFilter: { gte?: Date; lte?: Date } | undefined
   if (yearParam && monthParam) {
     const y = parseInt(yearParam, 10)
@@ -70,12 +73,21 @@ export async function POST(request: NextRequest) {
 
   const { date, description, entries } = await request.json()
 
-  if (!date || !description || !entries || entries.length === 0) {
+  if (!date || !description || !entries || !Array.isArray(entries) || entries.length === 0) {
     return NextResponse.json({ error: '필수 필드를 입력해주세요.' }, { status: 400 })
+  }
+
+  // Validate date
+  const parsedDate = new Date(date)
+  if (Number.isNaN(parsedDate.getTime())) {
+    return NextResponse.json({ error: '유효한 날짜를 입력해주세요.' }, { status: 400 })
   }
 
   // Per-entry validations
   for (const entry of entries) {
+    if (!entry.debitAccountId || !entry.creditAccountId || entry.amount === undefined) {
+      return NextResponse.json({ error: '각 항목의 차변·대변 계정과 금액을 입력해주세요.' }, { status: 400 })
+    }
     if (Number(entry.amount) <= 0) {
       return NextResponse.json({ error: '거래 금액은 0보다 커야 합니다.' }, { status: 400 })
     }
@@ -103,13 +115,13 @@ export async function POST(request: NextRequest) {
     const transaction = await prisma.transaction.create({
       data: {
         userId: session.user.id,
-        date: new Date(date),
+        date: parsedDate,
         description,
         entries: {
           create: entries.map((entry: {
             debitAccountId: string
             creditAccountId: string
-            amount: number
+            amount: string
             description?: string
           }) => ({
             debitAccountId: entry.debitAccountId,

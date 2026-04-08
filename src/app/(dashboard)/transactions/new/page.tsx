@@ -83,7 +83,7 @@ export default function NewTransactionPage() {
         entries: entries.map(e => ({
           debitAccountId: e.debitAccountId,
           creditAccountId: e.creditAccountId,
-          amount: parseFloat(e.amount),
+          amount: e.amount,
           description: e.description || undefined,
         })),
       }),

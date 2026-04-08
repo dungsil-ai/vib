@@ -54,11 +54,11 @@ npm run dev
    | `NEXTAUTH_URL` | 배포 후 생성된 Vercel URL (예: `https://vib.vercel.app`) |
 4. **Deploy** 버튼 클릭
 
-### 방법 2 — GitHub Actions 자동 배포
+### 방법 2 — GitHub Actions CI (자동 빌드·검증)
 
-`main` 브랜치에 푸시하면 `.github/workflows/deploy.yml`이 자동으로 빌드 · 배포합니다.
+`main` 브랜치에 푸시하거나 PR을 열면 `.github/workflows/deploy.yml`이 자동으로 린트 · 빌드를 검증합니다. 실제 배포는 Vercel GitHub App이 자동으로 처리합니다.
 
-저장소의 **Settings → Secrets and variables → Actions**에 다음 시크릿을 등록하세요:
+저장소의 **Settings → Secrets and variables → Actions**에 다음 시크릿을 등록하면 빌드 환경에서 사용됩니다:
 
 | 시크릿 | 설명 |
 |--------|------|

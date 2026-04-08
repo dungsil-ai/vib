@@ -34,8 +34,14 @@ export async function POST(request: NextRequest) {
 
   const { accountId, year, month, amount } = await request.json()
 
-  if (!accountId || !year || !month || amount === undefined) {
+  if (!accountId || year === undefined || month === undefined || amount === undefined) {
     return NextResponse.json({ error: '필수 필드를 입력해주세요.' }, { status: 400 })
+  }
+
+  const parsedYear = Number(year)
+  const parsedMonth = Number(month)
+  if (!Number.isFinite(parsedYear) || !Number.isFinite(parsedMonth) || parsedMonth < 1 || parsedMonth > 12) {
+    return NextResponse.json({ error: '유효한 year/month를 입력해주세요.' }, { status: 400 })
   }
 
   // Verify the account belongs to the authenticated user

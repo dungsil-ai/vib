@@ -33,18 +33,33 @@ function formatCurrency(amount: number) {
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    fetch('/api/dashboard')
-      .then(res => res.json())
-      .then(data => {
-        setData(data)
+    const loadDashboardData = async () => {
+      try {
+        setError(null)
+        const res = await fetch('/api/dashboard')
+        if (!res.ok) {
+          throw new Error(`대시보드 데이터를 불러오지 못했습니다. (${res.status})`)
+        }
+        const json = await res.json()
+        setData(json)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : '대시보드 데이터를 불러오는 중 오류가 발생했습니다.')
+      } finally {
         setLoading(false)
-      })
+      }
+    }
+    loadDashboardData()
   }, [])
 
   if (loading) {
     return <div className="flex items-center justify-center h-full"><div className="text-gray-500">로딩 중...</div></div>
+  }
+
+  if (error) {
+    return <div className="flex items-center justify-center h-full"><div className="text-red-500">{error}</div></div>
   }
 
   if (!data) return null
