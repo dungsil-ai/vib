@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
 
   // Per-entry validations
   for (const entry of entries) {
-    if (!entry.debitAccountId || !entry.creditAccountId || entry.amount === undefined) {
+    if (!entry.debitAccountId || !entry.creditAccountId || entry.amount == null) {
       return NextResponse.json({ error: '각 항목의 차변·대변 계정과 금액을 입력해주세요.' }, { status: 400 })
     }
     if (Number(entry.amount) <= 0) {

@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
     select: { code: true },
   })
   const maxCode = maxAccount ? parseInt(maxAccount.code, 10) : base
-  const nextNum = (Number.isFinite(maxCode) ? maxCode : base) + 1
+  const nextNum = (Number.isNaN(maxCode) ? base : maxCode) + 1
   const code = String(nextNum)
 
   try {
