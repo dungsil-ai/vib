@@ -5,7 +5,7 @@ import Link from 'next/link'
 
 interface Entry {
   id: string
-  amount: number
+  amount: string
   description: string | null
   debitAccount: { name: string; code: string; type: string }
   creditAccount: { name: string; code: string; type: string }
@@ -84,7 +84,7 @@ export default function TransactionsPage() {
               </thead>
               <tbody className="divide-y">
                 {transactions.map(tx => {
-                  const totalAmount = tx.entries.reduce((sum, e) => sum + e.amount, 0)
+                  const totalAmount = tx.entries.reduce((sum, e) => sum + Number(e.amount), 0)
                   const isExpanded = expandedId === tx.id
                   return (
                     <React.Fragment key={tx.id}>
@@ -133,7 +133,7 @@ export default function TransactionsPage() {
                                   <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded">
                                     대변: {entry.creditAccount.name} ({entry.creditAccount.code})
                                   </span>
-                                  <span className="font-medium">{formatCurrency(entry.amount)}</span>
+                                  <span className="font-medium">{formatCurrency(Number(entry.amount))}</span>
                                   {entry.description && (
                                     <span className="text-gray-500">{entry.description}</span>
                                   )}

@@ -12,7 +12,7 @@ interface DashboardData {
     date: string
     description: string
     entries: Array<{
-      amount: number
+      amount: string
       debitAccount: { name: string; code: string; type: string }
       creditAccount: { name: string; code: string; type: string }
     }>
@@ -86,7 +86,7 @@ export default function DashboardPage() {
               <p className="text-sm text-gray-500 text-center py-4">거래 내역이 없습니다.</p>
             ) : (
               data.recentTransactions.map(tx => {
-                const totalAmount = tx.entries.reduce((sum, e) => sum + e.amount, 0)
+                const totalAmount = tx.entries.reduce((sum, e) => sum + Number(e.amount), 0)
                 return (
                   <div key={tx.id} className="flex items-center justify-between py-2 border-b last:border-0">
                     <div>

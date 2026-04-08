@@ -11,16 +11,31 @@ export async function GET(request: NextRequest) {
   }
 
   const { searchParams } = new URL(request.url)
-  const limit = parseInt(searchParams.get('limit') || '50')
   const yearParam = searchParams.get('year')
   const monthParam = searchParams.get('month')
 
-  // When year/month are supplied, filter by date range and return all matching rows
-  // (no limit), so the budget page gets accurate monthly totals regardless of volume.
+  // Validate and parse limit
+  const DEFAULT_LIMIT = 50
+  const MAX_LIMIT = 100
+  const limitParam = searchParams.get('limit')
+  let limit = DEFAULT_LIMIT
+  if (limitParam !== null) {
+    const parsed = parseInt(limitParam, 10)
+    if (!Number.isFinite(parsed) || parsed < 1) {
+      return NextResponse.json({ error: '유효한 limit 값이 필요합니다.' }, { status: 400 })
+    }
+    limit = Math.min(parsed, MAX_LIMIT)
+  }
+
+  // When year/month are supplied, validate and filter by date range;
+  // return all matching rows (no limit) so budget page gets accurate monthly totals.
   let dateFilter: { gte?: Date; lte?: Date } | undefined
   if (yearParam && monthParam) {
-    const y = parseInt(yearParam)
-    const m = parseInt(monthParam)
+    const y = parseInt(yearParam, 10)
+    const m = parseInt(monthParam, 10)
+    if (!Number.isFinite(y) || !Number.isFinite(m) || m < 1 || m > 12) {
+      return NextResponse.json({ error: '유효한 year/month를 입력해주세요.' }, { status: 400 })
+    }
     dateFilter = {
       gte: new Date(y, m - 1, 1),
       lte: new Date(y, m, 0, 23, 59, 59, 999),

@@ -12,16 +12,41 @@ export async function GET() {
   const accounts = await prisma.account.findMany({
     where: { userId: session.user.id },
     orderBy: { code: 'asc' },
-    include: {
-      debitEntries: { select: { amount: true } },
-      creditEntries: { select: { amount: true } },
+    select: {
+      id: true,
+      code: true,
+      name: true,
+      type: true,
+      description: true,
     },
   })
 
+  const accountIds = accounts.map(a => a.id)
+
+  const [debitSums, creditSums] = await Promise.all([
+    prisma.entry.groupBy({
+      by: ['debitAccountId'],
+      where: { debitAccountId: { in: accountIds } },
+      _sum: { amount: true },
+    }),
+    prisma.entry.groupBy({
+      by: ['creditAccountId'],
+      where: { creditAccountId: { in: accountIds } },
+      _sum: { amount: true },
+    }),
+  ])
+
+  const debitByAccount = new Map(
+    debitSums.map(r => [r.debitAccountId, Number(r._sum.amount ?? 0)]),
+  )
+  const creditByAccount = new Map(
+    creditSums.map(r => [r.creditAccountId, Number(r._sum.amount ?? 0)]),
+  )
+
   const accountsWithBalance = accounts.map(account => {
-    const totalDebits = account.debitEntries.reduce((sum, e) => sum + Number(e.amount), 0)
-    const totalCredits = account.creditEntries.reduce((sum, e) => sum + Number(e.amount), 0)
-    
+    const totalDebits = debitByAccount.get(account.id) ?? 0
+    const totalCredits = creditByAccount.get(account.id) ?? 0
+
     let balance = 0
     if (account.type === 'ASSET' || account.type === 'EXPENSE') {
       balance = totalDebits - totalCredits
@@ -29,14 +54,7 @@ export async function GET() {
       balance = totalCredits - totalDebits
     }
 
-    return {
-      id: account.id,
-      code: account.code,
-      name: account.name,
-      type: account.type,
-      description: account.description,
-      balance,
-    }
+    return { ...account, balance }
   })
 
   return NextResponse.json(accountsWithBalance)

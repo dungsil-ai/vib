@@ -11,8 +11,12 @@ export async function GET(request: NextRequest) {
   }
 
   const { searchParams } = new URL(request.url)
-  const year = parseInt(searchParams.get('year') || String(new Date().getFullYear()))
-  const month = parseInt(searchParams.get('month') || String(new Date().getMonth() + 1))
+  const year = parseInt(searchParams.get('year') || String(new Date().getFullYear()), 10)
+  const month = parseInt(searchParams.get('month') || String(new Date().getMonth() + 1), 10)
+
+  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
+    return NextResponse.json({ error: '유효한 year/month를 입력해주세요.' }, { status: 400 })
+  }
 
   const budgets = await prisma.budget.findMany({
     where: { userId: session.user.id, year, month },

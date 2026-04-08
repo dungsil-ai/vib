@@ -15,7 +15,7 @@ interface Budget {
   accountId: string
   year: number
   month: number
-  amount: number
+  amount: string
   account: { name: string; code: string; type: string }
 }
 
@@ -48,7 +48,7 @@ async function loadBudgetData(year: number, month: number) {
   for (const tx of transactions) {
     for (const entry of tx.entries) {
       if (entry.debitAccount.type === 'EXPENSE') {
-        actuals[entry.debitAccountId] = (actuals[entry.debitAccountId] || 0) + entry.amount
+        actuals[entry.debitAccountId] = (actuals[entry.debitAccountId] || 0) + Number(entry.amount)
       }
     }
   }
@@ -56,7 +56,7 @@ async function loadBudgetData(year: number, month: number) {
   const rows = expenseAccounts.map(acc => ({
     account: acc,
     budget: budgetMap.get(acc.id) || null,
-    editAmount: budgetMap.get(acc.id)?.amount.toString() || '',
+    editAmount: budgetMap.get(acc.id)?.amount || '',
     editing: false,
   }))
 
@@ -127,7 +127,7 @@ export default function BudgetPage() {
     return <div className="flex items-center justify-center h-full"><div className="text-gray-500">로딩 중...</div></div>
   }
 
-  const totalBudget = rows.reduce((sum, r) => sum + (r.budget?.amount || 0), 0)
+  const totalBudget = rows.reduce((sum, r) => sum + Number(r.budget?.amount || 0), 0)
   const totalActual = rows.reduce((sum, r) => sum + (actualExpenses[r.account.id] || 0), 0)
 
   return (
@@ -185,7 +185,7 @@ export default function BudgetPage() {
           <div className="divide-y">
             {rows.map((row, index) => {
               const actual = actualExpenses[row.account.id] || 0
-              const budget = row.budget?.amount || 0
+              const budget = Number(row.budget?.amount || 0)
               const pct = budget > 0 ? Math.min((actual / budget) * 100, 100) : 0
               const isOver = actual > budget && budget > 0
 

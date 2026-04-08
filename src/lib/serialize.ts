@@ -1,16 +1,16 @@
 import { Prisma } from '@prisma/client'
 
 /**
- * Converts Prisma.Decimal values to plain JS numbers so they serialize
- * correctly as JSON numbers (not strings) in API responses.
- * Note: Prisma.Decimal fields in the result are replaced with number values.
+ * Converts Prisma.Decimal values to strings so they serialize correctly
+ * in API responses without any floating-point precision loss.
+ * Consumers must call Number() / parseFloat() when arithmetic is needed.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function serializeData(data: unknown): any {
   return JSON.parse(
     JSON.stringify(data, (_key, value) => {
       if (value instanceof Prisma.Decimal) {
-        return Number(value)
+        return value.toString()
       }
       return value
     }),

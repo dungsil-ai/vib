@@ -21,11 +21,6 @@ export async function POST(request: NextRequest) {
 
     const hashedPassword = await bcrypt.hash(password, 12)
 
-    const user = await prisma.user.create({
-      data: { name, email, password: hashedPassword },
-    })
-
-    // Create default accounts for the new user
     const defaultAccounts = [
       { code: '1001', name: '현금', type: 'ASSET' as const, description: '현금 및 현금성 자산' },
       { code: '1002', name: '보통예금', type: 'ASSET' as const, description: '은행 보통예금' },
@@ -45,8 +40,14 @@ export async function POST(request: NextRequest) {
       { code: '5008', name: '교육비', type: 'EXPENSE' as const, description: '교육 관련 비용' },
     ]
 
-    await prisma.account.createMany({
-      data: defaultAccounts.map(acc => ({ ...acc, userId: user.id })),
+    // Create user and default accounts atomically
+    await prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: { name, email, password: hashedPassword },
+      })
+      await tx.account.createMany({
+        data: defaultAccounts.map(acc => ({ ...acc, userId: user.id })),
+      })
     })
 
     return NextResponse.json({ message: '회원가입이 완료되었습니다.' }, { status: 201 })
