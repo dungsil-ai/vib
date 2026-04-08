@@ -60,27 +60,47 @@ export async function GET() {
   return NextResponse.json(accountsWithBalance)
 }
 
+const TYPE_CODE_PREFIX: Record<string, number> = {
+  ASSET: 1000,
+  LIABILITY: 2000,
+  EQUITY: 3000,
+  REVENUE: 4000,
+  EXPENSE: 5000,
+}
+
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) {
     return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
   }
 
-  const { name, code, type, description } = await request.json()
+  const userId = session.user.id
+  const { name, type, description } = await request.json()
 
-  if (!name || !code || !type) {
+  if (!name || !type) {
     return NextResponse.json({ error: '필수 필드를 입력해주세요.' }, { status: 400 })
   }
 
+  if (!(type in TYPE_CODE_PREFIX)) {
+    return NextResponse.json({ error: '올바른 계정 유형을 선택해주세요.' }, { status: 400 })
+  }
+
+  // Auto-generate the code: find the max code with this type's prefix and increment
+  const prefix = String(TYPE_CODE_PREFIX[type]).slice(0, 1)
+  const existing = await prisma.account.findMany({
+    where: { userId, code: { startsWith: prefix } },
+    select: { code: true },
+  })
+  const base = TYPE_CODE_PREFIX[type]
+  const nextNum = existing.reduce((max, a) => {
+    const n = parseInt(a.code, 10)
+    return Number.isFinite(n) && n > max ? n : max
+  }, base) + 1
+  const code = String(nextNum)
+
   try {
     const account = await prisma.account.create({
-      data: {
-        userId: session.user.id,
-        name,
-        code,
-        type,
-        description,
-      },
+      data: { userId, name, code, type, description },
     })
     return NextResponse.json(account, { status: 201 })
   } catch {

@@ -35,7 +35,7 @@ export default function AccountsPage() {
   const [accounts, setAccounts] = useState<Account[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
-  const [formData, setFormData] = useState({ name: '', code: '', type: 'ASSET', description: '' })
+  const [formData, setFormData] = useState({ name: '', type: 'ASSET', description: '' })
   const [error, setError] = useState('')
 
   const fetchAccounts = () => {
@@ -62,7 +62,7 @@ export default function AccountsPage() {
       setError(data.error || '오류가 발생했습니다.')
     } else {
       setShowForm(false)
-      setFormData({ name: '', code: '', type: 'ASSET', description: '' })
+      setFormData({ name: '', type: 'ASSET', description: '' })
       fetchAccounts()
     }
   }
@@ -99,17 +99,6 @@ export default function AccountsPage() {
           <h2 className="font-semibold text-gray-900 mb-4">새 계정 추가</h2>
           {error && <div className="mb-4 text-red-600 text-sm">{error}</div>}
           <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">계정 코드</label>
-              <input
-                type="text"
-                value={formData.code}
-                onChange={e => setFormData({ ...formData, code: e.target.value })}
-                className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="예: 1001"
-                required
-              />
-            </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">계정명</label>
               <input
