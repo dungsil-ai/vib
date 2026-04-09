@@ -22,7 +22,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
   const budget = await prisma.budget.updateMany({
     where: { id, userId: session.user.id },
-    data: { amount },
+    data: { amount: parsedAmount },
   })
 
   if (budget.count === 0) {

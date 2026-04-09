@@ -68,13 +68,13 @@ export async function POST(request: NextRequest) {
           month: parsedMonth,
         },
       },
-      update: { amount },
+      update: { amount: parsedAmount },
       create: {
         userId: session.user.id,
         accountId,
         year: parsedYear,
         month: parsedMonth,
-        amount,
+        amount: parsedAmount,
       },
     })
     return NextResponse.json(serializeData(budget))
