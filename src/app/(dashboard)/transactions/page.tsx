@@ -26,15 +26,23 @@ function formatCurrency(amount: number) {
 export default function TransactionsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
-  const fetchTransactions = () => {
-    fetch('/api/transactions')
-      .then(res => res.json())
-      .then(data => {
-        setTransactions(data)
-        setLoading(false)
-      })
+  const fetchTransactions = async () => {
+    try {
+      setError(null)
+      const res = await fetch('/api/transactions')
+      if (!res.ok) {
+        throw new Error(`거래 내역을 불러오지 못했습니다. (${res.status})`)
+      }
+      const data = await res.json()
+      setTransactions(data)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '거래 내역을 불러오는 중 오류가 발생했습니다.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => { fetchTransactions() }, [])
@@ -47,6 +55,10 @@ export default function TransactionsPage() {
 
   if (loading) {
     return <div className="flex items-center justify-center h-full"><div className="text-gray-500">로딩 중...</div></div>
+  }
+
+  if (error) {
+    return <div className="flex items-center justify-center h-full"><div className="text-red-500">{error}</div></div>
   }
 
   return (

@@ -85,16 +85,27 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: '올바른 계정 유형을 선택해주세요.' }, { status: 400 })
   }
 
-  // Auto-generate the code: find the highest existing code with this type's prefix and increment
+  // Auto-generate the code: find the highest existing code within this type's numeric range
   const prefix = String(TYPE_CODE_PREFIX[type]).slice(0, 1)
   const base = TYPE_CODE_PREFIX[type]
-  const maxAccount = await prisma.account.findFirst({
+  const upperBound = base + 999
+  const existingAccounts = await prisma.account.findMany({
     where: { userId, code: { startsWith: prefix } },
-    orderBy: { code: 'desc' },
     select: { code: true },
   })
-  const maxCode = maxAccount ? parseInt(maxAccount.code, 10) : base
-  const nextNum = (Number.isNaN(maxCode) ? base : maxCode) + 1
+  const maxCode = existingAccounts
+    .map(a => parseInt(a.code, 10))
+    .filter(n => Number.isInteger(n) && n >= base && n <= upperBound)
+    .reduce((max, n) => Math.max(max, n), base - 1)
+  const nextNum = maxCode + 1
+
+  if (nextNum > upperBound) {
+    return NextResponse.json(
+      { error: '해당 계정 유형에 할당 가능한 코드가 모두 사용되었습니다.' },
+      { status: 409 },
+    )
+  }
+
   const code = String(nextNum)
 
   try {

@@ -106,14 +106,14 @@ export default function BudgetPage() {
 
   const saveBudget = async (index: number) => {
     const row = rows[index]
-    const amount = parseFloat(row.editAmount)
-    if (isNaN(amount) || amount < 0) return
+    const amountNum = Number(row.editAmount)
+    if (!Number.isFinite(amountNum) || amountNum < 0) return
 
     const body = {
       accountId: row.account.id,
       year,
       month,
-      amount,
+      amount: row.editAmount,
     }
 
     const res = await fetch('/api/budget', {

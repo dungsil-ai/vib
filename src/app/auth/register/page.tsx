@@ -17,19 +17,24 @@ export default function RegisterPage() {
     setLoading(true)
     setError('')
 
-    const res = await fetch('/api/auth/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, password }),
-    })
+    try {
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, password }),
+      })
 
-    const data = await res.json()
+      const data = await res.json()
 
-    if (!res.ok) {
-      setError(data.error || '회원가입에 실패했습니다.')
+      if (!res.ok) {
+        setError(data.error || '회원가입에 실패했습니다.')
+      } else {
+        router.push('/auth/login')
+      }
+    } catch {
+      setError('회원가입 중 오류가 발생했습니다. 다시 시도해주세요.')
+    } finally {
       setLoading(false)
-    } else {
-      router.push('/auth/login')
     }
   }
 

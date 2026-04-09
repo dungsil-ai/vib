@@ -88,7 +88,11 @@ export async function POST(request: NextRequest) {
     if (!entry.debitAccountId || !entry.creditAccountId || entry.amount == null) {
       return NextResponse.json({ error: '각 항목의 차변·대변 계정과 금액을 입력해주세요.' }, { status: 400 })
     }
-    if (Number(entry.amount) <= 0) {
+    const amount = Number(entry.amount)
+    if (!Number.isFinite(amount)) {
+      return NextResponse.json({ error: '유효한 거래 금액을 입력해주세요.' }, { status: 400 })
+    }
+    if (amount <= 0) {
       return NextResponse.json({ error: '거래 금액은 0보다 커야 합니다.' }, { status: 400 })
     }
     if (entry.debitAccountId === entry.creditAccountId) {

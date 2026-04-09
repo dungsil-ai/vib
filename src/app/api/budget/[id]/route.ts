@@ -12,6 +12,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   const { id } = await params
   const { amount } = await request.json()
 
+  if (amount === undefined) {
+    return NextResponse.json({ error: '금액을 입력해주세요.' }, { status: 400 })
+  }
+  const parsedAmount = Number(amount)
+  if (!Number.isFinite(parsedAmount) || parsedAmount < 0) {
+    return NextResponse.json({ error: '유효한 금액을 입력해주세요.' }, { status: 400 })
+  }
+
   const budget = await prisma.budget.updateMany({
     where: { id, userId: session.user.id },
     data: { amount },

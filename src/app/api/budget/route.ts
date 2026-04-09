@@ -44,6 +44,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: '유효한 year/month를 입력해주세요.' }, { status: 400 })
   }
 
+  const parsedAmount = Number(amount)
+  if (!Number.isFinite(parsedAmount) || parsedAmount < 0) {
+    return NextResponse.json({ error: '유효한 금액을 입력해주세요.' }, { status: 400 })
+  }
+
   // Verify the account belongs to the authenticated user
   const account = await prisma.account.findFirst({
     where: { id: accountId, userId: session.user.id },
@@ -59,16 +64,16 @@ export async function POST(request: NextRequest) {
         userId_accountId_year_month: {
           userId: session.user.id,
           accountId,
-          year,
-          month,
+          year: parsedYear,
+          month: parsedMonth,
         },
       },
       update: { amount },
       create: {
         userId: session.user.id,
         accountId,
-        year,
-        month,
+        year: parsedYear,
+        month: parsedMonth,
         amount,
       },
     })

@@ -38,13 +38,20 @@ export default function AccountsPage() {
   const [formData, setFormData] = useState({ name: '', type: 'ASSET', description: '' })
   const [error, setError] = useState('')
 
-  const fetchAccounts = () => {
-    fetch('/api/accounts')
-      .then(res => res.json())
-      .then(data => {
-        setAccounts(data)
-        setLoading(false)
-      })
+  const fetchAccounts = async () => {
+    setError('')
+    try {
+      const res = await fetch('/api/accounts')
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data?.error || '계정 목록을 불러오지 못했습니다.')
+      }
+      setAccounts(data)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '계정 목록을 불러오지 못했습니다.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => { fetchAccounts() }, [])
@@ -80,6 +87,10 @@ export default function AccountsPage() {
 
   if (loading) {
     return <div className="flex items-center justify-center h-full"><div className="text-gray-500">로딩 중...</div></div>
+  }
+
+  if (!showForm && error && accounts.length === 0) {
+    return <div className="flex items-center justify-center h-full"><div className="text-red-500">{error}</div></div>
   }
 
   return (

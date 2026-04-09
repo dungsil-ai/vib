@@ -54,7 +54,7 @@ export default function NewTransactionPage() {
     setEntries(updated)
   }
 
-  const totalAmount = entries.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0)
+  const totalAmount = entries.reduce((sum, e) => sum + (Number(e.amount) || 0), 0)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
