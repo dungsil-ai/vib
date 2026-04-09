@@ -49,8 +49,19 @@ export default function TransactionsPage() {
 
   const handleDelete = async (id: string) => {
     if (!confirm('이 거래를 삭제하시겠습니까?')) return
-    await fetch(`/api/transactions/${id}`, { method: 'DELETE' })
-    fetchTransactions()
+
+    try {
+      setError(null)
+      const res = await fetch(`/api/transactions/${id}`, { method: 'DELETE' })
+
+      if (!res.ok) {
+        throw new Error(`거래를 삭제하지 못했습니다. (${res.status})`)
+      }
+
+      fetchTransactions()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '거래를 삭제하는 중 오류가 발생했습니다.')
+    }
   }
 
   if (loading) {

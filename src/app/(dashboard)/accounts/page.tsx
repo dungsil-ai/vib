@@ -76,7 +76,18 @@ export default function AccountsPage() {
 
   const handleDelete = async (id: string) => {
     if (!confirm('이 계정을 삭제하시겠습니까?')) return
-    await fetch(`/api/accounts/${id}`, { method: 'DELETE' })
+    setError('')
+    const res = await fetch(`/api/accounts/${id}`, { method: 'DELETE' })
+    let data: { error?: string } | null = null
+    try {
+      data = await res.json()
+    } catch {
+      data = null
+    }
+    if (!res.ok) {
+      setError(data?.error || '계정을 삭제하지 못했습니다.')
+      return
+    }
     fetchAccounts()
   }
 

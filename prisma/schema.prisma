@@ -7,6 +7,14 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum AccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  REVENUE
+  EXPENSE
+}
+
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
@@ -24,13 +32,13 @@ model Account {
   user      User        @relation(fields: [userId], references: [id])
   name      String
   code      String
-  type      String
+  type      AccountType
   description String?
   createdAt DateTime    @default(now())
   debitEntries  Entry[] @relation("DebitAccount")
   creditEntries Entry[] @relation("CreditAccount")
   budgets   Budget[]
-  
+
   @@unique([userId, code])
 }
 
@@ -67,6 +75,6 @@ model Budget {
   month     Int
   amount    Decimal
   createdAt DateTime @default(now())
-  
+
   @@unique([userId, accountId, year, month])
 }

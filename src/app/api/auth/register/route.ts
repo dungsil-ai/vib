@@ -14,7 +14,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '비밀번호는 6자 이상이어야 합니다.' }, { status: 400 })
     }
 
-    const existingUser = await prisma.user.findUnique({ where: { email } })
+    const normalizedEmail = email.trim().toLowerCase()
+
+    const existingUser = await prisma.user.findUnique({ where: { email: normalizedEmail } })
     if (existingUser) {
       return NextResponse.json({ error: '이미 사용 중인 이메일입니다.' }, { status: 400 })
     }
@@ -43,7 +45,7 @@ export async function POST(request: NextRequest) {
     // Create user and default accounts atomically
     await prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
-        data: { name, email, password: hashedPassword },
+        data: { name, email: normalizedEmail, password: hashedPassword },
       })
       await tx.account.createMany({
         data: defaultAccounts.map(acc => ({ ...acc, userId: user.id })),

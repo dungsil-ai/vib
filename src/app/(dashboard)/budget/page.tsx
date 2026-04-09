@@ -106,14 +106,17 @@ export default function BudgetPage() {
 
   const saveBudget = async (index: number) => {
     const row = rows[index]
-    const amountNum = Number(row.editAmount)
+    const rawAmount = row.editAmount.trim()
+    if (rawAmount === '') return
+
+    const amountNum = Number(rawAmount)
     if (!Number.isFinite(amountNum) || amountNum < 0) return
 
     const body = {
       accountId: row.account.id,
       year,
       month,
-      amount: row.editAmount,
+      amount: rawAmount,
     }
 
     const res = await fetch('/api/budget', {
@@ -122,11 +125,15 @@ export default function BudgetPage() {
       body: JSON.stringify(body),
     })
 
-    if (res.ok) {
-      const { rows: newRows, actuals } = await loadBudgetData(year, month)
-      setRows(newRows)
-      setActualExpenses(actuals)
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      setError(data.error || '예산 저장에 실패했습니다.')
+      return
     }
+
+    const { rows: newRows, actuals } = await loadBudgetData(year, month)
+    setRows(newRows)
+    setActualExpenses(actuals)
   }
 
   const updateEditAmount = (index: number, value: string) => {
@@ -202,8 +209,9 @@ export default function BudgetPage() {
             {rows.map((row, index) => {
               const actual = actualExpenses[row.account.id] || 0
               const budget = Number(row.budget?.amount || 0)
-              const pct = budget > 0 ? Math.min((actual / budget) * 100, 100) : 0
-              const isOver = actual > budget && budget > 0
+              const hasBudget = budget > 0
+              const pct = hasBudget ? Math.min((actual / budget) * 100, 100) : 0
+              const isOver = hasBudget && actual > budget
 
               return (
                 <div key={row.account.id} className="p-4">
@@ -248,12 +256,12 @@ export default function BudgetPage() {
                           onClick={() => startEditing(index)}
                           className="text-sm font-medium text-blue-600 hover:text-blue-800 min-w-[120px] text-right"
                         >
-                          예산: {budget > 0 ? formatCurrency(budget) : '설정 없음'}
+                          예산: {hasBudget ? formatCurrency(budget) : '설정 없음'}
                         </button>
                       )}
                     </div>
                   </div>
-                  {budget > 0 && (
+                  {hasBudget && (
                     <div className="mt-2">
                       <div className="w-full bg-gray-200 rounded-full h-2">
                         <div

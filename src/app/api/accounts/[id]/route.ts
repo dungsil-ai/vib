@@ -3,6 +3,8 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
+const VALID_ACCOUNT_TYPES = ['ASSET', 'LIABILITY', 'EQUITY', 'REVENUE', 'EXPENSE'] as const
+
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) {
@@ -11,6 +13,19 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
   const { id } = await params
   const { name, code, type, description } = await request.json()
+
+  // Validate type if provided
+  if (type !== undefined && !VALID_ACCOUNT_TYPES.includes(type)) {
+    return NextResponse.json({ error: '올바른 계정 유형을 선택해주세요.' }, { status: 400 })
+  }
+
+  // Validate code format if provided (should be 4-digit string)
+  if (code !== undefined) {
+    const codeNum = parseInt(code, 10)
+    if (!Number.isInteger(codeNum) || code.length !== 4 || codeNum < 1000 || codeNum > 5999) {
+      return NextResponse.json({ error: '올바른 계정 코드를 입력해주세요 (1000-5999).' }, { status: 400 })
+    }
+  }
 
   try {
     const account = await prisma.account.updateMany({
@@ -21,7 +36,12 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: '계정을 찾을 수 없습니다.' }, { status: 404 })
     }
     return NextResponse.json({ message: '업데이트되었습니다.' })
-  } catch {
+  } catch (error) {
+    // P2002: Unique constraint violation (duplicate code)
+    if (error instanceof Error && 'code' in error && (error as { code: string }).code === 'P2002') {
+      return NextResponse.json({ error: '이미 존재하는 계정 코드입니다.' }, { status: 409 })
+    }
+    console.error(error)
     return NextResponse.json({ error: '업데이트에 실패했습니다.' }, { status: 400 })
   }
 }

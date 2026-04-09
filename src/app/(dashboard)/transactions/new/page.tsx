@@ -34,9 +34,36 @@ export default function NewTransactionPage() {
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    fetch('/api/accounts')
-      .then(res => res.json())
-      .then(data => setAccounts(data))
+    let cancelled = false
+
+    const loadAccounts = async () => {
+      setError('')
+
+      try {
+        const res = await fetch('/api/accounts')
+
+        if (!res.ok) {
+          throw new Error(`계정 목록을 불러오지 못했습니다. (${res.status})`)
+        }
+
+        const data = await res.json()
+
+        if (!cancelled) {
+          setAccounts(data)
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setAccounts([])
+          setError(err instanceof Error ? err.message : '계정 목록을 불러오는 중 오류가 발생했습니다.')
+        }
+      }
+    }
+
+    loadAccounts()
+
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   const addEntry = () => {
@@ -74,27 +101,33 @@ export default function NewTransactionPage() {
       }
     }
 
-    const res = await fetch('/api/transactions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        date,
-        description,
-        entries: entries.map(e => ({
-          debitAccountId: e.debitAccountId,
-          creditAccountId: e.creditAccountId,
-          amount: e.amount,
-          description: e.description || undefined,
-        })),
-      }),
-    })
+    try {
+      const res = await fetch('/api/transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          date,
+          description,
+          entries: entries.map(e => ({
+            debitAccountId: e.debitAccountId,
+            creditAccountId: e.creditAccountId,
+            amount: e.amount,
+            description: e.description || undefined,
+          })),
+        }),
+      })
 
-    const data = await res.json()
-    if (!res.ok) {
-      setError(data.error || '오류가 발생했습니다.')
-      setLoading(false)
-    } else {
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error || '오류가 발생했습니다.')
+        return
+      }
+
       router.push('/transactions')
+    } catch {
+      setError('거래 저장 중 오류가 발생했습니다.')
+    } finally {
+      setLoading(false)
     }
   }
 

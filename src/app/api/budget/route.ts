@@ -40,7 +40,14 @@ export async function POST(request: NextRequest) {
 
   const parsedYear = Number(year)
   const parsedMonth = Number(month)
-  if (!Number.isFinite(parsedYear) || !Number.isFinite(parsedMonth) || parsedMonth < 1 || parsedMonth > 12) {
+  if (
+    !Number.isFinite(parsedYear) ||
+    !Number.isInteger(parsedYear) ||
+    !Number.isFinite(parsedMonth) ||
+    !Number.isInteger(parsedMonth) ||
+    parsedMonth < 1 ||
+    parsedMonth > 12
+  ) {
     return NextResponse.json({ error: '유효한 year/month를 입력해주세요.' }, { status: 400 })
   }
 
