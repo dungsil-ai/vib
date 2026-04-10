@@ -84,16 +84,19 @@ export default function TransactionsPage() {
     let cancelled = false
 
     const init = async () => {
-      // Load accounts and transactions in parallel
-      const [accountsRes] = await Promise.allSettled([
-        fetch('/api/accounts'),
-      ])
+      try {
+        const res = await fetch('/api/accounts')
+        if (!res.ok) {
+          throw new Error(`계정 목록을 불러오지 못했습니다. (${res.status})`)
+        }
 
-      if (!cancelled) {
-        if (accountsRes.status === 'fulfilled' && accountsRes.value.ok) {
-          setAccounts(await accountsRes.value.json())
-        } else {
-          setFormError('계정 목록을 불러오지 못했습니다.')
+        const data = await res.json()
+        if (!cancelled) {
+          setAccounts(data)
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setFormError(err instanceof Error ? err.message : '계정 목록을 불러오는 중 오류가 발생했습니다.')
         }
       }
     }
