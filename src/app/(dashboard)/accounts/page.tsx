@@ -166,51 +166,53 @@ export default function AccountsPage() {
         </div>
       )}
 
-      {Object.entries(ACCOUNT_TYPE_LABELS).map(([type, label]) => {
-        const typeAccounts = groupedAccounts[type] || []
-        if (typeAccounts.length === 0) return null
-        return (
-          <div key={type} className="bg-white rounded-xl shadow-sm border">
-            <div className="p-4 border-b flex items-center gap-2">
-              <span className={`px-2 py-1 rounded text-xs font-medium ${ACCOUNT_TYPE_COLORS[type]}`}>{label}</span>
-              <span className="text-sm text-gray-500">({typeAccounts.length}개)</span>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">계정명</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">설명</th>
-                    <th className="text-right px-4 py-3 font-medium text-gray-600">잔액</th>
-                    <th className="text-center px-4 py-3 font-medium text-gray-600">작업</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {typeAccounts.map(account => (
-                    <tr key={account.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 font-medium text-gray-900">{account.name}</td>
-                      <td className="px-4 py-3 text-gray-500">{account.description || '-'}</td>
-                      <td className="px-4 py-3 text-right font-medium">
-                        <span className={account.balance >= 0 ? 'text-gray-900' : 'text-red-500'}>
-                          {formatCurrency(account.balance)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <button
-                          onClick={() => handleDelete(account.id)}
-                          className="text-xs text-red-600 hover:text-red-800"
-                        >
-                          삭제
-                        </button>
-                      </td>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {Object.entries(ACCOUNT_TYPE_LABELS).map(([type, label]) => {
+          const typeAccounts = groupedAccounts[type] || []
+          if (typeAccounts.length === 0) return null
+          return (
+            <div key={type} className="bg-white rounded-xl shadow-sm border">
+              <div className="p-4 border-b flex items-center gap-2">
+                <span className={`px-2 py-1 rounded text-xs font-medium ${ACCOUNT_TYPE_COLORS[type]}`}>{label}</span>
+                <span className="text-sm text-gray-500">({typeAccounts.length}개)</span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="text-left px-4 py-3 font-medium text-gray-600">계정명</th>
+                      <th className="text-left px-4 py-3 font-medium text-gray-600">설명</th>
+                      <th className="text-right px-4 py-3 font-medium text-gray-600">잔액</th>
+                      <th className="text-center px-4 py-3 font-medium text-gray-600">작업</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y">
+                    {typeAccounts.map(account => (
+                      <tr key={account.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 font-medium text-gray-900">{account.name}</td>
+                        <td className="px-4 py-3 text-gray-500">{account.description || '-'}</td>
+                        <td className="px-4 py-3 text-right font-medium">
+                          <span className={account.balance >= 0 ? 'text-gray-900' : 'text-red-500'}>
+                            {formatCurrency(account.balance)}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <button
+                            onClick={() => handleDelete(account.id)}
+                            className="text-xs text-red-600 hover:text-red-800"
+                          >
+                            삭제
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
-        )
-      })}
+          )
+        })}
+      </div>
 
       {accounts.length === 0 && (
         <div className="bg-white rounded-xl shadow-sm border p-12 text-center">
