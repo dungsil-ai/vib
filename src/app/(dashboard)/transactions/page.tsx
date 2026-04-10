@@ -10,6 +10,7 @@ interface Account {
 }
 
 interface EntryForm {
+  id: string
   debitAccountId: string
   creditAccountId: string
   amount: string
@@ -240,7 +241,7 @@ export default function TransactionsPage() {
 
             <div className="space-y-3">
               {entries.map((entry, index) => (
-                <div key={index} className="border rounded-lg p-4 bg-gray-50">
+                <div key={entry.id} className="border rounded-lg p-4 bg-gray-50">
                   <div className="flex justify-between items-center mb-3">
                     <span className="text-sm font-medium text-gray-600">항목 {index + 1}</span>
                     {entries.length > 1 && (
