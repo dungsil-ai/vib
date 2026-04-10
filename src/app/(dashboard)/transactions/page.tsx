@@ -17,8 +17,6 @@ interface EntryForm {
   description: string
 }
 
-// NOTE: Keep a dedicated accounts error state in the component state section:
-// const [accountsError, setAccountsError] = useState<string | null>(null)
 
 interface Entry {
   id: string
@@ -64,6 +62,7 @@ export default function TransactionsPage() {
   // --- form state ---
   const [accounts, setAccounts] = useState<Account[]>([])
   const [accountsLoading, setAccountsLoading] = useState(true)
+  const [accountsError, setAccountsError] = useState<string | null>(null)
   const [date, setDate] = useState(todayDate())
   const [txDescription, setTxDescription] = useState('')
   const [entries, setEntries] = useState<EntryForm[]>([defaultEntry()])
@@ -110,7 +109,7 @@ export default function TransactionsPage() {
         }
       } catch (err) {
         if (!cancelled) {
-          setFormError(err instanceof Error ? err.message : '계정 목록을 불러오는 중 오류가 발생했습니다.')
+          setAccountsError(err instanceof Error ? err.message : '계정 목록을 불러오는 중 오류가 발생했습니다.')
         }
       } finally {
         if (!cancelled) {
@@ -224,6 +223,12 @@ export default function TransactionsPage() {
         {formError && (
           <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded text-sm">
             {formError}
+          </div>
+        )}
+
+        {accountsError && (
+          <div className="mb-4 bg-yellow-50 border border-yellow-200 text-yellow-700 px-4 py-3 rounded text-sm">
+            {accountsError}
           </div>
         )}
 
