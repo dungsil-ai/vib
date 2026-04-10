@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
 
   const budgets = await prisma.budget.findMany({
     where: { userId: session.user.id, year, month },
-    include: { account: { select: { name: true, code: true, type: true } } },
+    include: { account: { select: { name: true, code: true, type: true, currency: true } } },
   })
 
   return NextResponse.json(serializeData(budgets))
@@ -90,4 +90,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: '예산 설정에 실패했습니다.' }, { status: 400 })
   }
 }
-

@@ -1,12 +1,14 @@
 'use client'
 
 import React, { memo, useEffect, useMemo, useState } from 'react'
+import { formatCurrency, type SupportedCurrency } from '@/lib/currency'
 
 interface Account {
   id: string
   code: string
   name: string
   type: string
+  currency: SupportedCurrency
 }
 
 interface EntryForm {
@@ -88,8 +90,8 @@ interface Entry {
   id: string
   amount: string
   description: string | null
-  debitAccount: { name: string; code: string; type: string }
-  creditAccount: { name: string; code: string; type: string }
+  debitAccount: { name: string; code: string; type: string; currency: SupportedCurrency }
+  creditAccount: { name: string; code: string; type: string; currency: SupportedCurrency }
 }
 
 interface Transaction {
@@ -98,10 +100,6 @@ interface Transaction {
   description: string
   entries: Entry[]
   createdAt: string
-}
-
-function formatCurrency(amount: number) {
-  return new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW' }).format(amount)
 }
 
 const defaultEntry = (): EntryForm => ({
@@ -135,6 +133,7 @@ export default function TransactionsPage() {
   const [entries, setEntries] = useState<EntryForm[]>([defaultEntry()])
   const [formError, setFormError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [transactionCurrency, setTransactionCurrency] = useState<SupportedCurrency | null>(null)
 
   const hasActiveFilter = accountFilter.trim().length > 0
   const filteredAccounts = useMemo(() => {
@@ -147,7 +146,7 @@ export default function TransactionsPage() {
   }, [accounts, accountFilter, hasActiveFilter])
 
   const accountOptions = useMemo(
-    () => filteredAccounts.map(acc => ({ id: acc.id, label: `${acc.code} ${acc.name}` })),
+    () => filteredAccounts.map(acc => ({ id: acc.id, label: `[${acc.currency}] ${acc.code} ${acc.name}` })),
     [filteredAccounts],
   )
 
@@ -211,6 +210,7 @@ export default function TransactionsPage() {
     setDate(todayDate())
     setTxDescription('')
     setEntries([defaultEntry()])
+    setTransactionCurrency(null)
   }
 
   // --- entry helpers ---
@@ -225,6 +225,29 @@ export default function TransactionsPage() {
     setEntries(prev => {
       const updated = [...prev]
       updated[index] = { ...updated[index], [field]: value }
+
+      if (field === 'debitAccountId' || field === 'creditAccountId') {
+        const selectedCurrencies = new Set<SupportedCurrency>()
+        for (const entry of updated) {
+          for (const id of [entry.debitAccountId, entry.creditAccountId]) {
+            const currency = accounts.find(a => a.id === id)?.currency
+            if (id && currency) selectedCurrencies.add(currency)
+          }
+        }
+
+        if (selectedCurrencies.size > 1) {
+          setFormError('모든 항목은 동일한 통화를 사용하는 계정으로 입력해주세요.')
+          return prev
+        }
+
+        setFormError('')
+        setTransactionCurrency(
+          selectedCurrencies.size === 1
+            ? Array.from(selectedCurrencies)[0]
+            : null,
+        )
+      }
+
       return updated
     })
   }
@@ -247,6 +270,12 @@ export default function TransactionsPage() {
         setSubmitting(false)
         return
       }
+    }
+
+    if (!transactionCurrency) {
+      setFormError('모든 항목에 동일한 통화를 사용하는 계정을 선택해주세요.')
+      setSubmitting(false)
+      return
     }
 
     try {
@@ -355,7 +384,10 @@ export default function TransactionsPage() {
                   placeholder="코드나 이름으로 검색"
                 />
                 <span className="text-sm text-gray-700 dark:text-gray-200">
-                  총액: <span className="font-semibold text-blue-600 dark:text-blue-400">{formatCurrency(formTotal)}</span>
+                  총액:{' '}
+                  <span className="font-semibold text-blue-600 dark:text-blue-400">
+                    {transactionCurrency ? formatCurrency(formTotal, transactionCurrency) : '통화 선택 필요'}
+                  </span>
                 </span>
               </div>
             </div>
@@ -500,6 +532,7 @@ export default function TransactionsPage() {
                 <tbody className="divide-y dark:divide-gray-700">
                   {transactions.map(tx => {
                     const txTotal = tx.entries.reduce((sum, e) => sum + Number(e.amount), 0)
+                    const txCurrency = (tx.entries[0]?.debitAccount.currency || tx.entries[0]?.creditAccount.currency || 'KRW') as SupportedCurrency
                     const isExpanded = expandedId === tx.id
                     return (
                       <React.Fragment key={tx.id}>
@@ -525,7 +558,7 @@ export default function TransactionsPage() {
                             {tx.entries.map(e => e.creditAccount.name).join(', ')}
                           </td>
                           <td className="px-4 py-3 text-right font-medium text-gray-900 dark:text-gray-100">
-                            {formatCurrency(txTotal)}
+                            {formatCurrency(txTotal, txCurrency)}
                           </td>
                           <td className="px-4 py-3 text-center">
                             <button
@@ -543,12 +576,14 @@ export default function TransactionsPage() {
                                 {tx.entries.map(entry => (
                                   <div key={entry.id} className="flex items-center gap-4 text-xs">
                                     <span className="bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 px-2 py-0.5 rounded">
-                                      차변: {entry.debitAccount.name}
+                                      차변: {entry.debitAccount.name} ({entry.debitAccount.currency})
                                     </span>
                                     <span className="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-2 py-0.5 rounded">
-                                      대변: {entry.creditAccount.name}
+                                      대변: {entry.creditAccount.name} ({entry.creditAccount.currency})
                                     </span>
-                                    <span className="font-medium dark:text-gray-300">{formatCurrency(Number(entry.amount))}</span>
+                                    <span className="font-medium dark:text-gray-300">
+                                      {formatCurrency(Number(entry.amount), entry.debitAccount.currency)}
+                                    </span>
                                     {entry.description && (
                                       <span className="text-gray-500 dark:text-gray-400">{entry.description}</span>
                                     )}

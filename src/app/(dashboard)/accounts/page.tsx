@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { CURRENCY_LABELS, SUPPORTED_CURRENCIES, formatCurrency, type SupportedCurrency } from '@/lib/currency'
 
 const ACCOUNT_TYPE_LABELS: Record<string, string> = {
   ASSET: '자산',
@@ -23,19 +24,20 @@ interface Account {
   code: string
   name: string
   type: string
+  currency: SupportedCurrency
   description: string | null
   balance: number
-}
-
-function formatCurrency(amount: number) {
-  return new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW' }).format(amount)
 }
 
 export default function AccountsPage() {
   const [accounts, setAccounts] = useState<Account[]>([])
   const [loading, setLoading] = useState(true)
   const [showFormFor, setShowFormFor] = useState<string | null>(null)
-  const [formData, setFormData] = useState({ name: '', description: '' })
+  const [formData, setFormData] = useState<{ name: string; description: string; currency: SupportedCurrency }>({
+    name: '',
+    description: '',
+    currency: 'KRW',
+  })
   const [error, setError] = useState('')
   const [formError, setFormError] = useState('')
 
@@ -75,7 +77,7 @@ export default function AccountsPage() {
         setFormError(data.error || '오류가 발생했습니다.')
       } else {
         setShowFormFor(null)
-        setFormData({ name: '', description: '' })
+        setFormData({ name: '', description: '', currency: 'KRW' })
         fetchAccounts()
       }
     } catch {
@@ -138,6 +140,7 @@ export default function AccountsPage() {
                       <tr>
                         <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400">계정명</th>
                         <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400">설명</th>
+                        <th className="text-center px-4 py-3 font-medium text-gray-600 dark:text-gray-400">통화</th>
                         <th className="text-right px-4 py-3 font-medium text-gray-600 dark:text-gray-400">잔액</th>
                         <th className="text-center px-4 py-3 font-medium text-gray-600 dark:text-gray-400">작업</th>
                       </tr>
@@ -147,9 +150,14 @@ export default function AccountsPage() {
                         <tr key={account.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
                           <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{account.name}</td>
                           <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{account.description || '-'}</td>
+                          <td className="px-4 py-3 text-center">
+                            <span className="px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-700 text-xs text-gray-700 dark:text-gray-200">
+                              {account.currency}
+                            </span>
+                          </td>
                           <td className="px-4 py-3 text-right font-medium">
                             <span className={account.balance >= 0 ? 'text-gray-900 dark:text-gray-100' : 'text-red-500'}>
-                              {formatCurrency(account.balance)}
+                              {formatCurrency(account.balance, account.currency)}
                             </span>
                           </td>
                           <td className="px-4 py-3 text-center">
@@ -192,13 +200,25 @@ export default function AccountsPage() {
                         placeholder="계정 설명"
                       />
                     </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">통화</label>
+                      <select
+                        value={formData.currency}
+                        onChange={e => setFormData({ ...formData, currency: e.target.value })}
+                        className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
+                      >
+                        {SUPPORTED_CURRENCIES.map(cur => (
+                          <option key={cur} value={cur}>{CURRENCY_LABELS[cur]}</option>
+                        ))}
+                      </select>
+                    </div>
                     <div className="col-span-2 flex gap-2">
                       <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium">
                         저장
                       </button>
                       <button
                         type="button"
-                        onClick={() => { setShowFormFor(null); setFormData({ name: '', description: '' }); setFormError('') }}
+        onClick={() => { setShowFormFor(null); setFormData({ name: '', description: '', currency: 'KRW' }); setFormError('') }}
                         className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 text-sm font-medium"
                       >
                         취소
@@ -209,7 +229,7 @@ export default function AccountsPage() {
               ) : (
                 <div className="p-3">
                   <button
-                    onClick={() => { setShowFormFor(type); setFormData({ name: '', description: '' }); setFormError('') }}
+                    onClick={() => { setShowFormFor(type); setFormData({ name: '', description: '', currency: 'KRW' }); setFormError('') }}
                     className="w-full py-2 border-2 border-dashed border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-blue-400 hover:text-blue-500 rounded-lg text-sm"
                   >
                     + 계정 추가

@@ -25,6 +25,7 @@ model Account {
   name      String
   code      String
   type      String
+  currency  String      @default("KRW")
   description String?
   createdAt DateTime    @default(now())
   debitEntries  Entry[] @relation("DebitAccount")

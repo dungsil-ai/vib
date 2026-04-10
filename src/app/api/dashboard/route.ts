@@ -20,7 +20,7 @@ export async function GET() {
 
     const accounts = await prisma.account.findMany({
       where: { userId },
-      select: { id: true, type: true },
+      select: { id: true, type: true, currency: true },
     })
 
     const accountIds = accounts.map(a => a.id)
@@ -45,9 +45,7 @@ export async function GET() {
       creditSums.map(r => [r.creditAccountId, Number(r._sum.amount ?? 0)]),
     )
 
-    let totalAssets = 0
-    let totalLiabilities = 0
-    let totalEquity = 0
+    const totalsByCurrency = new Map<string, { totalAssets: number; totalLiabilities: number; totalEquity: number }>()
 
     for (const account of accounts) {
       const totalDebits = debitByAccount.get(account.id) ?? 0
@@ -59,9 +57,11 @@ export async function GET() {
         balance = totalCredits - totalDebits
       }
 
-      if (account.type === 'ASSET') totalAssets += balance
-      if (account.type === 'LIABILITY') totalLiabilities += balance
-      if (account.type === 'EQUITY') totalEquity += balance
+      const currencyTotals = totalsByCurrency.get(account.currency) ?? { totalAssets: 0, totalLiabilities: 0, totalEquity: 0 }
+      if (account.type === 'ASSET') currencyTotals.totalAssets += balance
+      if (account.type === 'LIABILITY') currencyTotals.totalLiabilities += balance
+      if (account.type === 'EQUITY') currencyTotals.totalEquity += balance
+      totalsByCurrency.set(account.currency, currencyTotals)
     }
 
     const expenseAccountIds = accounts
@@ -85,6 +85,7 @@ export async function GET() {
                   id: true,
                   name: true,
                   code: true,
+                  currency: true,
                 },
               },
               creditAccount: {
@@ -92,6 +93,7 @@ export async function GET() {
                   id: true,
                   name: true,
                   code: true,
+                  currency: true,
                 },
               },
             },
@@ -113,7 +115,7 @@ export async function GET() {
           }),
       prisma.budget.findMany({
         where: { userId, year, month },
-        include: { account: { select: { name: true, code: true } } },
+        include: { account: { select: { name: true, code: true, currency: true } } },
       }),
     ])
 
@@ -122,6 +124,7 @@ export async function GET() {
     )
 
     const budgetOverview = budgets.map(b => ({
+      currency: b.account.currency,
       accountId: b.accountId,
       name: b.account.name,
       code: b.account.code,
@@ -131,10 +134,11 @@ export async function GET() {
 
     return NextResponse.json(
       serializeData({
-        totalAssets,
-        totalLiabilities,
-        totalEquity,
-        netWorth: totalAssets - totalLiabilities,
+        totals: Array.from(totalsByCurrency.entries()).map(([currency, totals]) => ({
+          currency,
+          ...totals,
+          netWorth: totals.totalAssets - totals.totalLiabilities,
+        })),
         recentTransactions,
         budgetOverview,
       }),

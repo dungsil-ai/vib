@@ -1,12 +1,14 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { formatCurrency, type SupportedCurrency } from '@/lib/currency'
 
 interface Account {
   id: string
   code: string
   name: string
   type: string
+  currency: SupportedCurrency
   balance: number
 }
 
@@ -16,7 +18,7 @@ interface Budget {
   year: number
   month: number
   amount: string
-  account: { name: string; code: string; type: string }
+  account: { name: string; code: string; type: string; currency: SupportedCurrency }
 }
 
 interface BudgetRow {
@@ -24,10 +26,6 @@ interface BudgetRow {
   budget: Budget | null
   editAmount: string
   editing: boolean
-}
-
-function formatCurrency(amount: number) {
-  return new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW' }).format(amount)
 }
 
 async function loadBudgetData(year: number, month: number) {
@@ -150,8 +148,15 @@ export default function BudgetPage() {
     return <div className="flex items-center justify-center h-full"><div className="text-red-500">{error}</div></div>
   }
 
-  const totalBudget = rows.reduce((sum, r) => sum + Number(r.budget?.amount || 0), 0)
-  const totalActual = rows.reduce((sum, r) => sum + (actualExpenses[r.account.id] || 0), 0)
+  const totalsByCurrency = rows.reduce((acc, row) => {
+    const currency = row.account.currency
+    const current = acc[currency] ?? { budget: 0, actual: 0 }
+    current.budget += Number(row.budget?.amount || 0)
+    current.actual += actualExpenses[row.account.id] || 0
+    acc[currency] = current
+    return acc
+  }, {} as Record<SupportedCurrency, { budget: number; actual: number }>)
+  const currencyTotals = Object.entries(totalsByCurrency)
 
   return (
     <div className="space-y-6">
@@ -180,21 +185,33 @@ export default function BudgetPage() {
       </div>
 
       {/* Summary */}
-      <div className="grid grid-cols-3 gap-4">
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border dark:border-gray-700">
-          <p className="text-sm text-gray-500 dark:text-gray-400">총 예산</p>
-          <p className="text-xl font-bold text-blue-600 mt-1">{formatCurrency(totalBudget)}</p>
-        </div>
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border dark:border-gray-700">
-          <p className="text-sm text-gray-500 dark:text-gray-400">실제 지출</p>
-          <p className="text-xl font-bold text-orange-500 mt-1">{formatCurrency(totalActual)}</p>
-        </div>
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border dark:border-gray-700">
-          <p className="text-sm text-gray-500 dark:text-gray-400">남은 예산</p>
-          <p className={`text-xl font-bold mt-1 ${totalBudget - totalActual >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-            {formatCurrency(totalBudget - totalActual)}
-          </p>
-        </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {currencyTotals.map(([currency, totals]) => {
+          const remaining = totals.budget - totals.actual
+          return (
+            <div key={currency} className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border dark:border-gray-700 space-y-2">
+              <p className="text-sm text-gray-500 dark:text-gray-400">통화 {currency}</p>
+              <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400">
+                <span>총 예산</span>
+                <span className="font-semibold text-blue-600 dark:text-blue-400">
+                  {formatCurrency(totals.budget, currency as SupportedCurrency)}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400">
+                <span>실제 지출</span>
+                <span className="font-semibold text-orange-500">
+                  {formatCurrency(totals.actual, currency as SupportedCurrency)}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600 dark:text-gray-400">남은 예산</span>
+                <span className={`font-semibold ${remaining >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                  {formatCurrency(remaining, currency as SupportedCurrency)}
+                </span>
+              </div>
+            </div>
+          )
+        })}
       </div>
 
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border dark:border-gray-700">
@@ -221,7 +238,7 @@ export default function BudgetPage() {
                     </div>
                     <div className="flex items-center gap-4">
                       <span className={`text-sm ${isOver ? 'text-red-500 font-medium' : 'text-gray-600 dark:text-gray-400'}`}>
-                        실제: {formatCurrency(actual)}
+                        실제: {formatCurrency(actual, row.account.currency)}
                       </span>
                       {row.editing ? (
                         <div className="flex items-center gap-2">
@@ -255,7 +272,7 @@ export default function BudgetPage() {
                           onClick={() => startEditing(index)}
                           className="text-sm font-medium text-blue-600 hover:text-blue-800 min-w-[120px] text-right"
                         >
-                          예산: {hasBudget ? formatCurrency(budget) : '설정 없음'}
+                          예산: {hasBudget ? formatCurrency(budget, row.account.currency) : '설정 없음'}
                         </button>
                       )}
                     </div>
@@ -270,7 +287,7 @@ export default function BudgetPage() {
                       </div>
                       <div className="flex justify-between text-xs text-gray-400 dark:text-gray-500 mt-1">
                         <span>{pct.toFixed(1)}% 사용</span>
-                        <span>남은 예산: {formatCurrency(Math.max(0, budget - actual))}</span>
+                        <span>남은 예산: {formatCurrency(Math.max(0, budget - actual), row.account.currency)}</span>
                       </div>
                     </div>
                   )}

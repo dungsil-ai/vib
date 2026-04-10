@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { SUPPORTED_CURRENCIES } from '@/lib/currency'
 
 export async function GET() {
   const session = await getServerSession(authOptions)
@@ -17,6 +18,7 @@ export async function GET() {
       code: true,
       name: true,
       type: true,
+      currency: true,
       description: true,
     },
   })
@@ -76,14 +78,14 @@ export async function POST(request: NextRequest) {
 
   const userId = session.user.id
 
-  let body: { name?: unknown; type?: unknown; description?: unknown }
+  let body: { name?: unknown; type?: unknown; description?: unknown; currency?: unknown }
   try {
     body = await request.json()
   } catch {
     return NextResponse.json({ error: '요청 본문을 파싱할 수 없습니다.' }, { status: 400 })
   }
 
-  const { name, type, description } = body
+  const { name, type, description, currency } = body
 
   try {
     if (!name || !type) {
@@ -92,6 +94,11 @@ export async function POST(request: NextRequest) {
 
     if (!Object.prototype.hasOwnProperty.call(TYPE_CODE_PREFIX, type as string)) {
       return NextResponse.json({ error: '올바른 계정 유형을 선택해주세요.' }, { status: 400 })
+    }
+
+    const selectedCurrency = (currency || 'KRW') as string
+    if (!SUPPORTED_CURRENCIES.includes(selectedCurrency as (typeof SUPPORTED_CURRENCIES)[number])) {
+      return NextResponse.json({ error: '지원하지 않는 통화입니다.' }, { status: 400 })
     }
 
     // Auto-generate the code: find the highest existing code within this type's numeric range
@@ -122,6 +129,7 @@ export async function POST(request: NextRequest) {
         name: name as string,
         code,
         type: type as string,
+        currency: selectedCurrency,
         description: description ? String(description) : undefined,
       },
     })

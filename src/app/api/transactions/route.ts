@@ -55,8 +55,8 @@ export async function GET(request: NextRequest) {
     include: {
       entries: {
         include: {
-          debitAccount: { select: { name: true, code: true, type: true } },
-          creditAccount: { select: { name: true, code: true, type: true } },
+          debitAccount: { select: { name: true, code: true, type: true, currency: true } },
+          creditAccount: { select: { name: true, code: true, type: true, currency: true } },
         },
       },
     },
@@ -109,11 +109,18 @@ export async function POST(request: NextRequest) {
   ]
   const ownedAccounts = await prisma.account.findMany({
     where: { id: { in: accountIds }, userId: session.user.id },
-    select: { id: true },
+    select: { id: true, currency: true },
   })
   if (ownedAccounts.length !== accountIds.length) {
     return NextResponse.json({ error: '잘못된 계정이 포함되어 있습니다.' }, { status: 403 })
   }
+
+  // Enforce single-currency transactions to avoid inconsistent totals
+  const currencySet = new Set(ownedAccounts.map(a => a.currency))
+  if (currencySet.size > 1) {
+    return NextResponse.json({ error: '모든 항목은 동일한 통화를 사용하는 계정으로 작성해주세요.' }, { status: 400 })
+  }
+  const transactionCurrency = ownedAccounts[0]?.currency ?? 'KRW'
 
   try {
     const transaction = await prisma.transaction.create({
@@ -138,16 +145,15 @@ export async function POST(request: NextRequest) {
       include: {
         entries: {
           include: {
-            debitAccount: { select: { name: true, code: true } },
-            creditAccount: { select: { name: true, code: true } },
+            debitAccount: { select: { name: true, code: true, currency: true } },
+            creditAccount: { select: { name: true, code: true, currency: true } },
           },
         },
       },
     })
-    return NextResponse.json(serializeData(transaction), { status: 201 })
+    return NextResponse.json(serializeData({ ...transaction, currency: transactionCurrency }), { status: 201 })
   } catch (error) {
     console.error(error)
     return NextResponse.json({ error: '거래 생성에 실패했습니다.' }, { status: 400 })
   }
 }
-
