@@ -123,7 +123,10 @@ export async function POST(request: NextRequest) {
     if (error instanceof Error && 'code' in error) {
       const prismaCode = (error as { code: string }).code
       if (prismaCode === 'P2002') {
-        return NextResponse.json({ error: '이미 존재하는 계정 코드입니다.' }, { status: 409 })
+        return NextResponse.json(
+          { error: '계정 생성 중 중복이 발생했습니다. 잠시 후 다시 시도해주세요.' },
+          { status: 409 },
+        )
       }
       if (prismaCode === 'P2003') {
         return NextResponse.json(
