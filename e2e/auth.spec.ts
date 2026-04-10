@@ -35,7 +35,7 @@ test.describe('인증 페이지', () => {
 
     await expect(
       page.getByText('이메일 또는 비밀번호가 올바르지 않습니다.')
-    ).toBeVisible({ timeout: 10_000 })
+    ).toBeVisible()
   })
 
   test('인증되지 않은 사용자가 대시보드에 접근하면 로그인 페이지로 리다이렉트된다', async ({ page }) => {
