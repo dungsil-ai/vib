@@ -50,6 +50,9 @@ jobs:
         env:
           DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci"
 
+      - name: Install lcov
+        run: sudo apt-get update -y && sudo apt-get install -y lcov
+
       - name: Run unit tests
         run: npm run test:coverage
         env:
