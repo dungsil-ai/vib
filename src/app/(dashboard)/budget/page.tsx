@@ -218,7 +218,6 @@ export default function BudgetPage() {
                   <div className="flex items-center justify-between mb-2">
                     <div>
                       <span className="font-medium text-gray-900">{row.account.name}</span>
-                      <span className="ml-2 text-xs text-gray-400 font-mono">{row.account.code}</span>
                     </div>
                     <div className="flex items-center gap-4">
                       <span className={`text-sm ${isOver ? 'text-red-500 font-medium' : 'text-gray-600'}`}>
