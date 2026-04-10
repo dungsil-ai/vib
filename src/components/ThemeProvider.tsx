@@ -42,7 +42,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const handleChange = (e: MediaQueryListEvent) => {
       let hasUserPreference = false
       try {
-        hasUserPreference = !!localStorage.getItem('theme')
+        const stored = localStorage.getItem('theme')
+        hasUserPreference = stored === 'light' || stored === 'dark'
       } catch {
         // localStorage unavailable – treat as no stored preference
       }
