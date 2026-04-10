@@ -43,6 +43,8 @@ const defaultEntry = (): EntryForm => ({
   description: '',
 })
 
+const todayDate = () => new Date().toISOString().split('T')[0]
+
 export default function TransactionsPage() {
   // --- list state ---
   const [transactions, setTransactions] = useState<Transaction[]>([])
@@ -53,7 +55,7 @@ export default function TransactionsPage() {
   // --- form state ---
   const [showForm, setShowForm] = useState(false)
   const [accounts, setAccounts] = useState<Account[]>([])
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0])
+  const [date, setDate] = useState(todayDate())
   const [txDescription, setTxDescription] = useState('')
   const [entries, setEntries] = useState<EntryForm[]>([defaultEntry()])
   const [formError, setFormError] = useState('')
@@ -90,7 +92,7 @@ export default function TransactionsPage() {
 
   const handleOpenForm = () => {
     setFormError('')
-    setDate(new Date().toISOString().split('T')[0])
+    setDate(todayDate())
     setTxDescription('')
     setEntries([defaultEntry()])
     if (accounts.length === 0) fetchAccounts()
