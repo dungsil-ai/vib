@@ -116,15 +116,19 @@ export default function TransactionsPage() {
   }
 
   // --- entry helpers ---
-  const addEntry = () => setEntries([...entries, defaultEntry()])
+  const addEntry = () => setEntries(prev => [...prev, defaultEntry()])
   const removeEntry = (index: number) => {
-    if (entries.length === 1) return
-    setEntries(entries.filter((_, i) => i !== index))
+    setEntries(prev => {
+      if (prev.length === 1) return prev
+      return prev.filter((_, i) => i !== index)
+    })
   }
   const updateEntry = (index: number, field: keyof EntryForm, value: string) => {
-    const updated = [...entries]
-    updated[index] = { ...updated[index], [field]: value }
-    setEntries(updated)
+    setEntries(prev => {
+      const updated = [...prev]
+      updated[index] = { ...updated[index], [field]: value }
+      return updated
+    })
   }
 
   const formTotal = entries.reduce((sum, e) => sum + (Number(e.amount) || 0), 0)
