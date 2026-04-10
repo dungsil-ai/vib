@@ -56,15 +56,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const toggleTheme = () => {
-    setTheme(prev => {
-      const next = prev === 'dark' ? 'light' : 'dark'
-      try {
-        localStorage.setItem('theme', next)
-      } catch (error) {
-        console.error('Failed to persist theme preference:', error)
-      }
-      return next
-    })
+    const next = theme === 'dark' ? 'light' : 'dark'
+    setTheme(next)
+    try {
+      localStorage.setItem('theme', next)
+    } catch (error) {
+      console.error('Failed to persist theme preference:', error)
+    }
   }
 
   return (
