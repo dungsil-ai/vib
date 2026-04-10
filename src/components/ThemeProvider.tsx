@@ -38,6 +38,16 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     document.documentElement.classList.toggle('dark', theme === 'dark')
   }, [theme])
 
+  // Persist to localStorage only when the change was triggered by an explicit user toggle
+  useEffect(() => {
+    if (!userOverride.current) return
+    try {
+      localStorage.setItem('theme', theme)
+    } catch (error) {
+      console.error('Failed to persist theme preference:', error)
+    }
+  }, [theme])
+
   useEffect(() => {
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
     const handleChange = (e: MediaQueryListEvent) => {
@@ -65,15 +75,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const toggleTheme = () => {
     userOverride.current = true
-    setTheme((prev) => {
-      const next = prev === 'dark' ? 'light' : 'dark'
-      try {
-        localStorage.setItem('theme', next)
-      } catch (error) {
-        console.error('Failed to persist theme preference:', error)
-      }
-      return next
-    })
+    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))
   }
 
   return (
