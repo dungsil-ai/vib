@@ -1,6 +1,6 @@
 'use client'
 
-import React, { memo, useEffect, useState } from 'react'
+import React, { memo, useEffect, useMemo, useState } from 'react'
 
 interface Account {
   id: string
@@ -17,12 +17,18 @@ interface EntryForm {
   description: string
 }
 
+interface AccountOption {
+  id: string
+  label: string
+}
+
 interface AccountBadgePickerProps {
   label: string
   labelClassName: string
-  accounts: Account[]
+  accountOptions: AccountOption[]
   accountsLoading: boolean
   accountsError: string | null
+  hasActiveFilter: boolean
   selectedAccountId: string
   onSelect: (accountId: string) => void
   activeClassName: string
@@ -32,9 +38,10 @@ interface AccountBadgePickerProps {
 const AccountBadgePicker = memo(function AccountBadgePicker({
   label,
   labelClassName,
-  accounts,
+  accountOptions,
   accountsLoading,
   accountsError,
+  hasActiveFilter,
   selectedAccountId,
   onSelect,
   activeClassName,
@@ -44,30 +51,32 @@ const AccountBadgePicker = memo(function AccountBadgePicker({
     <div>
       <span className={`block text-xs font-medium mb-1.5 ${labelClassName}`}>{label}</span>
       <div className="flex flex-wrap gap-1.5">
-        {accounts.map(acc => {
-          const selected = selectedAccountId === acc.id
+        {accountOptions.map(option => {
+          const selected = selectedAccountId === option.id
           return (
             <button
-              key={acc.id}
+              key={option.id}
               type="button"
               aria-pressed={selected}
-              onClick={() => onSelect(selected ? '' : acc.id)}
+              onClick={() => onSelect(selected ? '' : option.id)}
               className={[
                 'px-2.5 py-1 rounded-full text-xs font-medium border transition-colors',
                 selected ? activeClassName : inactiveClassName,
               ].join(' ')}
             >
-              {acc.code} {acc.name}
+              {option.label}
             </button>
           )
         })}
-        {accounts.length === 0 && (
+        {accountOptions.length === 0 && (
           <span className={`text-xs ${accountsError ? 'text-red-500' : 'text-gray-400'}`}>
             {accountsLoading
               ? '계정 목록 로딩 중...'
               : accountsError
                 ? '계정 목록을 불러오지 못했습니다.'
-                : '등록된 계정이 없습니다.'}
+                : hasActiveFilter
+                  ? '검색 결과가 없습니다.'
+                  : '등록된 계정이 없습니다.'}
           </span>
         )}
       </div>
@@ -121,11 +130,27 @@ export default function TransactionsPage() {
   const [accounts, setAccounts] = useState<Account[]>([])
   const [accountsLoading, setAccountsLoading] = useState(true)
   const [accountsError, setAccountsError] = useState<string | null>(null)
+  const [accountFilter, setAccountFilter] = useState('')
   const [date, setDate] = useState(todayDate())
   const [txDescription, setTxDescription] = useState('')
   const [entries, setEntries] = useState<EntryForm[]>([defaultEntry()])
   const [formError, setFormError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+
+  const hasActiveFilter = accountFilter.trim().length > 0
+  const filteredAccounts = useMemo(() => {
+    if (!hasActiveFilter) return accounts
+    const term = accountFilter.trim().toLowerCase()
+    return accounts.filter(acc =>
+      acc.name.toLowerCase().includes(term) ||
+      acc.code.toLowerCase().includes(term),
+    )
+  }, [accounts, accountFilter, hasActiveFilter])
+
+  const accountOptions = useMemo(
+    () => filteredAccounts.map(acc => ({ id: acc.id, label: `${acc.code} ${acc.name}` })),
+    [filteredAccounts],
+  )
 
   const fetchTransactions = async (isCancelled: () => boolean = () => false) => {
     try {
@@ -316,9 +341,20 @@ export default function TransactionsPage() {
           </div>
 
           <div>
-            <div className="flex justify-between items-center mb-3">
+            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between mb-3">
               <h3 className="font-medium text-gray-900">분개 항목</h3>
-              <div className="text-sm text-gray-600">
+              <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-3">
+                <label htmlFor="account-search" className="text-xs font-medium text-gray-600">
+                  계정 검색
+                </label>
+                <input
+                  id="account-search"
+                  type="text"
+                  value={accountFilter}
+                  onChange={e => setAccountFilter(e.target.value)}
+                  className="w-full md:w-56 px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="코드나 이름으로 검색"
+                />
                 총액: <span className="font-semibold text-blue-600">{formatCurrency(formTotal)}</span>
               </div>
             </div>
@@ -345,9 +381,10 @@ export default function TransactionsPage() {
                       <AccountBadgePicker
                         label="차변 (Debit)"
                         labelClassName="text-red-700"
-                        accounts={accounts}
+                        accountOptions={accountOptions}
                         accountsLoading={accountsLoading}
                         accountsError={accountsError}
+                        hasActiveFilter={hasActiveFilter}
                         selectedAccountId={entry.debitAccountId}
                         onSelect={accountId => updateEntry(index, 'debitAccountId', accountId)}
                         activeClassName="bg-red-100 text-red-700 border-red-300"
@@ -358,9 +395,10 @@ export default function TransactionsPage() {
                       <AccountBadgePicker
                         label="대변 (Credit)"
                         labelClassName="text-green-700"
-                        accounts={accounts}
+                        accountOptions={accountOptions}
                         accountsLoading={accountsLoading}
                         accountsError={accountsError}
+                        hasActiveFilter={hasActiveFilter}
                         selectedAccountId={entry.creditAccountId}
                         onSelect={accountId => updateEntry(index, 'creditAccountId', accountId)}
                         activeClassName="bg-green-100 text-green-700 border-green-300"
