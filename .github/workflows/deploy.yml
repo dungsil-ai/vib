@@ -55,6 +55,14 @@ jobs:
         env:
           DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci"
 
+      - name: Verify coverage on PR
+        if: github.event_name == 'pull_request'
+        uses: zgosalvez/github-actions-report-lcov@v4
+        with:
+          coverage-files: coverage/lcov.info
+          minimum-coverage: 1
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
         if: always()
