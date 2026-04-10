@@ -17,6 +17,64 @@ interface EntryForm {
   description: string
 }
 
+interface AccountBadgePickerProps {
+  label: string
+  labelClassName: string
+  accounts: Account[]
+  accountsLoading: boolean
+  accountsError: string
+  selectedAccountId: string
+  onSelect: (accountId: string) => void
+  activeClassName: string
+  inactiveClassName: string
+}
+
+function AccountBadgePicker({
+  label,
+  labelClassName,
+  accounts,
+  accountsLoading,
+  accountsError,
+  selectedAccountId,
+  onSelect,
+  activeClassName,
+  inactiveClassName,
+}: AccountBadgePickerProps) {
+  return (
+    <div>
+      <span className={`block text-xs font-medium mb-1.5 ${labelClassName}`}>{label}</span>
+      <div className="flex flex-wrap gap-1.5">
+        {accounts.map(acc => {
+          const selected = selectedAccountId === acc.id
+          return (
+            <button
+              key={acc.id}
+              type="button"
+              aria-pressed={selected}
+              onClick={() => onSelect(selected ? '' : acc.id)}
+              className={[
+                'px-2.5 py-1 rounded-full text-xs font-medium border transition-colors',
+                selected ? activeClassName : inactiveClassName,
+              ].join(' ')}
+            >
+              {acc.code} {acc.name}
+            </button>
+          )
+        })}
+        {accounts.length === 0 && (
+          <span className={`text-xs ${accountsError ? 'text-red-500' : 'text-gray-400'}`}>
+            {accountsLoading
+              ? '계정 목록 로딩 중...'
+              : accountsError
+                ? '계정 목록을 불러오지 못했습니다.'
+                : '등록된 계정이 없습니다.'}
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
 
 interface Entry {
   id: string
@@ -284,39 +342,17 @@ export default function TransactionsPage() {
                     {/* Debit / Credit badge pickers — side by side */}
                     <div className="grid grid-cols-2 gap-3">
                       {/* Debit account badge picker */}
-                      <div>
-                        <span className="block text-xs font-medium text-red-700 mb-1.5">차변 (Debit)</span>
-                        <div className="flex flex-wrap gap-1.5">
-                          {accounts.map(acc => {
-                            const selected = entry.debitAccountId === acc.id
-                            return (
-                              <button
-                                key={acc.id}
-                                type="button"
-                                aria-pressed={selected}
-                                onClick={() => updateEntry(index, 'debitAccountId', selected ? '' : acc.id)}
-                                className={[
-                                  'px-2.5 py-1 rounded-full text-xs font-medium border transition-colors',
-                                  selected
-                                    ? 'bg-red-100 text-red-700 border-red-300'
-                                    : 'bg-white text-gray-600 border-gray-300 hover:border-red-300 hover:text-red-600',
-                                ].join(' ')}
-                              >
-                                {acc.code} {acc.name}
-                              </button>
-                            )
-                          })}
-                          {accounts.length === 0 && (
-                            <span className={`text-xs ${accountsError ? 'text-red-500' : 'text-gray-400'}`}>
-                              {accountsLoading
-                                ? '계정 목록 로딩 중...'
-                                : accountsError
-                                  ? '계정 목록을 불러오지 못했습니다.'
-                                  : '등록된 계정이 없습니다.'}
-                            </span>
-                          )}
-                        </div>
-                      </div>
+                      <AccountBadgePicker
+                        label="차변 (Debit)"
+                        labelClassName="text-red-700"
+                        accounts={accounts}
+                        accountsLoading={accountsLoading}
+                        accountsError={accountsError}
+                        selectedAccountId={entry.debitAccountId}
+                        onSelect={accountId => updateEntry(index, 'debitAccountId', accountId)}
+                        activeClassName="bg-red-100 text-red-700 border-red-300"
+                        inactiveClassName="bg-white text-gray-600 border-gray-300 hover:border-red-300 hover:text-red-600"
+                      />
 
                       {/* Credit account badge picker */}
                       <div>
