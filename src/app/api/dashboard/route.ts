@@ -82,18 +82,20 @@ export async function GET() {
       .filter(a => a.type === 'EXPENSE')
       .map(a => a.id)
 
-    const monthlyExpenseEntries = await prisma.entry.findMany({
-      where: {
-        transaction: {
-          userId,
-          date: { gte: startOfMonth, lte: endOfMonth },
-        },
-        debitAccountId: { in: expenseAccountIds },
-      },
-      include: {
-        debitAccount: { select: { id: true, name: true, code: true } },
-      },
-    })
+    const monthlyExpenseEntries = expenseAccountIds.length === 0
+      ? []
+      : await prisma.entry.findMany({
+          where: {
+            transaction: {
+              userId,
+              date: { gte: startOfMonth, lte: endOfMonth },
+            },
+            debitAccountId: { in: expenseAccountIds },
+          },
+          include: {
+            debitAccount: { select: { id: true, name: true, code: true } },
+          },
+        })
 
     const expenseByAccount: Record<string, { name: string; code: string; actual: number }> = {}
     for (const entry of monthlyExpenseEntries) {
