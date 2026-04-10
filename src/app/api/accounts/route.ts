@@ -76,20 +76,27 @@ export async function POST(request: NextRequest) {
 
   const userId = session.user.id
 
+  let body: { name?: unknown; type?: unknown; description?: unknown }
   try {
-    const { name, type, description } = await request.json()
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: '요청 본문을 파싱할 수 없습니다.' }, { status: 400 })
+  }
 
+  const { name, type, description } = body
+
+  try {
     if (!name || !type) {
       return NextResponse.json({ error: '필수 필드를 입력해주세요.' }, { status: 400 })
     }
 
-    if (!Object.prototype.hasOwnProperty.call(TYPE_CODE_PREFIX, type)) {
+    if (!Object.prototype.hasOwnProperty.call(TYPE_CODE_PREFIX, type as string)) {
       return NextResponse.json({ error: '올바른 계정 유형을 선택해주세요.' }, { status: 400 })
     }
 
     // Auto-generate the code: find the highest existing code within this type's numeric range
-    const prefix = String(TYPE_CODE_PREFIX[type]).slice(0, 1)
-    const base = TYPE_CODE_PREFIX[type]
+    const prefix = String(TYPE_CODE_PREFIX[type as string]).slice(0, 1)
+    const base = TYPE_CODE_PREFIX[type as string]
     const upperBound = base + 999
     const existingAccounts = await prisma.account.findMany({
       where: { userId, code: { startsWith: prefix } },
@@ -112,10 +119,10 @@ export async function POST(request: NextRequest) {
     const account = await prisma.account.create({
       data: {
         userId,
-        name,
+        name: name as string,
         code,
-        type,
-        description: description || undefined,
+        type: type as string,
+        description: description ? String(description) : undefined,
       },
     })
     return NextResponse.json(account, { status: 201 })
