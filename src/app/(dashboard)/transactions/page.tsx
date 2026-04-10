@@ -247,59 +247,62 @@ export default function TransactionsPage() {
                     )}
                   </div>
                   <div className="space-y-3">
-                    {/* Debit account badge picker */}
-                    <div>
-                      <span className="block text-xs font-medium text-red-700 mb-1.5">차변 (Debit)</span>
-                      <div className="flex flex-wrap gap-1.5">
-                        {accounts.map(acc => {
-                          const selected = entry.debitAccountId === acc.id
-                          return (
-                            <button
-                              key={acc.id}
-                              type="button"
-                              onClick={() => updateEntry(index, 'debitAccountId', selected ? '' : acc.id)}
-                              className={[
-                                'px-2.5 py-1 rounded-full text-xs font-medium border transition-colors',
-                                selected
-                                  ? 'bg-red-100 text-red-700 border-red-300'
-                                  : 'bg-white text-gray-600 border-gray-300 hover:border-red-300 hover:text-red-600',
-                              ].join(' ')}
-                            >
-                              {acc.code} {acc.name}
-                            </button>
-                          )
-                        })}
-                        {accounts.length === 0 && (
-                          <span className="text-xs text-gray-400">계정 목록 로딩 중...</span>
-                        )}
+                    {/* Debit / Credit badge pickers — side by side */}
+                    <div className="grid grid-cols-2 gap-3">
+                      {/* Debit account badge picker */}
+                      <div>
+                        <span className="block text-xs font-medium text-red-700 mb-1.5">차변 (Debit)</span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {accounts.map(acc => {
+                            const selected = entry.debitAccountId === acc.id
+                            return (
+                              <button
+                                key={acc.id}
+                                type="button"
+                                onClick={() => updateEntry(index, 'debitAccountId', selected ? '' : acc.id)}
+                                className={[
+                                  'px-2.5 py-1 rounded-full text-xs font-medium border transition-colors',
+                                  selected
+                                    ? 'bg-red-100 text-red-700 border-red-300'
+                                    : 'bg-white text-gray-600 border-gray-300 hover:border-red-300 hover:text-red-600',
+                                ].join(' ')}
+                              >
+                                {acc.code} {acc.name}
+                              </button>
+                            )
+                          })}
+                          {accounts.length === 0 && (
+                            <span className="text-xs text-gray-400">계정 목록 로딩 중...</span>
+                          )}
+                        </div>
                       </div>
-                    </div>
 
-                    {/* Credit account badge picker */}
-                    <div>
-                      <span className="block text-xs font-medium text-green-700 mb-1.5">대변 (Credit)</span>
-                      <div className="flex flex-wrap gap-1.5">
-                        {accounts.map(acc => {
-                          const selected = entry.creditAccountId === acc.id
-                          return (
-                            <button
-                              key={acc.id}
-                              type="button"
-                              onClick={() => updateEntry(index, 'creditAccountId', selected ? '' : acc.id)}
-                              className={[
-                                'px-2.5 py-1 rounded-full text-xs font-medium border transition-colors',
-                                selected
-                                  ? 'bg-green-100 text-green-700 border-green-300'
-                                  : 'bg-white text-gray-600 border-gray-300 hover:border-green-300 hover:text-green-600',
-                              ].join(' ')}
-                            >
-                              {acc.code} {acc.name}
-                            </button>
-                          )
-                        })}
-                        {accounts.length === 0 && (
-                          <span className="text-xs text-gray-400">계정 목록 로딩 중...</span>
-                        )}
+                      {/* Credit account badge picker */}
+                      <div>
+                        <span className="block text-xs font-medium text-green-700 mb-1.5">대변 (Credit)</span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {accounts.map(acc => {
+                            const selected = entry.creditAccountId === acc.id
+                            return (
+                              <button
+                                key={acc.id}
+                                type="button"
+                                onClick={() => updateEntry(index, 'creditAccountId', selected ? '' : acc.id)}
+                                className={[
+                                  'px-2.5 py-1 rounded-full text-xs font-medium border transition-colors',
+                                  selected
+                                    ? 'bg-green-100 text-green-700 border-green-300'
+                                    : 'bg-white text-gray-600 border-gray-300 hover:border-green-300 hover:text-green-600',
+                                ].join(' ')}
+                              >
+                                {acc.code} {acc.name}
+                              </button>
+                            )
+                          })}
+                          {accounts.length === 0 && (
+                            <span className="text-xs text-gray-400">계정 목록 로딩 중...</span>
+                          )}
+                        </div>
                       </div>
                     </div>
 
