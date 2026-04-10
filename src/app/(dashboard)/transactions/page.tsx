@@ -43,7 +43,11 @@ const defaultEntry = (): EntryForm => ({
   description: '',
 })
 
-const todayDate = () => new Date().toISOString().split('T')[0]
+const todayDate = () => {
+  const now = new Date()
+  const localDate = new Date(now.getTime() - now.getTimezoneOffset() * 60 * 1000)
+  return localDate.toISOString().split('T')[0]
+}
 
 export default function TransactionsPage() {
   // --- list state ---
