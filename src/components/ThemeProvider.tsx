@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useRef, useState } from 'react'
 
 type Theme = 'light' | 'dark'
 
@@ -32,6 +32,7 @@ function getInitialTheme(): Theme {
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setTheme] = useState<Theme>(getInitialTheme)
+  const userOverride = useRef(false)
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark')
@@ -40,6 +41,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
     const handleChange = (e: MediaQueryListEvent) => {
+      if (userOverride.current) return
       let hasUserPreference = false
       try {
         const stored = localStorage.getItem('theme')
@@ -57,6 +59,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const toggleTheme = () => {
     const next = theme === 'dark' ? 'light' : 'dark'
+    userOverride.current = true
     setTheme(next)
     try {
       localStorage.setItem('theme', next)
