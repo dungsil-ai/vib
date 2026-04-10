@@ -38,6 +38,7 @@ function formatCurrency(amount: number) {
 }
 
 const defaultEntry = (): EntryForm => ({
+  id: crypto.randomUUID(),
   debitAccountId: '',
   creditAccountId: '',
   amount: '',
