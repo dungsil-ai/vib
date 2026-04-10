@@ -34,7 +34,9 @@ describe('serializeData', () => {
 
   it('null과 undefined를 처리한다', () => {
     expect(serializeData(null)).toBeNull()
+    expect(serializeData(undefined)).toBeUndefined()
     expect(serializeData({ a: null })).toEqual({ a: null })
+    expect(serializeData({ a: undefined })).toEqual({})
   })
 
   it('배열을 처리한다', () => {
