@@ -42,6 +42,8 @@ model Transaction {
   description String
   entries     Entry[]
   createdAt   DateTime @default(now())
+
+  @@index([userId, date(sort: Desc)])
 }
 
 model Entry {
@@ -55,6 +57,10 @@ model Entry {
   amount          Decimal
   description     String?
   createdAt       DateTime    @default(now())
+
+  @@index([transactionId])
+  @@index([debitAccountId])
+  @@index([creditAccountId])
 }
 
 model Budget {
@@ -69,4 +75,5 @@ model Budget {
   createdAt DateTime @default(now())
 
   @@unique([userId, accountId, year, month])
+  @@index([userId, year, month])
 }

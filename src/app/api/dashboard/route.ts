@@ -64,63 +64,69 @@ export async function GET() {
       if (account.type === 'EQUITY') totalEquity += balance
     }
 
-    const recentTransactions = await prisma.transaction.findMany({
-      where: { userId },
-      orderBy: { date: 'desc' },
-      take: 5,
-      include: {
-        entries: {
-          include: {
-            debitAccount: { select: { name: true, code: true, type: true } },
-            creditAccount: { select: { name: true, code: true, type: true } },
-          },
-        },
-      },
-    })
-
     const expenseAccountIds = accounts
       .filter(a => a.type === 'EXPENSE')
       .map(a => a.id)
 
-    const monthlyExpenseEntries = expenseAccountIds.length === 0
-      ? []
-      : await prisma.entry.findMany({
-          where: {
-            transaction: {
-              userId,
-              date: { gte: startOfMonth, lte: endOfMonth },
+    const [recentTransactions, monthlyExpenseSums, budgets] = await Promise.all([
+      prisma.transaction.findMany({
+        where: { userId },
+        orderBy: { date: 'desc' },
+        take: 5,
+        select: {
+          id: true,
+          date: true,
+          description: true,
+          entries: {
+            select: {
+              amount: true,
+              debitAccount: {
+                select: {
+                  id: true,
+                  name: true,
+                  code: true,
+                },
+              },
+              creditAccount: {
+                select: {
+                  id: true,
+                  name: true,
+                  code: true,
+                },
+              },
             },
-            debitAccountId: { in: expenseAccountIds },
           },
-          include: {
-            debitAccount: { select: { id: true, name: true, code: true } },
-          },
-        })
+        },
+      }),
+      expenseAccountIds.length === 0
+        ? Promise.resolve([])
+        : prisma.entry.groupBy({
+            by: ['debitAccountId'],
+            where: {
+              transaction: {
+                userId,
+                date: { gte: startOfMonth, lte: endOfMonth },
+              },
+              debitAccountId: { in: expenseAccountIds },
+            },
+            _sum: { amount: true },
+          }),
+      prisma.budget.findMany({
+        where: { userId, year, month },
+        include: { account: { select: { name: true, code: true } } },
+      }),
+    ])
 
-    const expenseByAccount: Record<string, { name: string; code: string; actual: number }> = {}
-    for (const entry of monthlyExpenseEntries) {
-      const accId = entry.debitAccountId
-      if (!expenseByAccount[accId]) {
-        expenseByAccount[accId] = {
-          name: entry.debitAccount.name,
-          code: entry.debitAccount.code,
-          actual: 0,
-        }
-      }
-      expenseByAccount[accId].actual += Number(entry.amount)
-    }
-
-    const budgets = await prisma.budget.findMany({
-      where: { userId, year, month },
-      include: { account: { select: { name: true, code: true } } },
-    })
+    const expenseByAccount = new Map<string, number>(
+      monthlyExpenseSums.map(row => [row.debitAccountId, Number(row._sum.amount ?? 0)]),
+    )
 
     const budgetOverview = budgets.map(b => ({
       accountId: b.accountId,
       name: b.account.name,
       code: b.account.code,
       budget: Number(b.amount),
-      actual: expenseByAccount[b.accountId]?.actual || 0,
+      actual: expenseByAccount.get(b.accountId) ?? 0,
     }))
 
     return NextResponse.json(
@@ -138,4 +144,3 @@ export async function GET() {
     return NextResponse.json({ error: '대시보드 데이터를 불러오지 못했습니다.' }, { status: 500 })
   }
 }
-
