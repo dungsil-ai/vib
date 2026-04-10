@@ -40,7 +40,7 @@ export function Sidebar({ user }: SidebarProps) {
             key={item.href}
             href={item.href}
             className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
-              pathname === item.href
+              pathname === item.href || pathname.startsWith(item.href + '/')
                 ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
                 : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white'
             }`}
