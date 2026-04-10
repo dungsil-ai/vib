@@ -246,60 +246,87 @@ export default function TransactionsPage() {
                       </button>
                     )}
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-3">
+                    {/* Debit account badge picker */}
                     <div>
-                      <label className="block text-xs font-medium text-red-700 mb-1">차변 (Debit)</label>
-                      <select
-                        value={entry.debitAccountId}
-                        onChange={e => updateEntry(index, 'debitAccountId', e.target.value)}
-                        className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        required
-                      >
-                        <option value="">계정 선택</option>
-                        {accounts.map(acc => (
-                          <option key={acc.id} value={acc.id}>
-                            {acc.code} - {acc.name}
-                          </option>
-                        ))}
-                      </select>
+                      <span className="block text-xs font-medium text-red-700 mb-1.5">차변 (Debit)</span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {accounts.map(acc => {
+                          const selected = entry.debitAccountId === acc.id
+                          return (
+                            <button
+                              key={acc.id}
+                              type="button"
+                              onClick={() => updateEntry(index, 'debitAccountId', selected ? '' : acc.id)}
+                              className={[
+                                'px-2.5 py-1 rounded-full text-xs font-medium border transition-colors',
+                                selected
+                                  ? 'bg-red-100 text-red-700 border-red-300'
+                                  : 'bg-white text-gray-600 border-gray-300 hover:border-red-300 hover:text-red-600',
+                              ].join(' ')}
+                            >
+                              {acc.code} {acc.name}
+                            </button>
+                          )
+                        })}
+                        {accounts.length === 0 && (
+                          <span className="text-xs text-gray-400">계정 목록 로딩 중...</span>
+                        )}
+                      </div>
                     </div>
+
+                    {/* Credit account badge picker */}
                     <div>
-                      <label className="block text-xs font-medium text-green-700 mb-1">대변 (Credit)</label>
-                      <select
-                        value={entry.creditAccountId}
-                        onChange={e => updateEntry(index, 'creditAccountId', e.target.value)}
-                        className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        required
-                      >
-                        <option value="">계정 선택</option>
-                        {accounts.map(acc => (
-                          <option key={acc.id} value={acc.id}>
-                            {acc.code} - {acc.name}
-                          </option>
-                        ))}
-                      </select>
+                      <span className="block text-xs font-medium text-green-700 mb-1.5">대변 (Credit)</span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {accounts.map(acc => {
+                          const selected = entry.creditAccountId === acc.id
+                          return (
+                            <button
+                              key={acc.id}
+                              type="button"
+                              onClick={() => updateEntry(index, 'creditAccountId', selected ? '' : acc.id)}
+                              className={[
+                                'px-2.5 py-1 rounded-full text-xs font-medium border transition-colors',
+                                selected
+                                  ? 'bg-green-100 text-green-700 border-green-300'
+                                  : 'bg-white text-gray-600 border-gray-300 hover:border-green-300 hover:text-green-600',
+                              ].join(' ')}
+                            >
+                              {acc.code} {acc.name}
+                            </button>
+                          )
+                        })}
+                        {accounts.length === 0 && (
+                          <span className="text-xs text-gray-400">계정 목록 로딩 중...</span>
+                        )}
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">금액 (원)</label>
-                      <input
-                        type="number"
-                        value={entry.amount}
-                        onChange={e => updateEntry(index, 'amount', e.target.value)}
-                        className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="0"
-                        min="1"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">메모 (선택)</label>
-                      <input
-                        type="text"
-                        value={entry.description}
-                        onChange={e => updateEntry(index, 'description', e.target.value)}
-                        className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="항목 설명"
-                      />
+
+                    {/* Amount & memo */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">금액 (원)</label>
+                        <input
+                          type="number"
+                          value={entry.amount}
+                          onChange={e => updateEntry(index, 'amount', e.target.value)}
+                          className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="0"
+                          min="1"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">메모 (선택)</label>
+                        <input
+                          type="text"
+                          value={entry.description}
+                          onChange={e => updateEntry(index, 'description', e.target.value)}
+                          className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="항목 설명"
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
