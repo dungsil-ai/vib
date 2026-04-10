@@ -60,18 +60,22 @@ export default function AccountsPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setFormError('')
-    const res = await fetch('/api/accounts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...formData, type: showFormFor }),
-    })
-    const data = await res.json()
-    if (!res.ok) {
-      setFormError(data.error || '오류가 발생했습니다.')
-    } else {
-      setShowFormFor(null)
-      setFormData({ name: '', description: '' })
-      fetchAccounts()
+    try {
+      const res = await fetch('/api/accounts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...formData, type: showFormFor }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setFormError(data.error || '오류가 발생했습니다.')
+      } else {
+        setShowFormFor(null)
+        setFormData({ name: '', description: '' })
+        fetchAccounts()
+      }
+    } catch {
+      setFormError('네트워크 오류가 발생했습니다.')
     }
   }
 
