@@ -205,7 +205,7 @@ export default function NewTransactionPage() {
                         <option value="">계정 선택</option>
                         {accounts.map(acc => (
                           <option key={acc.id} value={acc.id}>
-                            {acc.code} - {acc.name}
+                            {acc.name}
                           </option>
                         ))}
                       </select>
@@ -221,7 +221,7 @@ export default function NewTransactionPage() {
                         <option value="">계정 선택</option>
                         {accounts.map(acc => (
                           <option key={acc.id} value={acc.id}>
-                            {acc.code} - {acc.name}
+                            {acc.name}
                           </option>
                         ))}
                       </select>

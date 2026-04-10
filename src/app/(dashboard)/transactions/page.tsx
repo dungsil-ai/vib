@@ -151,10 +151,10 @@ export default function TransactionsPage() {
                               {tx.entries.map(entry => (
                                 <div key={entry.id} className="flex items-center gap-4 text-xs">
                                   <span className="bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 px-2 py-0.5 rounded">
-                                    차변: {entry.debitAccount.name} ({entry.debitAccount.code})
+                                    차변: {entry.debitAccount.name}
                                   </span>
                                   <span className="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-2 py-0.5 rounded">
-                                    대변: {entry.creditAccount.name} ({entry.creditAccount.code})
+                                    대변: {entry.creditAccount.name}
                                   </span>
                                   <span className="font-medium dark:text-gray-300">{formatCurrency(Number(entry.amount))}</span>
                                   {entry.description && (
