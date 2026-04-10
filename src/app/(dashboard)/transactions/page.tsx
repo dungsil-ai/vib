@@ -17,6 +17,9 @@ interface EntryForm {
   description: string
 }
 
+// NOTE: Keep a dedicated accounts error state in the component state section:
+// const [accountsError, setAccountsError] = useState<string | null>(null)
+
 interface Entry {
   id: string
   amount: string
@@ -299,8 +302,12 @@ export default function TransactionsPage() {
                             )
                           })}
                           {accounts.length === 0 && (
-                            <span className={`text-xs ${accountsLoading ? 'text-gray-400' : 'text-gray-400'}`}>
-                              {accountsLoading ? '계정 목록 로딩 중...' : '등록된 계정이 없습니다.'}
+                            <span className={`text-xs ${accountsError ? 'text-red-500' : 'text-gray-400'}`}>
+                              {accountsLoading
+                                ? '계정 목록 로딩 중...'
+                                : accountsError
+                                  ? '계정 목록을 불러오지 못했습니다.'
+                                  : '등록된 계정이 없습니다.'}
                             </span>
                           )}
                         </div>
@@ -330,8 +337,12 @@ export default function TransactionsPage() {
                             )
                           })}
                           {accounts.length === 0 && (
-                            <span className={`text-xs ${accountsLoading ? 'text-gray-400' : 'text-gray-400'}`}>
-                              {accountsLoading ? '계정 목록 로딩 중...' : '등록된 계정이 없습니다.'}
+                            <span className={`text-xs ${accountsError ? 'text-red-500' : 'text-gray-400'}`}>
+                              {accountsLoading
+                                ? '계정 목록 로딩 중...'
+                                : accountsError
+                                  ? '계정 목록을 불러오지 못했습니다.'
+                                  : '등록된 계정이 없습니다.'}
                             </span>
                           )}
                         </div>
