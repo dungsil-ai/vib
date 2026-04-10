@@ -126,7 +126,10 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: '이미 존재하는 계정 코드입니다.' }, { status: 409 })
       }
       if (prismaCode === 'P2003') {
-        return NextResponse.json({ error: '인증이 만료되었습니다. 다시 로그인해주세요.' }, { status: 401 })
+        return NextResponse.json(
+          { error: '연결된 사용자 정보를 찾을 수 없어 계정을 생성할 수 없습니다.' },
+          { status: 409 },
+        )
       }
     }
     console.error('Account creation error:', error)
