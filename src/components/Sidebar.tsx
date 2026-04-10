@@ -60,6 +60,7 @@ export function Sidebar({ user }: SidebarProps) {
           onClick={toggleTheme}
           className="flex items-center gap-2 w-full text-left px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg mb-1"
           aria-label={theme === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환'}
+          aria-pressed={theme === 'dark'}
         >
           <Icon
             icon={theme === 'dark' ? 'lucide:sun' : 'lucide:moon'}
