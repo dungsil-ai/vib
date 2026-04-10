@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: '필수 필드를 입력해주세요.' }, { status: 400 })
   }
 
-  if (!(type in TYPE_CODE_PREFIX)) {
+  if (!Object.prototype.hasOwnProperty.call(TYPE_CODE_PREFIX, type)) {
     return NextResponse.json({ error: '올바른 계정 유형을 선택해주세요.' }, { status: 400 })
   }
 
