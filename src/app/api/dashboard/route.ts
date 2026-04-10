@@ -80,6 +80,20 @@ export async function GET() {
           entries: {
             select: {
               amount: true,
+              debitAccount: {
+                select: {
+                  id: true,
+                  name: true,
+                  code: true,
+                },
+              },
+              creditAccount: {
+                select: {
+                  id: true,
+                  name: true,
+                  code: true,
+                },
+              },
             },
           },
         },
