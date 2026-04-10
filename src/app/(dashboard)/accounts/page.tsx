@@ -157,7 +157,7 @@ export default function AccountsPage() {
                 </div>
               )}
               {isFormOpen ? (
-                <div className="p-4 border-t bg-gray-50">
+                <div className="p-4 border-t">
                   {formError && <div className="mb-3 text-red-600 text-sm">{formError}</div>}
                   <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-3">
                     <div>
@@ -197,10 +197,10 @@ export default function AccountsPage() {
                   </form>
                 </div>
               ) : (
-                <div className="p-3 border-t">
+                <div className="p-3">
                   <button
                     onClick={() => { setShowFormFor(type); setFormData({ name: '', description: '' }); setFormError('') }}
-                    className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                    className="w-full py-2 border-2 border-dashed border-gray-300 text-gray-500 hover:border-blue-400 hover:text-blue-500 rounded-lg text-sm"
                   >
                     + 계정 추가
                   </button>
