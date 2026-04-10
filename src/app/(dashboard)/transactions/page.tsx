@@ -259,6 +259,7 @@ export default function TransactionsPage() {
                               <button
                                 key={acc.id}
                                 type="button"
+                                aria-pressed={selected}
                                 onClick={() => updateEntry(index, 'debitAccountId', selected ? '' : acc.id)}
                                 className={[
                                   'px-2.5 py-1 rounded-full text-xs font-medium border transition-colors',
@@ -287,6 +288,7 @@ export default function TransactionsPage() {
                               <button
                                 key={acc.id}
                                 type="button"
+                                aria-pressed={selected}
                                 onClick={() => updateEntry(index, 'creditAccountId', selected ? '' : acc.id)}
                                 className={[
                                   'px-2.5 py-1 rounded-full text-xs font-medium border transition-colors',
