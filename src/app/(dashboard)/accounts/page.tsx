@@ -11,11 +11,11 @@ const ACCOUNT_TYPE_LABELS: Record<string, string> = {
 }
 
 const ACCOUNT_TYPE_COLORS: Record<string, string> = {
-  ASSET: 'bg-blue-100 text-blue-800',
-  LIABILITY: 'bg-red-100 text-red-800',
-  EQUITY: 'bg-purple-100 text-purple-800',
-  REVENUE: 'bg-green-100 text-green-800',
-  EXPENSE: 'bg-orange-100 text-orange-800',
+  ASSET: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
+  LIABILITY: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+  EQUITY: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400',
+  REVENUE: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+  EXPENSE: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400',
 }
 
 interface Account {
@@ -97,7 +97,7 @@ export default function AccountsPage() {
   }, {} as Record<string, Account[]>)
 
   if (loading) {
-    return <div className="flex items-center justify-center h-full"><div className="text-gray-500">로딩 중...</div></div>
+    return <div className="flex items-center justify-center h-full"><div className="text-gray-500 dark:text-gray-400">로딩 중...</div></div>
   }
 
   if (!showForm && error && accounts.length === 0) {
@@ -107,7 +107,7 @@ export default function AccountsPage() {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-900">계정 관리</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">계정 관리</h1>
         <button
           onClick={() => setShowForm(!showForm)}
           className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
@@ -117,27 +117,27 @@ export default function AccountsPage() {
       </div>
 
       {showForm && (
-        <div className="bg-white rounded-xl shadow-sm border p-6">
-          <h2 className="font-semibold text-gray-900 mb-4">새 계정 추가</h2>
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border dark:border-gray-700 p-6">
+          <h2 className="font-semibold text-gray-900 dark:text-gray-100 mb-4">새 계정 추가</h2>
           {error && <div className="mb-4 text-red-600 text-sm">{error}</div>}
           <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">계정명</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">계정명</label>
               <input
                 type="text"
                 value={formData.name}
                 onChange={e => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
                 placeholder="예: 현금"
                 required
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">계정 유형</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">계정 유형</label>
               <select
                 value={formData.type}
                 onChange={e => setFormData({ ...formData, type: e.target.value })}
-                className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
               >
                 {Object.entries(ACCOUNT_TYPE_LABELS).map(([value, label]) => (
                   <option key={value} value={value}>{label} ({value})</option>
@@ -145,12 +145,12 @@ export default function AccountsPage() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">설명 (선택)</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">설명 (선택)</label>
               <input
                 type="text"
                 value={formData.description}
                 onChange={e => setFormData({ ...formData, description: e.target.value })}
-                className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
                 placeholder="계정 설명"
               />
             </div>
@@ -158,7 +158,7 @@ export default function AccountsPage() {
               <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium">
                 저장
               </button>
-              <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm font-medium">
+              <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 text-sm font-medium">
                 취소
               </button>
             </div>
@@ -170,30 +170,30 @@ export default function AccountsPage() {
         const typeAccounts = groupedAccounts[type] || []
         if (typeAccounts.length === 0) return null
         return (
-          <div key={type} className="bg-white rounded-xl shadow-sm border">
-            <div className="p-4 border-b flex items-center gap-2">
+          <div key={type} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border dark:border-gray-700">
+            <div className="p-4 border-b dark:border-gray-700 flex items-center gap-2">
               <span className={`px-2 py-1 rounded text-xs font-medium ${ACCOUNT_TYPE_COLORS[type]}`}>{label}</span>
-              <span className="text-sm text-gray-500">({typeAccounts.length}개)</span>
+              <span className="text-sm text-gray-500 dark:text-gray-400">({typeAccounts.length}개)</span>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-gray-50">
+                <thead className="bg-gray-50 dark:bg-gray-700/50">
                   <tr>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">코드</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">계정명</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">설명</th>
-                    <th className="text-right px-4 py-3 font-medium text-gray-600">잔액</th>
-                    <th className="text-center px-4 py-3 font-medium text-gray-600">작업</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400">코드</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400">계정명</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400">설명</th>
+                    <th className="text-right px-4 py-3 font-medium text-gray-600 dark:text-gray-400">잔액</th>
+                    <th className="text-center px-4 py-3 font-medium text-gray-600 dark:text-gray-400">작업</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y">
+                <tbody className="divide-y dark:divide-gray-700">
                   {typeAccounts.map(account => (
-                    <tr key={account.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 font-mono text-gray-600">{account.code}</td>
-                      <td className="px-4 py-3 font-medium text-gray-900">{account.name}</td>
-                      <td className="px-4 py-3 text-gray-500">{account.description || '-'}</td>
+                    <tr key={account.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                      <td className="px-4 py-3 font-mono text-gray-600 dark:text-gray-400">{account.code}</td>
+                      <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{account.name}</td>
+                      <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{account.description || '-'}</td>
                       <td className="px-4 py-3 text-right font-medium">
-                        <span className={account.balance >= 0 ? 'text-gray-900' : 'text-red-500'}>
+                        <span className={account.balance >= 0 ? 'text-gray-900 dark:text-gray-100' : 'text-red-500'}>
                           {formatCurrency(account.balance)}
                         </span>
                       </td>
@@ -215,8 +215,8 @@ export default function AccountsPage() {
       })}
 
       {accounts.length === 0 && (
-        <div className="bg-white rounded-xl shadow-sm border p-12 text-center">
-          <p className="text-gray-500">계정이 없습니다. 계정을 추가해보세요.</p>
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border dark:border-gray-700 p-12 text-center">
+          <p className="text-gray-500 dark:text-gray-400">계정이 없습니다. 계정을 추가해보세요.</p>
         </div>
       )}
     </div>
