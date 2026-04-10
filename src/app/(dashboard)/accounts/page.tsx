@@ -179,7 +179,6 @@ export default function AccountsPage() {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">코드</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-600">계정명</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-600">설명</th>
                     <th className="text-right px-4 py-3 font-medium text-gray-600">잔액</th>
@@ -189,7 +188,6 @@ export default function AccountsPage() {
                 <tbody className="divide-y">
                   {typeAccounts.map(account => (
                     <tr key={account.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 font-mono text-gray-600">{account.code}</td>
                       <td className="px-4 py-3 font-medium text-gray-900">{account.name}</td>
                       <td className="px-4 py-3 text-gray-500">{account.description || '-'}</td>
                       <td className="px-4 py-3 text-right font-medium">
