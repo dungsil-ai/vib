@@ -60,6 +60,10 @@ export default function AccountsPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setFormError('')
+    if (!showFormFor) {
+      setFormError('계정 유형을 선택해주세요.')
+      return
+    }
     try {
       const res = await fetch('/api/accounts', {
         method: 'POST',
@@ -105,15 +109,17 @@ export default function AccountsPage() {
     return <div className="flex items-center justify-center h-full"><div className="text-gray-500">로딩 중...</div></div>
   }
 
-  if (!showFormFor && error && accounts.length === 0) {
-    return <div className="flex items-center justify-center h-full"><div className="text-red-500">{error}</div></div>
-  }
-
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold text-gray-900">계정 관리</h1>
       </div>
+
+      {error && (
+        <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {Object.entries(ACCOUNT_TYPE_LABELS).map(([type, label]) => {
