@@ -20,9 +20,14 @@ export function useTheme() {
 
 function getInitialTheme(): Theme {
   if (typeof window === 'undefined') return 'light'
-  const stored = localStorage.getItem('theme') as Theme | null
+  try {
+    const stored = localStorage.getItem('theme')
+    if (stored === 'light' || stored === 'dark') return stored
+  } catch {
+    // localStorage unavailable (e.g. Safari private mode) – fall through
+  }
   const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-  return stored ?? (prefersDark ? 'dark' : 'light')
+  return prefersDark ? 'dark' : 'light'
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
@@ -35,7 +40,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
     const handleChange = (e: MediaQueryListEvent) => {
-      if (!localStorage.getItem('theme')) {
+      let hasUserPreference = false
+      try {
+        hasUserPreference = !!localStorage.getItem('theme')
+      } catch {
+        // localStorage unavailable – treat as no stored preference
+      }
+      if (!hasUserPreference) {
         setTheme(e.matches ? 'dark' : 'light')
       }
     }
@@ -46,7 +57,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const toggleTheme = () => {
     setTheme(prev => {
       const next = prev === 'dark' ? 'light' : 'dark'
-      localStorage.setItem('theme', next)
+      try {
+        localStorage.setItem('theme', next)
+      } catch (error) {
+        console.error('Failed to persist theme preference:', error)
+      }
       return next
     })
   }
