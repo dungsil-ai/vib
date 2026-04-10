@@ -134,13 +134,13 @@ export default function NewTransactionPage() {
   return (
     <div className="space-y-6 max-w-3xl">
       <div className="flex items-center gap-4">
-        <Link href="/transactions" className="text-gray-500 hover:text-gray-700">← 뒤로</Link>
-        <h1 className="text-2xl font-bold text-gray-900">거래 추가</h1>
+        <Link href="/transactions" className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">← 뒤로</Link>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">거래 추가</h1>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border dark:border-gray-700 p-6">
         {error && (
-          <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+          <div className="mb-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded">
             {error}
           </div>
         )}
@@ -148,22 +148,22 @@ export default function NewTransactionPage() {
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">날짜</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">날짜</label>
               <input
                 type="date"
                 value={date}
                 onChange={e => setDate(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
                 required
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">거래 설명</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">거래 설명</label>
               <input
                 type="text"
                 value={description}
                 onChange={e => setDescription(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
                 placeholder="거래 내용을 입력하세요"
                 required
               />
@@ -172,17 +172,17 @@ export default function NewTransactionPage() {
 
           <div>
             <div className="flex justify-between items-center mb-3">
-              <h2 className="font-medium text-gray-900">분개 항목</h2>
-              <div className="text-sm text-gray-600">
+              <h2 className="font-medium text-gray-900 dark:text-gray-100">분개 항목</h2>
+              <div className="text-sm text-gray-600 dark:text-gray-400">
                 총액: <span className="font-semibold text-blue-600">{formatCurrency(totalAmount)}</span>
               </div>
             </div>
 
             <div className="space-y-3">
               {entries.map((entry, index) => (
-                <div key={index} className="border rounded-lg p-4 bg-gray-50">
+                <div key={index} className="border dark:border-gray-600 rounded-lg p-4 bg-gray-50 dark:bg-gray-700/50">
                   <div className="flex justify-between items-center mb-3">
-                    <span className="text-sm font-medium text-gray-600">항목 {index + 1}</span>
+                    <span className="text-sm font-medium text-gray-600 dark:text-gray-400">항목 {index + 1}</span>
                     {entries.length > 1 && (
                       <button
                         type="button"
@@ -195,56 +195,56 @@ export default function NewTransactionPage() {
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-medium text-red-700 mb-1">차변 (Debit)</label>
+                      <label className="block text-xs font-medium text-red-700 dark:text-red-400 mb-1">차변 (Debit)</label>
                       <select
                         value={entry.debitAccountId}
                         onChange={e => updateEntry(index, 'debitAccountId', e.target.value)}
-                        className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
                         required
                       >
                         <option value="">계정 선택</option>
                         {accounts.map(acc => (
                           <option key={acc.id} value={acc.id}>
-                            {acc.code} - {acc.name}
+                            {acc.name}
                           </option>
                         ))}
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-green-700 mb-1">대변 (Credit)</label>
+                      <label className="block text-xs font-medium text-green-700 dark:text-green-400 mb-1">대변 (Credit)</label>
                       <select
                         value={entry.creditAccountId}
                         onChange={e => updateEntry(index, 'creditAccountId', e.target.value)}
-                        className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
                         required
                       >
                         <option value="">계정 선택</option>
                         {accounts.map(acc => (
                           <option key={acc.id} value={acc.id}>
-                            {acc.code} - {acc.name}
+                            {acc.name}
                           </option>
                         ))}
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">금액 (원)</label>
+                      <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">금액 (원)</label>
                       <input
                         type="number"
                         value={entry.amount}
                         onChange={e => updateEntry(index, 'amount', e.target.value)}
-                        className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
                         placeholder="0"
                         min="1"
                         required
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">메모 (선택)</label>
+                      <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">메모 (선택)</label>
                       <input
                         type="text"
                         value={entry.description}
                         onChange={e => updateEntry(index, 'description', e.target.value)}
-                        className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
                         placeholder="항목 설명"
                       />
                     </div>
@@ -256,7 +256,7 @@ export default function NewTransactionPage() {
             <button
               type="button"
               onClick={addEntry}
-              className="mt-3 w-full py-2 border-2 border-dashed border-gray-300 text-gray-500 hover:border-blue-400 hover:text-blue-500 rounded-lg text-sm"
+              className="mt-3 w-full py-2 border-2 border-dashed border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-blue-400 hover:text-blue-500 rounded-lg text-sm"
             >
               + 항목 추가
             </button>
@@ -272,7 +272,7 @@ export default function NewTransactionPage() {
             </button>
             <Link
               href="/transactions"
-              className="px-6 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm font-medium"
+              className="px-6 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 text-sm font-medium"
             >
               취소
             </Link>

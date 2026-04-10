@@ -143,7 +143,7 @@ export default function BudgetPage() {
   }
 
   if (loading) {
-    return <div className="flex items-center justify-center h-full"><div className="text-gray-500">로딩 중...</div></div>
+    return <div className="flex items-center justify-center h-full"><div className="text-gray-500 dark:text-gray-400">로딩 중...</div></div>
   }
 
   if (error) {
@@ -156,12 +156,12 @@ export default function BudgetPage() {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-900">예산 관리</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">예산 관리</h1>
         <div className="flex gap-2 items-center">
           <select
             value={year}
             onChange={e => setYear(parseInt(e.target.value))}
-            className="px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="px-3 py-2 border dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
           >
             {Array.from({ length: 5 }, (_, i) => now.getFullYear() - 2 + i).map(y => (
               <option key={y} value={y}>{y}년</option>
@@ -170,7 +170,7 @@ export default function BudgetPage() {
           <select
             value={month}
             onChange={e => setMonth(parseInt(e.target.value))}
-            className="px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="px-3 py-2 border dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
           >
             {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
               <option key={m} value={m}>{m}월</option>
@@ -181,31 +181,31 @@ export default function BudgetPage() {
 
       {/* Summary */}
       <div className="grid grid-cols-3 gap-4">
-        <div className="bg-white rounded-xl p-5 shadow-sm border">
-          <p className="text-sm text-gray-500">총 예산</p>
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border dark:border-gray-700">
+          <p className="text-sm text-gray-500 dark:text-gray-400">총 예산</p>
           <p className="text-xl font-bold text-blue-600 mt-1">{formatCurrency(totalBudget)}</p>
         </div>
-        <div className="bg-white rounded-xl p-5 shadow-sm border">
-          <p className="text-sm text-gray-500">실제 지출</p>
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border dark:border-gray-700">
+          <p className="text-sm text-gray-500 dark:text-gray-400">실제 지출</p>
           <p className="text-xl font-bold text-orange-500 mt-1">{formatCurrency(totalActual)}</p>
         </div>
-        <div className="bg-white rounded-xl p-5 shadow-sm border">
-          <p className="text-sm text-gray-500">남은 예산</p>
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border dark:border-gray-700">
+          <p className="text-sm text-gray-500 dark:text-gray-400">남은 예산</p>
           <p className={`text-xl font-bold mt-1 ${totalBudget - totalActual >= 0 ? 'text-green-600' : 'text-red-500'}`}>
             {formatCurrency(totalBudget - totalActual)}
           </p>
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border">
-        <div className="p-4 border-b">
-          <h2 className="font-semibold text-gray-900">비용 계정별 예산</h2>
-          <p className="text-xs text-gray-500 mt-1">예산 금액을 클릭하여 편집하세요</p>
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border dark:border-gray-700">
+        <div className="p-4 border-b dark:border-gray-700">
+          <h2 className="font-semibold text-gray-900 dark:text-gray-100">비용 계정별 예산</h2>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">예산 금액을 클릭하여 편집하세요</p>
         </div>
         {rows.length === 0 ? (
-          <div className="p-12 text-center text-gray-500">비용 계정이 없습니다.</div>
+          <div className="p-12 text-center text-gray-500 dark:text-gray-400">비용 계정이 없습니다.</div>
         ) : (
-          <div className="divide-y">
+          <div className="divide-y dark:divide-gray-700">
             {rows.map((row, index) => {
               const actual = actualExpenses[row.account.id] || 0
               const budget = Number(row.budget?.amount || 0)
@@ -217,11 +217,10 @@ export default function BudgetPage() {
                 <div key={row.account.id} className="p-4">
                   <div className="flex items-center justify-between mb-2">
                     <div>
-                      <span className="font-medium text-gray-900">{row.account.name}</span>
-                      <span className="ml-2 text-xs text-gray-400 font-mono">{row.account.code}</span>
+                      <span className="font-medium text-gray-900 dark:text-gray-100">{row.account.name}</span>
                     </div>
                     <div className="flex items-center gap-4">
-                      <span className={`text-sm ${isOver ? 'text-red-500 font-medium' : 'text-gray-600'}`}>
+                      <span className={`text-sm ${isOver ? 'text-red-500 font-medium' : 'text-gray-600 dark:text-gray-400'}`}>
                         실제: {formatCurrency(actual)}
                       </span>
                       {row.editing ? (
@@ -230,7 +229,7 @@ export default function BudgetPage() {
                             type="number"
                             value={row.editAmount}
                             onChange={e => updateEditAmount(index, e.target.value)}
-                            className="w-28 px-2 py-1 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-28 px-2 py-1 border dark:border-gray-600 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
                             placeholder="예산 금액"
                             autoFocus
                           />
@@ -246,7 +245,7 @@ export default function BudgetPage() {
                               updated[index].editing = false
                               setRows(updated)
                             }}
-                            className="px-2 py-1 bg-gray-100 text-gray-600 rounded text-xs"
+                            className="px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded text-xs"
                           >
                             취소
                           </button>
@@ -263,13 +262,13 @@ export default function BudgetPage() {
                   </div>
                   {hasBudget && (
                     <div className="mt-2">
-                      <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2">
                         <div
                           className={`h-2 rounded-full transition-all ${isOver ? 'bg-red-500' : pct > 80 ? 'bg-yellow-500' : 'bg-blue-500'}`}
                           style={{ width: `${pct}%` }}
                         />
                       </div>
-                      <div className="flex justify-between text-xs text-gray-400 mt-1">
+                      <div className="flex justify-between text-xs text-gray-400 dark:text-gray-500 mt-1">
                         <span>{pct.toFixed(1)}% 사용</span>
                         <span>남은 예산: {formatCurrency(Math.max(0, budget - actual))}</span>
                       </div>

@@ -11,11 +11,11 @@ const ACCOUNT_TYPE_LABELS: Record<string, string> = {
 }
 
 const ACCOUNT_TYPE_COLORS: Record<string, string> = {
-  ASSET: 'bg-blue-100 text-blue-800',
-  LIABILITY: 'bg-red-100 text-red-800',
-  EQUITY: 'bg-purple-100 text-purple-800',
-  REVENUE: 'bg-green-100 text-green-800',
-  EXPENSE: 'bg-orange-100 text-orange-800',
+  ASSET: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
+  LIABILITY: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+  EQUITY: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400',
+  REVENUE: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+  EXPENSE: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400',
 }
 
 interface Account {
@@ -34,9 +34,10 @@ function formatCurrency(amount: number) {
 export default function AccountsPage() {
   const [accounts, setAccounts] = useState<Account[]>([])
   const [loading, setLoading] = useState(true)
-  const [showForm, setShowForm] = useState(false)
-  const [formData, setFormData] = useState({ name: '', type: 'ASSET', description: '' })
+  const [showFormFor, setShowFormFor] = useState<string | null>(null)
+  const [formData, setFormData] = useState({ name: '', description: '' })
   const [error, setError] = useState('')
+  const [formError, setFormError] = useState('')
 
   const fetchAccounts = async () => {
     setError('')
@@ -58,19 +59,27 @@ export default function AccountsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setError('')
-    const res = await fetch('/api/accounts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(formData),
-    })
-    const data = await res.json()
-    if (!res.ok) {
-      setError(data.error || '오류가 발생했습니다.')
-    } else {
-      setShowForm(false)
-      setFormData({ name: '', type: 'ASSET', description: '' })
-      fetchAccounts()
+    setFormError('')
+    if (!showFormFor) {
+      setFormError('계정 유형을 선택해주세요.')
+      return
+    }
+    try {
+      const res = await fetch('/api/accounts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...formData, type: showFormFor }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setFormError(data.error || '오류가 발생했습니다.')
+      } else {
+        setShowFormFor(null)
+        setFormData({ name: '', description: '' })
+        fetchAccounts()
+      }
+    } catch {
+      setFormError('네트워크 오류가 발생했습니다.')
     }
   }
 
@@ -97,128 +106,120 @@ export default function AccountsPage() {
   }, {} as Record<string, Account[]>)
 
   if (loading) {
-    return <div className="flex items-center justify-center h-full"><div className="text-gray-500">로딩 중...</div></div>
-  }
-
-  if (!showForm && error && accounts.length === 0) {
-    return <div className="flex items-center justify-center h-full"><div className="text-red-500">{error}</div></div>
+    return <div className="flex items-center justify-center h-full"><div className="text-gray-500 dark:text-gray-400">로딩 중...</div></div>
   }
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-900">계정 관리</h1>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
-        >
-          + 계정 추가
-        </button>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">계정 관리</h1>
       </div>
 
-      {showForm && (
-        <div className="bg-white rounded-xl shadow-sm border p-6">
-          <h2 className="font-semibold text-gray-900 mb-4">새 계정 추가</h2>
-          {error && <div className="mb-4 text-red-600 text-sm">{error}</div>}
-          <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">계정명</label>
-              <input
-                type="text"
-                value={formData.name}
-                onChange={e => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="예: 현금"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">계정 유형</label>
-              <select
-                value={formData.type}
-                onChange={e => setFormData({ ...formData, type: e.target.value })}
-                className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                {Object.entries(ACCOUNT_TYPE_LABELS).map(([value, label]) => (
-                  <option key={value} value={value}>{label} ({value})</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">설명 (선택)</label>
-              <input
-                type="text"
-                value={formData.description}
-                onChange={e => setFormData({ ...formData, description: e.target.value })}
-                className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="계정 설명"
-              />
-            </div>
-            <div className="col-span-2 flex gap-2">
-              <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium">
-                저장
-              </button>
-              <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm font-medium">
-                취소
-              </button>
-            </div>
-          </form>
+      {error && (
+        <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+          {error}
         </div>
       )}
 
-      {Object.entries(ACCOUNT_TYPE_LABELS).map(([type, label]) => {
-        const typeAccounts = groupedAccounts[type] || []
-        if (typeAccounts.length === 0) return null
-        return (
-          <div key={type} className="bg-white rounded-xl shadow-sm border">
-            <div className="p-4 border-b flex items-center gap-2">
-              <span className={`px-2 py-1 rounded text-xs font-medium ${ACCOUNT_TYPE_COLORS[type]}`}>{label}</span>
-              <span className="text-sm text-gray-500">({typeAccounts.length}개)</span>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {Object.entries(ACCOUNT_TYPE_LABELS).map(([type, label]) => {
+          const typeAccounts = groupedAccounts[type] || []
+          const isFormOpen = showFormFor === type
+          return (
+            <div key={type} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border dark:border-gray-700">
+              <div className="p-4 border-b dark:border-gray-700 flex items-center gap-2">
+                <span className={`px-2 py-1 rounded text-xs font-medium ${ACCOUNT_TYPE_COLORS[type]}`}>{label}</span>
+                <span className="text-sm text-gray-500 dark:text-gray-400">({typeAccounts.length}개)</span>
+              </div>
+              {typeAccounts.length > 0 && (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 dark:bg-gray-700/50">
+                      <tr>
+                        <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400">계정명</th>
+                        <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400">설명</th>
+                        <th className="text-right px-4 py-3 font-medium text-gray-600 dark:text-gray-400">잔액</th>
+                        <th className="text-center px-4 py-3 font-medium text-gray-600 dark:text-gray-400">작업</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y dark:divide-gray-700">
+                      {typeAccounts.map(account => (
+                        <tr key={account.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                          <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{account.name}</td>
+                          <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{account.description || '-'}</td>
+                          <td className="px-4 py-3 text-right font-medium">
+                            <span className={account.balance >= 0 ? 'text-gray-900 dark:text-gray-100' : 'text-red-500'}>
+                              {formatCurrency(account.balance)}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <button
+                              onClick={() => handleDelete(account.id)}
+                              className="text-xs text-red-600 hover:text-red-800"
+                            >
+                              삭제
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {isFormOpen ? (
+                <div className="p-4 border-t dark:border-gray-700">
+                  {formError && <div className="mb-3 text-red-600 text-sm">{formError}</div>}
+                  <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">계정명</label>
+                      <input
+                        type="text"
+                        value={formData.name}
+                        onChange={e => setFormData({ ...formData, name: e.target.value })}
+                        className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
+                        placeholder="예: 현금"
+                        required
+                        autoFocus
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">설명 (선택)</label>
+                      <input
+                        type="text"
+                        value={formData.description}
+                        onChange={e => setFormData({ ...formData, description: e.target.value })}
+                        className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
+                        placeholder="계정 설명"
+                      />
+                    </div>
+                    <div className="col-span-2 flex gap-2">
+                      <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium">
+                        저장
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setShowFormFor(null); setFormData({ name: '', description: '' }); setFormError('') }}
+                        className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 text-sm font-medium"
+                      >
+                        취소
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              ) : (
+                <div className="p-3">
+                  <button
+                    onClick={() => { setShowFormFor(type); setFormData({ name: '', description: '' }); setFormError('') }}
+                    className="w-full py-2 border-2 border-dashed border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-blue-400 hover:text-blue-500 rounded-lg text-sm"
+                  >
+                    + 계정 추가
+                  </button>
+                </div>
+              )}
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">코드</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">계정명</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">설명</th>
-                    <th className="text-right px-4 py-3 font-medium text-gray-600">잔액</th>
-                    <th className="text-center px-4 py-3 font-medium text-gray-600">작업</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {typeAccounts.map(account => (
-                    <tr key={account.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 font-mono text-gray-600">{account.code}</td>
-                      <td className="px-4 py-3 font-medium text-gray-900">{account.name}</td>
-                      <td className="px-4 py-3 text-gray-500">{account.description || '-'}</td>
-                      <td className="px-4 py-3 text-right font-medium">
-                        <span className={account.balance >= 0 ? 'text-gray-900' : 'text-red-500'}>
-                          {formatCurrency(account.balance)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <button
-                          onClick={() => handleDelete(account.id)}
-                          className="text-xs text-red-600 hover:text-red-800"
-                        >
-                          삭제
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )
-      })}
-
-      {accounts.length === 0 && (
-        <div className="bg-white rounded-xl shadow-sm border p-12 text-center">
-          <p className="text-gray-500">계정이 없습니다. 계정을 추가해보세요.</p>
-        </div>
-      )}
+          )
+        })}
+      </div>
     </div>
   )
 }
