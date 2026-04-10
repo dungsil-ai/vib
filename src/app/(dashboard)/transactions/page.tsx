@@ -60,6 +60,7 @@ export default function TransactionsPage() {
 
   // --- form state ---
   const [accounts, setAccounts] = useState<Account[]>([])
+  const [accountsLoading, setAccountsLoading] = useState(true)
   const [date, setDate] = useState(todayDate())
   const [txDescription, setTxDescription] = useState('')
   const [entries, setEntries] = useState<EntryForm[]>([defaultEntry()])
@@ -99,6 +100,10 @@ export default function TransactionsPage() {
       } catch (err) {
         if (!cancelled) {
           setFormError(err instanceof Error ? err.message : '계정 목록을 불러오는 중 오류가 발생했습니다.')
+        }
+      } finally {
+        if (!cancelled) {
+          setAccountsLoading(false)
         }
       }
     }
@@ -286,8 +291,8 @@ export default function TransactionsPage() {
                             )
                           })}
                           {accounts.length === 0 && (
-                            <span className={`text-xs ${formError ? 'text-red-500' : 'text-gray-400'}`}>
-                              {formError ? '계정 목록을 불러오지 못했습니다.' : '등록된 계정이 없습니다.'}
+                            <span className={`text-xs ${accountsLoading ? 'text-gray-400' : formError ? 'text-red-500' : 'text-gray-400'}`}>
+                              {accountsLoading ? '계정 목록 로딩 중...' : formError ? '계정 목록을 불러오지 못했습니다.' : '등록된 계정이 없습니다.'}
                             </span>
                           )}
                         </div>
@@ -317,8 +322,8 @@ export default function TransactionsPage() {
                             )
                           })}
                           {accounts.length === 0 && (
-                            <span className={`text-xs ${formError ? 'text-red-500' : 'text-gray-400'}`}>
-                              {formError ? '계정 목록을 불러오지 못했습니다.' : '등록된 계정이 없습니다.'}
+                            <span className={`text-xs ${accountsLoading ? 'text-gray-400' : formError ? 'text-red-500' : 'text-gray-400'}`}>
+                              {accountsLoading ? '계정 목록 로딩 중...' : formError ? '계정 목록을 불러오지 못했습니다.' : '등록된 계정이 없습니다.'}
                             </span>
                           )}
                         </div>
