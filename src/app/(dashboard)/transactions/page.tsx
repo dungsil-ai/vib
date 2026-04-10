@@ -67,19 +67,27 @@ export default function TransactionsPage() {
   const [formError, setFormError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
-  const fetchTransactions = async () => {
+  const fetchTransactions = async (isCancelled: () => boolean = () => false) => {
     try {
-      setListError(null)
+      if (!isCancelled()) {
+        setListError(null)
+      }
       const res = await fetch('/api/transactions')
       if (!res.ok) {
         throw new Error(`거래 내역을 불러오지 못했습니다. (${res.status})`)
       }
       const data = await res.json()
-      setTransactions(data)
+      if (!isCancelled()) {
+        setTransactions(data)
+      }
     } catch (err) {
-      setListError(err instanceof Error ? err.message : '거래 내역을 불러오는 중 오류가 발생했습니다.')
+      if (!isCancelled()) {
+        setListError(err instanceof Error ? err.message : '거래 내역을 불러오는 중 오류가 발생했습니다.')
+      }
     } finally {
-      setListLoading(false)
+      if (!isCancelled()) {
+        setListLoading(false)
+      }
     }
   }
 
@@ -109,7 +117,7 @@ export default function TransactionsPage() {
     }
 
     init()
-    fetchTransactions()
+    fetchTransactions(() => cancelled)
 
     return () => { cancelled = true }
   }, [])
