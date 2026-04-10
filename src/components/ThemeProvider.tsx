@@ -53,8 +53,14 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         setTheme(e.matches ? 'dark' : 'light')
       }
     }
-    mediaQuery.addEventListener('change', handleChange)
-    return () => mediaQuery.removeEventListener('change', handleChange)
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', handleChange)
+      return () => mediaQuery.removeEventListener('change', handleChange)
+    } else {
+      // Safari < 14 / iOS < 14 only support addListener/removeListener
+      mediaQuery.addListener(handleChange)
+      return () => mediaQuery.removeListener(handleChange)
+    }
   }, [])
 
   const toggleTheme = () => {
