@@ -58,6 +58,10 @@ jobs:
         env:
           DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci"
 
+      - name: Fix lcov data inconsistencies
+        if: github.event_name == 'pull_request'
+        run: lcov --ignore-errors inconsistent -a coverage/lcov.info -o coverage/lcov.info
+
       - name: Verify coverage on PR
         if: github.event_name == 'pull_request'
         uses: zgosalvez/github-actions-report-lcov@v4
@@ -65,7 +69,6 @@ jobs:
           coverage-files: coverage/lcov.info
           minimum-coverage: 1
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          additional-lcov-options: --ignore-errors inconsistent
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
