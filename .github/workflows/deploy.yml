@@ -65,6 +65,7 @@ jobs:
           coverage-files: coverage/lcov.info
           minimum-coverage: 1
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          additional-lcov-options: --ignore-errors inconsistent
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
