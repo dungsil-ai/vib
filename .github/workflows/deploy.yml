@@ -60,7 +60,7 @@ jobs:
 
       - name: Fix lcov data inconsistencies
         if: github.event_name == 'pull_request'
-        run: lcov --ignore-errors inconsistent -a coverage/lcov.info -o coverage/lcov.info
+        run: lcov --ignore-errors inconsistent -a coverage/lcov.info -o coverage/lcov.info.tmp && mv coverage/lcov.info.tmp coverage/lcov.info
 
       - name: Verify coverage on PR
         if: github.event_name == 'pull_request'
