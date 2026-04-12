@@ -36,6 +36,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
 
@@ -50,10 +51,25 @@ jobs:
         env:
           DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci"
 
+      - name: Install lcov
+        run: sudo apt-get update -y && sudo apt-get install -y lcov
+
       - name: Run unit tests
         run: npm run test:coverage
         env:
           DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci"
+
+      - name: Fix lcov data inconsistencies
+        if: github.event_name == 'pull_request'
+        run: lcov --ignore-errors inconsistent -a coverage/lcov.info -o coverage/lcov.info.tmp && mv coverage/lcov.info.tmp coverage/lcov.info
+
+      - name: Verify coverage on PR
+        if: github.event_name == 'pull_request'
+        uses: zgosalvez/github-actions-report-lcov@v4
+        with:
+          coverage-files: coverage/lcov.info
+          minimum-coverage: 1
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
