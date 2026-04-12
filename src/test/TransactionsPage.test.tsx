@@ -86,7 +86,7 @@ describe('TransactionsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     global.fetch = vi.fn()
-    // mock crypto.randomUUID
+    // crypto.randomUUID 모킹
     vi.spyOn(crypto, 'randomUUID').mockReturnValue('mock-uuid-1' as `${string}-${string}-${string}-${string}-${string}`)
   })
 
@@ -218,13 +218,22 @@ describe('TransactionsPage', () => {
       expect(screen.getByText('거래 추가')).toBeInTheDocument()
     })
 
-    // 금액만 입력하고 계정 선택 없이 제출 시도
-    const amountInput = screen.getByPlaceholderText('0')
-    await user.type(amountInput, '10000')
+    // 차변만 선택하고 대변, 금액 없이 제출 시도
+    const debitSection = screen.getByText('차변 (Debit)').closest('div')!
+    await user.click(within(debitSection).getByRole('button', { name: '101 현금' }))
 
-    // submit은 HTML5 required에 의해 차단될 수 있으므로, 
-    // 직접 handleSubmit 호출을 트리거
-    // formError가 설정되는지 확인
+    // 설명 입력 (required 필드이므로)
+    await user.type(screen.getByPlaceholderText('거래 내용을 입력하세요'), '테스트')
+
+    // 금액 입력
+    await user.type(screen.getByPlaceholderText('0'), '10000')
+
+    // 대변 계정 없이 제출
+    await user.click(screen.getByRole('button', { name: '거래 저장' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('모든 항목의 차변 계정, 대변 계정, 금액을 입력해주세요.')).toBeInTheDocument()
+    })
   })
 
   it('같은 차변/대변 계정 시 에러를 표시한다', async () => {

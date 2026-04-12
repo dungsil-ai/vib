@@ -20,7 +20,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 
-const authorize = (authOptions.providers[0] as { options: { authorize: (credentials: Record<string, string> | undefined) => Promise<{ id: string; email: string; name: string } | null> } }).options.authorize
+const credentialsAuthorize = (authOptions.providers[0] as { options: { authorize: (credentials: Record<string, string> | undefined) => Promise<{ id: string; email: string; name: string } | null> } }).options.authorize
 
 describe('auth - authorize', () => {
   beforeEach(() => {
@@ -28,24 +28,24 @@ describe('auth - authorize', () => {
   })
 
   it('자격 증명이 없으면 null을 반환한다', async () => {
-    const result = await authorize(undefined)
+    const result = await credentialsAuthorize(undefined)
     expect(result).toBeNull()
   })
 
   it('이메일이 없으면 null을 반환한다', async () => {
-    const result = await authorize({ password: 'test123' } as Record<string, string>)
+    const result = await credentialsAuthorize({ password: 'test123' } as Record<string, string>)
     expect(result).toBeNull()
   })
 
   it('비밀번호가 없으면 null을 반환한다', async () => {
-    const result = await authorize({ email: 'test@example.com' } as Record<string, string>)
+    const result = await credentialsAuthorize({ email: 'test@example.com' } as Record<string, string>)
     expect(result).toBeNull()
   })
 
   it('사용자를 찾을 수 없으면 null을 반환한다', async () => {
     vi.mocked(prisma.user.findUnique).mockResolvedValue(null)
 
-    const result = await authorize({
+    const result = await credentialsAuthorize({
       email: 'unknown@example.com',
       password: 'test123',
     })
@@ -66,7 +66,7 @@ describe('auth - authorize', () => {
     })
     vi.mocked(bcrypt.compare).mockResolvedValue(false as never)
 
-    const result = await authorize({
+    const result = await credentialsAuthorize({
       email: 'test@example.com',
       password: 'wrong_password',
     })
@@ -84,7 +84,7 @@ describe('auth - authorize', () => {
     })
     vi.mocked(bcrypt.compare).mockResolvedValue(true as never)
 
-    const result = await authorize({
+    const result = await credentialsAuthorize({
       email: 'test@example.com',
       password: 'correct_password',
     })
@@ -98,7 +98,7 @@ describe('auth - authorize', () => {
   it('이메일을 소문자로 정규화한다', async () => {
     vi.mocked(prisma.user.findUnique).mockResolvedValue(null)
 
-    await authorize({
+    await credentialsAuthorize({
       email: '  Test@Example.COM  ',
       password: 'test123',
     })
