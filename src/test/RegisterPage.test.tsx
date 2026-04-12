@@ -120,6 +120,11 @@ describe('RegisterPage', () => {
       ok: true,
       json: () => Promise.resolve({ message: 'ok' }),
     } as Response)
+
+    await waitFor(() => {
+      expect(screen.queryByText('가입 중...')).not.toBeInTheDocument()
+      expect(screen.getByRole('button')).not.toBeDisabled()
+    })
   })
 
   it('에러 없는 실패 응답 시 기본 메시지를 표시한다', async () => {

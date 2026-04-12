@@ -1,8 +1,11 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 import TransactionsPage from '@/app/(dashboard)/transactions/page'
+
+const originalFetch = global.fetch
+const originalConfirm = window.confirm
 
 const mockAccounts = [
   { id: 'acc-1', code: '101', name: '현금', type: 'ASSET' },
@@ -87,7 +90,14 @@ describe('TransactionsPage', () => {
     vi.clearAllMocks()
     global.fetch = vi.fn()
     // crypto.randomUUID 모킹
-    vi.spyOn(crypto, 'randomUUID').mockReturnValue('mock-uuid-1' as `${string}-${string}-${string}-${string}-${string}`)
+    let uuidCounter = 0
+    vi.spyOn(crypto, 'randomUUID').mockImplementation(() => `mock-uuid-${++uuidCounter}` as `${string}-${string}-${string}-${string}-${string}`)
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    global.fetch = originalFetch
+    window.confirm = originalConfirm
   })
 
   it('로딩 중 상태를 표시한다', () => {
@@ -196,16 +206,26 @@ describe('TransactionsPage', () => {
     await user.click(screen.getByText('+ 항목 추가'))
     expect(screen.getByText('항목 2')).toBeInTheDocument()
 
-    // 항목 삭제
-    const deleteButtons = screen.getAllByRole('button', { name: '삭제' })
-    // 첫 번째 삭제 버튼은 분개 항목 삭제 (거래 목록의 삭제와 구분)
-    const entryDeleteBtn = deleteButtons.find(btn => {
-      const parent = btn.closest('.border.dark\\:border-gray-600.rounded-lg')
-      return parent !== null
+    // 항목이 2개인지 확인
+    expect(screen.getAllByText(/^항목 \d+$/)).toHaveLength(2)
+
+    // 항목 2 삭제
+    const secondEntryContainer = screen
+      .getByText('항목 2')
+      .closest('.border')
+    expect(secondEntryContainer).not.toBeNull()
+
+    const entryDeleteBtn = within(secondEntryContainer as HTMLElement).getByRole('button', {
+      name: '삭제',
     })
-    if (entryDeleteBtn) {
-      await user.click(entryDeleteBtn)
-    }
+    expect(entryDeleteBtn).toBeInTheDocument()
+
+    await user.click(entryDeleteBtn)
+
+    await waitFor(() => {
+      expect(screen.queryByText('항목 2')).not.toBeInTheDocument()
+      expect(screen.getAllByText(/^항목 \d+$/)).toHaveLength(1)
+    })
   })
 
   it('폼 유효성 검증 - 필수 필드 누락', async () => {
@@ -303,7 +323,6 @@ describe('TransactionsPage', () => {
       expect(screen.getByText('점심 식사')).toBeInTheDocument()
     })
 
-    const fetchCallCount = vi.mocked(global.fetch).mock.calls.length
     const table = screen.getByRole('table')
     const tableDeleteButtons = within(table).getAllByRole('button', { name: '삭제' })
     await user.click(tableDeleteButtons[0])

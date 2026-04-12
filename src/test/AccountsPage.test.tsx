@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
@@ -7,6 +7,9 @@ vi.mock('@iconify/react', () => ({
 }))
 
 import AccountsPage from '@/app/(dashboard)/accounts/page'
+
+const originalFetch = global.fetch
+const originalConfirm = window.confirm
 
 const mockAccounts = [
   { id: '1', code: '101', name: '현금', type: 'ASSET', description: '현금 자산', balance: 1000000 },
@@ -20,6 +23,11 @@ describe('AccountsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     global.fetch = vi.fn()
+  })
+
+  afterEach(() => {
+    global.fetch = originalFetch
+    window.confirm = originalConfirm
   })
 
   it('로딩 중 상태를 표시한다', () => {
@@ -82,10 +90,10 @@ describe('AccountsPage', () => {
   })
 
   it('새 계정을 추가할 수 있다', async () => {
-    let callCount = 0
+    let getCallCount = 0
     vi.mocked(global.fetch).mockImplementation(async (input) => {
       const url = typeof input === 'string' ? input : (input as Request).url
-      if (url === '/api/accounts' && callCount++ === 0) {
+      if (url === '/api/accounts' && getCallCount++ === 0) {
         return { ok: true, json: () => Promise.resolve([]) } as Response
       }
       if (url === '/api/accounts') {
@@ -121,12 +129,10 @@ describe('AccountsPage', () => {
   })
 
   it('계정 추가 실패 시 에러를 표시한다', async () => {
-    let callCount = 0
     vi.mocked(global.fetch).mockImplementation(async (input, init) => {
       const url = typeof input === 'string' ? input : (input as Request).url
       const method = init?.method || 'GET'
       if (url === '/api/accounts' && method === 'GET') {
-        callCount++
         return { ok: true, json: () => Promise.resolve([]) } as Response
       }
       if (url === '/api/accounts' && method === 'POST') {
@@ -175,6 +181,13 @@ describe('AccountsPage', () => {
     await user.click(deleteButtons[0])
 
     expect(window.confirm).toHaveBeenCalledWith('이 계정을 삭제하시겠습니까?')
+
+    await waitFor(() => {
+      expect(vi.mocked(global.fetch)).toHaveBeenCalledWith(
+        `/api/accounts/1`,
+        { method: 'DELETE' },
+      )
+    })
   })
 
   it('삭제 취소 시 API를 호출하지 않는다', async () => {

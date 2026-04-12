@@ -194,10 +194,9 @@ describe('ThemeProvider', () => {
   })
 
   it('localStorage 접근 에러 시에도 기본값으로 동작한다', () => {
-    const original = Storage.prototype.getItem
-    Storage.prototype.getItem = () => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
       throw new Error('localStorage unavailable')
-    }
+    })
 
     render(
       <ThemeProvider>
@@ -205,7 +204,6 @@ describe('ThemeProvider', () => {
       </ThemeProvider>,
     )
     expect(screen.getByTestId('theme').textContent).toBe('light')
-    Storage.prototype.getItem = original
   })
 })
 
