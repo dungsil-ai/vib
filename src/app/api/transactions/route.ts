@@ -4,6 +4,15 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { serializeData } from '@/lib/serialize'
 
+const ENTRY_INCLUDE = {
+  entries: {
+    include: {
+      debitAccount: { select: { name: true, code: true, type: true } },
+      creditAccount: { select: { name: true, code: true, type: true } },
+    },
+  },
+} as const
+
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) {
@@ -11,58 +20,162 @@ export async function GET(request: NextRequest) {
   }
 
   const { searchParams } = new URL(request.url)
+
+  // ── Legacy params (year/month) used by budget page ──
   const yearParam = searchParams.get('year')
   const monthParam = searchParams.get('month')
 
-  // Validate and parse limit
-  const DEFAULT_LIMIT = 50
-  const MAX_LIMIT = 100
-  const limitParam = searchParams.get('limit')
-  let limit = DEFAULT_LIMIT
-  if (limitParam !== null) {
-    const parsed = parseInt(limitParam, 10)
-    if (!Number.isFinite(parsed) || parsed < 1) {
-      return NextResponse.json({ error: '유효한 limit 값이 필요합니다.' }, { status: 400 })
-    }
-    limit = Math.min(parsed, MAX_LIMIT)
-  }
+  // ── New filter params ──
+  const startDateParam = searchParams.get('startDate')
+  const endDateParam = searchParams.get('endDate')
+  const accountIdParam = searchParams.get('accountId')
+  const keywordParam = searchParams.get('keyword')
+  const minAmountParam = searchParams.get('minAmount')
+  const maxAmountParam = searchParams.get('maxAmount')
+  const sortByParam = searchParams.get('sortBy')
+  const sortOrderParam = searchParams.get('sortOrder')
+  const pageParam = searchParams.get('page')
+  const pageSizeParam = searchParams.get('pageSize')
 
-  // When year/month are supplied, validate and filter by date range;
-  // return all matching rows (no limit) so budget page gets accurate monthly totals.
+  // year/month must be supplied together
   if ((yearParam && !monthParam) || (!yearParam && monthParam)) {
     return NextResponse.json({ error: 'year와 month를 함께 입력해주세요.' }, { status: 400 })
   }
-  let dateFilter: { gte?: Date; lte?: Date } | undefined
+
+  // Build date filter
+  let dateWhere: { gte?: Date; lte?: Date } | undefined
+
   if (yearParam && monthParam) {
     const y = parseInt(yearParam, 10)
     const m = parseInt(monthParam, 10)
     if (!Number.isFinite(y) || !Number.isFinite(m) || m < 1 || m > 12) {
       return NextResponse.json({ error: '유효한 year/month를 입력해주세요.' }, { status: 400 })
     }
-    dateFilter = {
+    dateWhere = {
       gte: new Date(y, m - 1, 1),
       lte: new Date(y, m, 0, 23, 59, 59, 999),
     }
+  } else if (startDateParam || endDateParam) {
+    dateWhere = {}
+    if (startDateParam) {
+      const d = new Date(startDateParam)
+      if (isNaN(d.getTime())) {
+        return NextResponse.json({ error: '유효한 startDate를 입력해주세요.' }, { status: 400 })
+      }
+      dateWhere.gte = d
+    }
+    if (endDateParam) {
+      const d = new Date(endDateParam)
+      if (isNaN(d.getTime())) {
+        return NextResponse.json({ error: '유효한 endDate를 입력해주세요.' }, { status: 400 })
+      }
+      // include the full end day
+      d.setHours(23, 59, 59, 999)
+      dateWhere.lte = d
+    }
   }
 
-  const transactions = await prisma.transaction.findMany({
-    where: {
-      userId: session.user.id,
-      ...(dateFilter ? { date: dateFilter } : {}),
-    },
-    orderBy: { date: 'desc' },
-    ...(dateFilter ? {} : { take: limit }),
-    include: {
-      entries: {
-        include: {
-          debitAccount: { select: { name: true, code: true, type: true } },
-          creditAccount: { select: { name: true, code: true, type: true } },
-        },
-      },
-    },
-  })
+  // Validate minAmount / maxAmount
+  let minAmount: number | undefined
+  if (minAmountParam !== null) {
+    minAmount = parseFloat(minAmountParam)
+    if (!Number.isFinite(minAmount) || minAmount < 0) {
+      return NextResponse.json({ error: '유효한 minAmount 값이 필요합니다.' }, { status: 400 })
+    }
+  }
+  let maxAmount: number | undefined
+  if (maxAmountParam !== null) {
+    maxAmount = parseFloat(maxAmountParam)
+    if (!Number.isFinite(maxAmount) || maxAmount < 0) {
+      return NextResponse.json({ error: '유효한 maxAmount 값이 필요합니다.' }, { status: 400 })
+    }
+    if (minAmount !== undefined && minAmount > maxAmount) {
+      return NextResponse.json({ error: 'minAmount는 maxAmount보다 클 수 없습니다.' }, { status: 400 })
+    }
+  }
 
-  return NextResponse.json(serializeData(transactions))
+  // Sort
+  const sortBy = sortByParam === 'createdAt' ? 'createdAt' : 'date'
+  const sortOrder: 'asc' | 'desc' = sortOrderParam === 'asc' ? 'asc' : 'desc'
+  const orderBy = sortBy === 'createdAt'
+    ? { createdAt: sortOrder }
+    : { date: sortOrder }
+
+  // Build entries filter (accountId + amount range combined)
+  const entrySome: {
+    OR?: Array<{ debitAccountId: string } | { creditAccountId: string }>
+    amount?: { gte?: number; lte?: number }
+  } = {}
+  if (accountIdParam) {
+    entrySome.OR = [
+      { debitAccountId: accountIdParam },
+      { creditAccountId: accountIdParam },
+    ]
+  }
+  if (minAmount !== undefined || maxAmount !== undefined) {
+    entrySome.amount = {}
+    if (minAmount !== undefined) entrySome.amount.gte = minAmount
+    if (maxAmount !== undefined) entrySome.amount.lte = maxAmount
+  }
+
+  // Build where clause
+  const where = {
+    userId: session.user.id,
+    ...(dateWhere ? { date: dateWhere } : {}),
+    ...(keywordParam ? { description: { contains: keywordParam, mode: 'insensitive' as const } } : {}),
+    ...(Object.keys(entrySome).length > 0 ? { entries: { some: entrySome } } : {}),
+  }
+
+  // ── Legacy mode: year+month returns flat array for backward compatibility ──
+  const isLegacyMode = yearParam !== null && monthParam !== null
+  if (isLegacyMode) {
+    const transactions = await prisma.transaction.findMany({
+      where,
+      orderBy,
+      include: ENTRY_INCLUDE,
+    })
+    return NextResponse.json(serializeData(transactions))
+  }
+
+  // ── Paginated mode ──
+  const DEFAULT_PAGE_SIZE = 20
+  const MAX_PAGE_SIZE = 100
+  let page = 1
+  let pageSize = DEFAULT_PAGE_SIZE
+
+  if (pageParam !== null) {
+    page = parseInt(pageParam, 10)
+    if (!Number.isFinite(page) || page < 1) {
+      return NextResponse.json({ error: '유효한 page 값이 필요합니다.' }, { status: 400 })
+    }
+  }
+  if (pageSizeParam !== null) {
+    pageSize = parseInt(pageSizeParam, 10)
+    if (!Number.isFinite(pageSize) || pageSize < 1) {
+      return NextResponse.json({ error: '유효한 pageSize 값이 필요합니다.' }, { status: 400 })
+    }
+    pageSize = Math.min(pageSize, MAX_PAGE_SIZE)
+  }
+
+  const skip = (page - 1) * pageSize
+
+  const [total, transactions] = await prisma.$transaction([
+    prisma.transaction.count({ where }),
+    prisma.transaction.findMany({
+      where,
+      orderBy,
+      skip,
+      take: pageSize,
+      include: ENTRY_INCLUDE,
+    }),
+  ])
+
+  return NextResponse.json({
+    data: serializeData(transactions),
+    total,
+    page,
+    pageSize,
+  })
 }
 
 export async function POST(request: NextRequest) {
