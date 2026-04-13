@@ -174,7 +174,7 @@ describe('AccountsPage', () => {
     let getCallCount = 0
     vi.mocked(global.fetch).mockImplementation(async (input, init) => {
       const url = typeof input === 'string' ? input : (input as Request).url
-      const method = init?.method || 'GET'
+      const method = (init?.method ?? 'GET').toUpperCase()
 
       if (url === '/api/accounts' && method === 'GET') {
         if (getCallCount++ === 0) {
@@ -241,7 +241,7 @@ describe('AccountsPage', () => {
 
     expect(vi.mocked(global.fetch)).not.toHaveBeenCalledWith(
       '/api/accounts/1',
-      { method: 'DELETE' },
+      expect.objectContaining({ method: 'DELETE' }),
     )
   })
 
