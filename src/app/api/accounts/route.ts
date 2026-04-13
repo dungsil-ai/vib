@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { CURRENCY_CODES } from '@/lib/currencies'
 
 export async function GET() {
   const session = await getServerSession(authOptions)
