@@ -105,8 +105,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '차변 계정과 대변 계정은 달라야 합니다.' }, { status: 400 })
     }
     // Validate entry currency if provided
-    if (entry.currency && !CURRENCY_CODES.includes(entry.currency)) {
-      return NextResponse.json({ error: '지원하지 않는 통화 코드입니다.' }, { status: 400 })
+    if (entry.currency !== undefined && entry.currency !== null) {
+      if (typeof entry.currency !== 'string') {
+        return NextResponse.json({ error: '통화 코드는 문자열이어야 합니다.' }, { status: 400 })
+      }
+      const normalizedCurrency = entry.currency.trim().toUpperCase()
+      if (!normalizedCurrency || !CURRENCY_CODES.includes(normalizedCurrency)) {
+        return NextResponse.json({ error: '지원하지 않는 통화 코드입니다.' }, { status: 400 })
+      }
+      entry.currency = normalizedCurrency
     }
     // Validate exchangeRate if provided; require it when currency differs from base
     if (entry.exchangeRate !== undefined) {
