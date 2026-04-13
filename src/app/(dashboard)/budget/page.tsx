@@ -141,7 +141,7 @@ export default function BudgetPage() {
     const res = await fetch(`/api/budget/${budgetId}`, { method: 'DELETE' })
     if (!res.ok) {
       const data = await res.json().catch(() => ({}))
-      setError(data.error || '예산 삭제에 실패했습니다.')
+      setError(data.error || '예산 초기화에 실패했습니다.')
       return
     }
     const { rows: newRows, actuals } = await loadBudgetData(year, month)
@@ -273,7 +273,7 @@ export default function BudgetPage() {
                           </button>
                           {hasBudget && row.budget && (
                             <button
-                              onClick={() => deleteBudget(row.budget!.id)}
+                              onClick={() => { const b = row.budget; if (b) deleteBudget(b.id) }}
                               className="text-xs text-red-500 hover:text-red-700"
                             >
                               초기화
