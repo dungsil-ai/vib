@@ -188,13 +188,16 @@ export async function POST(request: NextRequest) {
             where: { userId, code: { startsWith: equityPrefix } },
             select: { code: true },
           })
-          const maxEquityCode = existingEquityAccounts
-            .map(a => parseInt(a.code, 10))
-            .filter(n => Number.isInteger(n) && n >= equityBase && n <= equityUpperBound)
-            .reduce((max, n) => Math.max(max, n), equityBase - 1)
-          const nextEquityNum = maxEquityCode + 1
+          const usedEquityCodes = new Set(
+            existingEquityAccounts
+              .map(a => parseInt(a.code, 10))
+              .filter(n => Number.isInteger(n) && n >= equityBase && n <= equityUpperBound),
+          )
 
-          if (!existingOpeningEquityAccount && nextEquityNum > equityUpperBound) {
+          let firstFreeEquity = equityBase
+          while (usedEquityCodes.has(firstFreeEquity)) firstFreeEquity++
+
+          if (!existingOpeningEquityAccount && firstFreeEquity > equityUpperBound) {
             throw new AccountApiError('개시잔액 계정을 생성할 수 없습니다. 자본 계정 코드가 모두 사용되었습니다.', 409)
           }
 
@@ -203,7 +206,7 @@ export async function POST(request: NextRequest) {
             data: {
               userId,
               name: OPENING_BALANCE_ACCOUNT_NAME,
-              code: String(nextEquityNum),
+              code: String(firstFreeEquity),
               type: 'EQUITY',
               description: OPENING_BALANCE_ACCOUNT_DESCRIPTION,
             },
@@ -214,17 +217,20 @@ export async function POST(request: NextRequest) {
             where: { userId, code: { startsWith: prefix } },
             select: { code: true },
           })
-          const maxCode = existingAccounts
-            .map(a => parseInt(a.code, 10))
-            .filter(n => Number.isInteger(n) && n >= base && n <= upperBound)
-            .reduce((max, n) => Math.max(max, n), base - 1)
-          const nextNum = maxCode + 1
+          const usedCodes = new Set(
+            existingAccounts
+              .map(a => parseInt(a.code, 10))
+              .filter(n => Number.isInteger(n) && n >= base && n <= upperBound),
+          )
 
-          if (nextNum > upperBound) {
+          let firstFree = base
+          while (usedCodes.has(firstFree)) firstFree++
+
+          if (firstFree > upperBound) {
             throw new AccountApiError('해당 계정 유형에 할당 가능한 코드가 모두 사용되었습니다.', 409)
           }
 
-          newAccountCode = String(nextNum)
+          newAccountCode = String(firstFree)
         }
 
         const newAccount = await tx.account.create({
@@ -270,20 +276,23 @@ export async function POST(request: NextRequest) {
       where: { userId, code: { startsWith: prefix } },
       select: { code: true },
     })
-    const maxCode = existingAccounts
-      .map(a => parseInt(a.code, 10))
-      .filter(n => Number.isInteger(n) && n >= base && n <= upperBound)
-      .reduce((max, n) => Math.max(max, n), base - 1)
-    const nextNum = maxCode + 1
+    const usedCodes = new Set(
+      existingAccounts
+        .map(a => parseInt(a.code, 10))
+        .filter(n => Number.isInteger(n) && n >= base && n <= upperBound),
+    )
 
-    if (nextNum > upperBound) {
+    let firstFree = base
+    while (usedCodes.has(firstFree)) firstFree++
+
+    if (firstFree > upperBound) {
       return NextResponse.json(
         { error: '해당 계정 유형에 할당 가능한 코드가 모두 사용되었습니다.' },
         { status: 409 },
       )
     }
 
-    const code = String(nextNum)
+    const code = String(firstFree)
     const account = await prisma.account.create({
       data: {
         userId,
