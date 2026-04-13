@@ -166,13 +166,10 @@ describe('TransactionsPage', () => {
     setupFetchMock()
     render(<TransactionsPage />)
 
+    // 계정 배지가 로딩될 때까지 대기
     await waitFor(() => {
-      expect(screen.getByText('거래 추가')).toBeInTheDocument()
+      expect(screen.getAllByRole('button', { name: /101 현금|501 식비|401 급여/ }).length).toBeGreaterThan(0)
     })
-
-    // 계정 배지들이 렌더링됨
-    const buttons = screen.getAllByRole('button', { name: /101 현금|501 식비|401 급여/ })
-    expect(buttons.length).toBeGreaterThan(0)
   })
 
   it('계정 검색 필터가 동작한다', async () => {
@@ -181,15 +178,14 @@ describe('TransactionsPage', () => {
 
     render(<TransactionsPage />)
 
+    const searchInput = await screen.findByLabelText('계정 검색')
+
+    // 검색 전에는 모든 계정 배지가 렌더링된 뒤 보임 (차변/대변 섹션 각각 3개 = 6개)
     await waitFor(() => {
-      expect(screen.getByLabelText('계정 검색')).toBeInTheDocument()
+      expect(screen.getAllByRole('button', { name: /101 현금|501 식비|401 급여/ })).toHaveLength(6)
     })
 
-    // 검색 전에는 모든 계정이 보임 (차변/대변 섹션 각각 3개 = 6개)
-    const allBadgesBefore = screen.getAllByRole('button', { name: /101 현금|501 식비|401 급여/ })
-    expect(allBadgesBefore).toHaveLength(6)
-
-    await user.type(screen.getByLabelText('계정 검색'), '현금')
+    await user.type(searchInput, '현금')
 
     // 검색 후에는 현금만 보이고 다른 계정은 사라짐 (차변/대변 각 1개 = 2개)
     await waitFor(() => {
@@ -247,7 +243,10 @@ describe('TransactionsPage', () => {
 
     // 차변만 선택하고 대변, 금액 없이 제출 시도
     const debitSection = screen.getByText('차변 (Debit)').closest('div')!
-    await user.click(within(debitSection).getByRole('button', { name: '101 현금' }))
+    const debitAccountButton = await within(debitSection).findByRole('button', {
+      name: '101 현금',
+    })
+    await user.click(debitAccountButton)
 
     // 설명 입력 (required 필드이므로)
     await user.type(screen.getByPlaceholderText('거래 내용을 입력하세요'), '테스트')
@@ -275,12 +274,12 @@ describe('TransactionsPage', () => {
 
     // 차변에서 현금 선택
     const debitSection = screen.getByText('차변 (Debit)').closest('div')!
-    const debitBadge = within(debitSection).getByRole('button', { name: '101 현금' })
+    const debitBadge = await within(debitSection).findByRole('button', { name: '101 현금' })
     await user.click(debitBadge)
 
     // 대변에서도 현금 선택
     const creditSection = screen.getByText('대변 (Credit)').closest('div')!
-    const creditBadge = within(creditSection).getByRole('button', { name: '101 현금' })
+    const creditBadge = await within(creditSection).findByRole('button', { name: '101 현금' })
     await user.click(creditBadge)
 
     // 금액 입력
@@ -398,12 +397,18 @@ describe('TransactionsPage', () => {
       expect(screen.getByText('거래 추가')).toBeInTheDocument()
     })
 
-    // 차변 선택
+    // 차변/대변 계정 배지가 로딩된 뒤 선택
     const debitSection = screen.getByText('차변 (Debit)').closest('div')!
+    const creditSection = screen.getByText('대변 (Credit)').closest('div')!
+
+    await waitFor(() => {
+      expect(within(debitSection).getByRole('button', { name: '501 식비' })).toBeInTheDocument()
+      expect(within(creditSection).getByRole('button', { name: '101 현금' })).toBeInTheDocument()
+    })
+
     await user.click(within(debitSection).getByRole('button', { name: '501 식비' }))
 
     // 대변 선택
-    const creditSection = screen.getByText('대변 (Credit)').closest('div')!
     await user.click(within(creditSection).getByRole('button', { name: '101 현금' }))
 
     // 금액 입력
@@ -414,13 +419,14 @@ describe('TransactionsPage', () => {
 
     // 저장
     await user.click(screen.getByRole('button', { name: '거래 저장' }))
-    await user.click(screen.getByRole('button', { name: '거래 저장' }))
 
     // POST 호출 검증
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith('/api/transactions', expect.objectContaining({
-        method: 'POST',
-      }))
+      const postTransactionCalls = vi.mocked(global.fetch).mock.calls.filter(
+        ([url, opts]) => url === '/api/transactions' && (opts as RequestInit | undefined)?.method === 'POST'
+      )
+
+      expect(postTransactionCalls).toHaveLength(1)
     })
 
     // 폼 초기화 검증: 설명 필드가 빈 값으로 리셋
@@ -428,8 +434,10 @@ describe('TransactionsPage', () => {
       expect(screen.getByPlaceholderText('거래 내용을 입력하세요')).toHaveValue('')
     })
 
-    // 금액 필드도 초기화 확인 (number input은 빈 값이 null)
-    expect(screen.getByPlaceholderText('0')).toHaveValue(null)
+    // 금액 필드도 초기화 확인 (number input reset 시 표시값은 빈 문자열)
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('0')).toHaveDisplayValue('')
+    })
 
     // 목록 새로고침 검증: 저장 후 /api/transactions GET이 다시 호출됨
     const getTransactionCalls = vi.mocked(global.fetch).mock.calls.filter(
@@ -453,11 +461,17 @@ describe('TransactionsPage', () => {
 
     // 차변 선택
     const debitSection = screen.getByText('차변 (Debit)').closest('div')!
-    await user.click(within(debitSection).getByRole('button', { name: '501 식비' }))
+    const debitAccountButton = await waitFor(() =>
+      within(debitSection).getByRole('button', { name: '501 식비' }),
+    )
+    await user.click(debitAccountButton)
 
     // 대변 선택
     const creditSection = screen.getByText('대변 (Credit)').closest('div')!
-    await user.click(within(creditSection).getByRole('button', { name: '101 현금' }))
+    const creditAccountButton = await waitFor(() =>
+      within(creditSection).getByRole('button', { name: '101 현금' }),
+    )
+    await user.click(creditAccountButton)
 
     // 금액 입력
     await user.type(screen.getByPlaceholderText('0'), '15000')

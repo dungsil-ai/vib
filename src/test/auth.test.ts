@@ -20,7 +20,26 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 
-const credentialsAuthorize = (authOptions.providers[0] as { options: { authorize: (credentials: Record<string, string> | undefined) => Promise<{ id: string; email: string; name: string } | null> } }).options.authorize
+type CredentialsAuthorize = (
+  credentials: Record<string, string> | undefined
+) => Promise<{ id: string; email: string; name: string } | null>
+
+const credentialsProvider = authOptions.providers.find(
+  (
+    provider
+  ): provider is typeof provider & {
+    options: { authorize: CredentialsAuthorize }
+  } => {
+    const opts = (provider as { options?: { authorize?: unknown } }).options
+    return typeof opts?.authorize === 'function'
+  }
+)
+
+if (!credentialsProvider) {
+  throw new Error('Credentials provider with authorize was not found in authOptions.providers')
+}
+
+const credentialsAuthorize = credentialsProvider.options.authorize
 
 describe('auth - authorize', () => {
   beforeEach(() => {
