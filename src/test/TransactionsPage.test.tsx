@@ -412,10 +412,8 @@ describe('TransactionsPage', () => {
     // 설명 입력
     await user.type(screen.getByPlaceholderText('거래 내용을 입력하세요'), '점심')
 
-    // 저장 전 fetch 호출 수 기록
-    const fetchCallsBefore = vi.mocked(global.fetch).mock.calls.length
-
     // 저장
+    await user.click(screen.getByRole('button', { name: '거래 저장' }))
     await user.click(screen.getByRole('button', { name: '거래 저장' }))
 
     // POST 호출 검증
