@@ -42,17 +42,19 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: '키워드는 100자 이하로 입력해주세요.' }, { status: 400 })
   }
 
-  // year/month must be supplied together
-  if ((yearParam && !monthParam) || (!yearParam && monthParam)) {
+  // year/month must be supplied together (ignore empty strings)
+  const hasYearParam = Boolean(yearParam?.trim())
+  const hasMonthParam = Boolean(monthParam?.trim())
+  if ((hasYearParam && !hasMonthParam) || (!hasYearParam && hasMonthParam)) {
     return NextResponse.json({ error: 'year와 month를 함께 입력해주세요.' }, { status: 400 })
   }
 
   // Build date filter
   let dateWhere: { gte?: Date; lte?: Date } | undefined
 
-  if (yearParam && monthParam) {
-    const y = parseInt(yearParam, 10)
-    const m = parseInt(monthParam, 10)
+  if (hasYearParam && hasMonthParam) {
+    const y = parseInt(yearParam!, 10)
+    const m = parseInt(monthParam!, 10)
     if (!Number.isFinite(y) || !Number.isFinite(m) || m < 1 || m > 12) {
       return NextResponse.json({ error: '유효한 year/month를 입력해주세요.' }, { status: 400 })
     }
@@ -63,19 +65,25 @@ export async function GET(request: NextRequest) {
   } else if (startDateParam || endDateParam) {
     dateWhere = {}
     if (startDateParam) {
-      const d = new Date(startDateParam)
+      const parts = startDateParam.split('-').map(Number)
+      if (parts.length !== 3 || parts.some(isNaN)) {
+        return NextResponse.json({ error: '유효한 startDate를 입력해주세요.' }, { status: 400 })
+      }
+      const d = new Date(parts[0], parts[1] - 1, parts[2])
       if (isNaN(d.getTime())) {
         return NextResponse.json({ error: '유효한 startDate를 입력해주세요.' }, { status: 400 })
       }
       dateWhere.gte = d
     }
     if (endDateParam) {
-      const d = new Date(endDateParam)
+      const parts = endDateParam.split('-').map(Number)
+      if (parts.length !== 3 || parts.some(isNaN)) {
+        return NextResponse.json({ error: '유효한 endDate를 입력해주세요.' }, { status: 400 })
+      }
+      const d = new Date(parts[0], parts[1] - 1, parts[2], 23, 59, 59, 999)
       if (isNaN(d.getTime())) {
         return NextResponse.json({ error: '유효한 endDate를 입력해주세요.' }, { status: 400 })
       }
-      // include the full end day
-      d.setHours(23, 59, 59, 999)
       dateWhere.lte = d
     }
   }
@@ -106,34 +114,43 @@ export async function GET(request: NextRequest) {
     ? { createdAt: sortOrder }
     : { date: sortOrder }
 
-  // Build entries filter (accountId + amount range combined)
-  const entrySome: {
-    OR?: Array<{ debitAccountId: string } | { creditAccountId: string }>
-    amount?: { gte?: number; lte?: number }
-  } = {}
-  if (accountIdParam) {
-    entrySome.OR = [
-      { debitAccountId: accountIdParam },
-      { creditAccountId: accountIdParam },
-    ]
-  }
-  if (minAmount !== undefined || maxAmount !== undefined) {
-    entrySome.amount = {}
-    if (minAmount !== undefined) entrySome.amount.gte = minAmount
-    if (maxAmount !== undefined) entrySome.amount.lte = maxAmount
-  }
+  // Build entries filters separately so account and amount conditions
+  // can match different entries within the same transaction.
+  const accountEntriesWhere = accountIdParam
+    ? {
+        entries: {
+          some: {
+            OR: [
+              { debitAccountId: accountIdParam },
+              { creditAccountId: accountIdParam },
+            ],
+          },
+        },
+      }
+    : undefined
+
+  const amountSome: { gte?: number; lte?: number } = {}
+  if (minAmount !== undefined) amountSome.gte = minAmount
+  if (maxAmount !== undefined) amountSome.lte = maxAmount
+  const amountEntriesWhere = Object.keys(amountSome).length > 0
+    ? { entries: { some: { amount: amountSome } } }
+    : undefined
+
+  const andConditions = [accountEntriesWhere, amountEntriesWhere].filter(
+    (condition): condition is NonNullable<typeof condition> => condition !== undefined,
+  )
 
   // Build where clause
   const where = {
     userId: session.user.id,
     ...(dateWhere ? { date: dateWhere } : {}),
     ...(keywordParam ? { description: { contains: keywordParam, mode: 'insensitive' as const } } : {}),
-    ...(Object.keys(entrySome).length > 0 ? { entries: { some: entrySome } } : {}),
+    ...(andConditions.length > 0 ? { AND: andConditions } : {}),
   }
 
   // ── Legacy mode: year+month returns flat array for backward compatibility ──
-  const isLegacyMode = yearParam !== null && monthParam !== null
-  if (isLegacyMode) {
+  const hasLegacyYearMonth = Boolean(yearParam?.trim()) && Boolean(monthParam?.trim())
+  if (hasLegacyYearMonth) {
     const transactions = await prisma.transaction.findMany({
       where,
       orderBy,

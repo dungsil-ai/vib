@@ -592,15 +592,34 @@ describe('TransactionsPage', () => {
     expect(screen.queryByRole('button', { name: '다음' })).not.toBeInTheDocument()
   })
 
-  it('다음 페이지 버튼 클릭 시 page 파라미터가 증가한다', async () => {
+  it('다음 페이지 버튼 클릭 시 page 파라미터가 증가하고 UI가 업데이트된다', async () => {
+    const fetchMock = vi.mocked(global.fetch)
+    // Setup accounts mock first
     setupFetchMock({
       transactions: {
         ok: true,
         json: () => Promise.resolve({ data: mockTransactions, total: 50, page: 1, pageSize: 20 }),
       } as Response,
     })
-    const user = userEvent.setup()
+    // Override to return correct page number based on URL
+    fetchMock.mockImplementation(async (input, init) => {
+      const urlStr = typeof input === 'string' ? input : (input as Request).url
+      const method = (init as RequestInit | undefined)?.method ?? 'GET'
 
+      if (urlStr === '/api/accounts' && method === 'GET') {
+        return { ok: true, json: () => Promise.resolve(mockAccounts) } as Response
+      }
+      if (urlStr.startsWith('/api/transactions') && !urlStr.includes('/api/transactions/') && method === 'GET') {
+        const page = Number(new URL(urlStr, 'http://localhost').searchParams.get('page') ?? '1')
+        return {
+          ok: true,
+          json: () => Promise.resolve({ data: mockTransactions, total: 50, page, pageSize: 20 }),
+        } as Response
+      }
+      return { ok: true, json: () => Promise.resolve({}) } as Response
+    })
+
+    const user = userEvent.setup()
     render(<TransactionsPage />)
 
     await waitFor(() => {
@@ -609,12 +628,18 @@ describe('TransactionsPage', () => {
 
     await user.click(screen.getByRole('button', { name: '다음' }))
 
+    // page=2 요청이 발생했는지 확인
     await waitFor(() => {
       const getCalls = vi.mocked(global.fetch).mock.calls.filter(([url, opts]) => {
         const urlStr = typeof url === 'string' ? url : (url as Request).url
         return urlStr.includes('page=2') && (!opts || (opts as RequestInit).method === undefined)
       })
       expect(getCalls.length).toBeGreaterThanOrEqual(1)
+    })
+
+    // 2페이지로 UI가 업데이트되었는지 확인
+    await waitFor(() => {
+      expect(screen.getByText('2 / 3')).toBeInTheDocument()
     })
   })
 })

@@ -760,7 +760,7 @@ export default function TransactionsPage() {
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    disabled={listPage <= 1}
+                    disabled={listPage <= 1 || listLoading}
                     onClick={() => {
                       const prev = listPage - 1
                       setListPage(prev)
@@ -776,7 +776,7 @@ export default function TransactionsPage() {
                   </span>
                   <button
                     type="button"
-                    disabled={listPage >= Math.ceil(listTotal / LIST_PAGE_SIZE)}
+                    disabled={listPage >= Math.ceil(listTotal / LIST_PAGE_SIZE) || listLoading}
                     onClick={() => {
                       const next = listPage + 1
                       setListPage(next)
