@@ -42,6 +42,7 @@ model Account {
   recurringCreditEntries RecurringEntry[] @relation("RecurringCreditAccount")
 
   @@unique([userId, code])
+  @@index([userId, name, type])
 }
 
 model Transaction {
