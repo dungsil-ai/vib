@@ -116,12 +116,99 @@ export async function POST(request: NextRequest) {
     }
 
     const code = String(nextNum)
+
+    const openingBalanceRaw = (body as { openingBalance?: unknown }).openingBalance
+    const openingBalance = openingBalanceRaw != null ? Number(openingBalanceRaw) : 0
+
+    if (openingBalanceRaw != null && (!Number.isFinite(openingBalance) || openingBalance < 0)) {
+      return NextResponse.json({ error: '초기잔액은 0 이상의 숫자여야 합니다.' }, { status: 400 })
+    }
+
+    const accountType = type as string
+
+    if (openingBalance > 0) {
+      // Find or create the opening balance equity account
+      let openingEquityAccount = await prisma.account.findFirst({
+        where: { userId, name: '개시잔액', type: 'EQUITY' },
+      })
+
+      if (!openingEquityAccount) {
+        const equityPrefix = '3'
+        const existingEquityAccounts = await prisma.account.findMany({
+          where: { userId, code: { startsWith: equityPrefix } },
+          select: { code: true },
+        })
+        const equityBase = TYPE_CODE_PREFIX['EQUITY']
+        const equityUpperBound = equityBase + 999
+        const maxEquityCode = existingEquityAccounts
+          .map(a => parseInt(a.code, 10))
+          .filter(n => Number.isInteger(n) && n >= equityBase && n <= equityUpperBound)
+          .reduce((max, n) => Math.max(max, n), equityBase - 1)
+        const nextEquityNum = maxEquityCode + 1
+
+        if (nextEquityNum > equityUpperBound) {
+          return NextResponse.json(
+            { error: '개시잔액 계정을 생성할 수 없습니다. 자본 계정 코드가 모두 사용되었습니다.' },
+            { status: 409 },
+          )
+        }
+
+        openingEquityAccount = await prisma.account.create({
+          data: {
+            userId,
+            name: '개시잔액',
+            code: String(nextEquityNum),
+            type: 'EQUITY',
+            description: '초기잔액 자동 분개용 계정',
+          },
+        })
+      }
+
+      const account = await prisma.$transaction(async (tx) => {
+        const newAccount = await tx.account.create({
+          data: {
+            userId,
+            name: name as string,
+            code,
+            type: accountType,
+            description: description ? String(description) : undefined,
+          },
+        })
+
+        // Debit-normal types (ASSET, EXPENSE): Dr. new account / Cr. opening equity
+        // Credit-normal types (LIABILITY, EQUITY, REVENUE): Dr. opening equity / Cr. new account
+        const isDebitNormal = accountType === 'ASSET' || accountType === 'EXPENSE'
+        const debitAccountId = isDebitNormal ? newAccount.id : openingEquityAccount!.id
+        const creditAccountId = isDebitNormal ? openingEquityAccount!.id : newAccount.id
+
+        await tx.transaction.create({
+          data: {
+            userId,
+            date: new Date(),
+            description: `${name as string} 초기잔액`,
+            entries: {
+              create: [{
+                debitAccountId,
+                creditAccountId,
+                amount: openingBalance,
+                description: '초기잔액 자동 분개',
+              }],
+            },
+          },
+        })
+
+        return newAccount
+      })
+
+      return NextResponse.json(account, { status: 201 })
+    }
+
     const account = await prisma.account.create({
       data: {
         userId,
         name: name as string,
         code,
-        type: type as string,
+        type: accountType,
         description: description ? String(description) : undefined,
       },
     })

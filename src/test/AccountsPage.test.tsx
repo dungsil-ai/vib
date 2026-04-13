@@ -215,6 +215,89 @@ describe('AccountsPage', () => {
     expect(deleteCalls).toHaveLength(0)
   })
 
+  it('자산 계정 추가 폼에 초기잔액 입력 필드가 표시된다', async () => {
+    vi.mocked(global.fetch).mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve([]),
+    } as Response)
+
+    const user = userEvent.setup()
+    render(<AccountsPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('계정 관리')).toBeInTheDocument()
+    })
+
+    // ASSET 타입의 "계정 추가" 버튼 클릭 (첫 번째가 ASSET)
+    const addButtons = screen.getAllByText('+ 계정 추가')
+    await user.click(addButtons[0])
+
+    expect(screen.getByPlaceholderText('예: 현금')).toBeInTheDocument()
+    expect(screen.getByLabelText(/초기잔액/)).toBeInTheDocument()
+  })
+
+  it('비용 계정 추가 폼에는 초기잔액 입력 필드가 표시되지 않는다', async () => {
+    vi.mocked(global.fetch).mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve([]),
+    } as Response)
+
+    const user = userEvent.setup()
+    render(<AccountsPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('계정 관리')).toBeInTheDocument()
+    })
+
+    // EXPENSE 타입의 "계정 추가" 버튼 클릭 (ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE 순서 → 5번째)
+    const addButtons = screen.getAllByText('+ 계정 추가')
+    await user.click(addButtons[4])
+
+    expect(screen.getByPlaceholderText('예: 현금')).toBeInTheDocument()
+    expect(screen.queryByLabelText(/초기잔액/)).not.toBeInTheDocument()
+  })
+
+  it('초기잔액을 포함하여 계정을 추가할 수 있다', async () => {
+    let getCallCount = 0
+    let postBody: Record<string, unknown> | null = null
+    vi.mocked(global.fetch).mockImplementation(async (input, init) => {
+      const url = typeof input === 'string' ? input : (input as Request).url
+      const method = init?.method || 'GET'
+      if (url === '/api/accounts' && method === 'GET') {
+        if (getCallCount++ === 0) return { ok: true, json: () => Promise.resolve([]) } as Response
+        return {
+          ok: true,
+          json: () => Promise.resolve([
+            { id: 'new', code: '101', name: '현금', type: 'ASSET', description: '', balance: 100000 },
+          ]),
+        } as Response
+      }
+      if (url === '/api/accounts' && method === 'POST') {
+        postBody = JSON.parse(init?.body as string)
+        return { ok: true, json: () => Promise.resolve({ id: 'new' }) } as Response
+      }
+      return { ok: true, json: () => Promise.resolve({}) } as Response
+    })
+
+    const user = userEvent.setup()
+    render(<AccountsPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('계정 관리')).toBeInTheDocument()
+    })
+
+    const addButtons = screen.getAllByText('+ 계정 추가')
+    await user.click(addButtons[0])
+
+    await user.type(screen.getByPlaceholderText('예: 현금'), '현금')
+    await user.type(screen.getByLabelText(/초기잔액/), '100000')
+    await user.click(screen.getByRole('button', { name: '저장' }))
+
+    await waitFor(() => {
+      expect(postBody).toMatchObject({ name: '현금', type: 'ASSET', openingBalance: 100000 })
+    })
+  })
+
   it('네트워크 에러 시 에러 메시지를 표시한다', async () => {
     vi.mocked(global.fetch).mockRejectedValue(new TypeError('Failed to fetch'))
 
