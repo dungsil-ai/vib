@@ -249,8 +249,19 @@ export default function TransactionsPage() {
     })
   }
 
-  const formTotal = entries.reduce((sum, e) => sum + (Number(e.amount) || 0), 0)
+  const totalsByCurrency = entries.reduce<Record<string, number>>((totals, entry) => {
+    const currency = entry.currency || baseCurrency
+    const amount = Number(entry.amount) || 0
+    totals[currency] = (totals[currency] || 0) + amount
+    return totals
+  }, {})
+  const hasMixedCurrencies = Object.keys(totalsByCurrency).length > 1
   const formTotalBase = entries.reduce((sum, e) => sum + (Number(e.amount) || 0) * (Number(e.exchangeRate) || 1), 0)
+  const firstEntryCurrency = entries.length > 0 ? (entries[0].currency || baseCurrency) : baseCurrency
+  const formTotal = hasMixedCurrencies
+    ? formTotalBase
+    : (totalsByCurrency[firstEntryCurrency] || 0)
+  const formTotalCurrency = hasMixedCurrencies ? baseCurrency : firstEntryCurrency
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -379,10 +390,10 @@ export default function TransactionsPage() {
                 />
                 <span className="text-sm text-gray-700 dark:text-gray-200">
                   총액: <span className="font-semibold text-blue-600 dark:text-blue-400">
-                    {formatCurrency(formTotal, entries[0]?.currency ?? baseCurrency)}
-                    {entries.some(e => e.currency !== baseCurrency) && (
+                    {formatCurrency(formTotal, formTotalCurrency)}
+                    {hasMixedCurrencies && (
                       <span className="ml-1 text-xs text-gray-400">
-                        ≈ {formatCurrency(formTotalBase, baseCurrency)}
+                        ({baseCurrency} 환산 기준)
                       </span>
                     )}
                   </span>

@@ -59,7 +59,8 @@ export async function GET(request: NextRequest) {
           include: {
             debitAccount: { select: { name: true, code: true, type: true } },
             creditAccount: { select: { name: true, code: true, type: true } },
-          },      },
+          },
+        },
       },
     })
 
@@ -107,7 +108,7 @@ export async function POST(request: NextRequest) {
     if (entry.currency && !CURRENCY_CODES.includes(entry.currency)) {
       return NextResponse.json({ error: '지원하지 않는 통화 코드입니다.' }, { status: 400 })
     }
-    // Validate exchangeRate if provided
+    // Validate exchangeRate if provided; require it when currency differs from base
     if (entry.exchangeRate !== undefined) {
       const rate = Number(entry.exchangeRate)
       if (!Number.isFinite(rate) || rate <= 0) {
@@ -123,21 +124,34 @@ export async function POST(request: NextRequest) {
       ...entries.map((e: { creditAccountId: string }) => e.creditAccountId),
     ]),
   ]
-  const ownedAccounts = await prisma.account.findMany({
-    where: { id: { in: accountIds }, userId: session.user.id },
-    select: { id: true },
-  })
+  const [ownedAccounts, userRecord] = await Promise.all([
+    prisma.account.findMany({
+      where: { id: { in: accountIds }, userId: session.user.id },
+      select: { id: true },
+    }),
+    prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { currency: true },
+    }),
+  ])
   if (ownedAccounts.length !== accountIds.length) {
     return NextResponse.json({ error: '잘못된 계정이 포함되어 있습니다.' }, { status: 403 })
   }
 
+  const baseCurrency = userRecord?.currency ?? 'KRW'
+
+  // Validate currency and exchangeRate for each entry (requires baseCurrency)
+  for (const entry of entries) {
+    const entryCurrency: string = entry.currency ?? baseCurrency
+    if (entryCurrency !== baseCurrency && (entry.exchangeRate === undefined || entry.exchangeRate === null)) {
+      return NextResponse.json(
+        { error: `외화(${entryCurrency}) 분개에는 환율(exchangeRate)이 필요합니다.` },
+        { status: 400 },
+      )
+    }
+  }
+
   try {
-    // Get user's base currency for default exchange rate
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { currency: true },
-    })
-    const baseCurrency = user?.currency ?? 'KRW'
 
     const transaction = await prisma.transaction.create({
       data: {

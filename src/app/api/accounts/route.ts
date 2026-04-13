@@ -34,23 +34,22 @@ export async function GET() {
     const baseCurrency = user?.currency ?? 'KRW'
 
     // Use raw SQL to compute balance in base currency: SUM(amount * exchangeRate)
-    const debitSums = accountIds.length > 0
-      ? await prisma.$queryRaw<Array<{ debitAccountId: string; total: string }>>`
-          SELECT "debitAccountId", SUM(amount * "exchangeRate")::text AS total
-          FROM "Entry"
-          WHERE "debitAccountId" = ANY(${accountIds}::text[])
-          GROUP BY "debitAccountId"
-        `
-      : []
-
-    const creditSums = accountIds.length > 0
-      ? await prisma.$queryRaw<Array<{ creditAccountId: string; total: string }>>`
-          SELECT "creditAccountId", SUM(amount * "exchangeRate")::text AS total
-          FROM "Entry"
-          WHERE "creditAccountId" = ANY(${accountIds}::text[])
-          GROUP BY "creditAccountId"
-        `
-      : []
+    const [debitSums, creditSums] = accountIds.length > 0
+      ? await Promise.all([
+          prisma.$queryRaw<Array<{ debitAccountId: string; total: string }>>`
+            SELECT "debitAccountId", SUM(amount * "exchangeRate")::text AS total
+            FROM "Entry"
+            WHERE "debitAccountId" = ANY(${accountIds}::text[])
+            GROUP BY "debitAccountId"
+          `,
+          prisma.$queryRaw<Array<{ creditAccountId: string; total: string }>>`
+            SELECT "creditAccountId", SUM(amount * "exchangeRate")::text AS total
+            FROM "Entry"
+            WHERE "creditAccountId" = ANY(${accountIds}::text[])
+            GROUP BY "creditAccountId"
+          `,
+        ])
+      : [[], []]
 
     const debitByAccount = new Map(
       debitSums.map(r => [r.debitAccountId, Number(r.total ?? 0)]),

@@ -50,10 +50,15 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: '지원하지 않는 통화 코드입니다.' }, { status: 400 })
   }
 
-  await prisma.user.update({
-    where: { id: session.user.id },
-    data: { currency },
-  })
+  try {
+    await prisma.user.update({
+      where: { id: session.user.id },
+      data: { currency },
+    })
 
-  return NextResponse.json({ currency })
+    return NextResponse.json({ currency })
+  } catch (error) {
+    console.error('[settings] PATCH error:', error)
+    return NextResponse.json({ error: '설정을 저장하지 못했습니다.' }, { status: 500 })
+  }
 }
