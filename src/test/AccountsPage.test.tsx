@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 vi.mock('@iconify/react', () => ({
@@ -228,9 +228,9 @@ describe('AccountsPage', () => {
       expect(screen.getByText('계정 관리')).toBeInTheDocument()
     })
 
-    // ASSET 타입의 "계정 추가" 버튼 클릭 (첫 번째가 ASSET)
-    const addButtons = screen.getAllByText('+ 계정 추가')
-    await user.click(addButtons[0])
+    // ASSET 섹션 내부로 범위를 좁혀 버튼 클릭
+    const assetSection = screen.getByText('자산').closest('[class*="rounded-xl"]') as HTMLElement
+    await user.click(within(assetSection).getByText('+ 계정 추가'))
 
     expect(screen.getByPlaceholderText('예: 현금')).toBeInTheDocument()
     expect(screen.getByLabelText(/초기잔액/)).toBeInTheDocument()
@@ -249,9 +249,9 @@ describe('AccountsPage', () => {
       expect(screen.getByText('계정 관리')).toBeInTheDocument()
     })
 
-    // EXPENSE 타입의 "계정 추가" 버튼 클릭 (ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE 순서 → 5번째)
-    const addButtons = screen.getAllByText('+ 계정 추가')
-    await user.click(addButtons[4])
+    // EXPENSE 섹션 내부로 범위를 좁혀 버튼 클릭
+    const expenseSection = screen.getByText('비용').closest('[class*="rounded-xl"]') as HTMLElement
+    await user.click(within(expenseSection).getByText('+ 계정 추가'))
 
     expect(screen.getByPlaceholderText('예: 현금')).toBeInTheDocument()
     expect(screen.queryByLabelText(/초기잔액/)).not.toBeInTheDocument()
@@ -286,8 +286,9 @@ describe('AccountsPage', () => {
       expect(screen.getByText('계정 관리')).toBeInTheDocument()
     })
 
-    const addButtons = screen.getAllByText('+ 계정 추가')
-    await user.click(addButtons[0])
+    // ASSET 섹션 내부로 범위를 좁혀 버튼 클릭
+    const assetSection = screen.getByText('자산').closest('[class*="rounded-xl"]') as HTMLElement
+    await user.click(within(assetSection).getByText('+ 계정 추가'))
 
     await user.type(screen.getByPlaceholderText('예: 현금'), '현금')
     await user.type(screen.getByLabelText(/초기잔액/), '100000')

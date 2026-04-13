@@ -72,6 +72,13 @@ const OPENING_BALANCE_ACCOUNT_NAME = '개시잔액'
 const OPENING_BALANCE_ACCOUNT_DESCRIPTION = '초기잔액 자동 분개용 계정'
 const OPENING_BALANCE_ENTRY_DESCRIPTION = '초기잔액 자동 분개'
 
+class AccountApiError extends Error {
+  constructor(public readonly apiMessage: string, public readonly apiStatus: number) {
+    super(apiMessage)
+    this.name = 'AccountApiError'
+  }
+}
+
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) {
@@ -98,29 +105,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '올바른 계정 유형을 선택해주세요.' }, { status: 400 })
     }
 
-    // Auto-generate the code: find the highest existing code within this type's numeric range
-    const prefix = String(TYPE_CODE_PREFIX[type as string]).slice(0, 1)
-    const base = TYPE_CODE_PREFIX[type as string]
-    const upperBound = base + 999
-    const existingAccounts = await prisma.account.findMany({
-      where: { userId, code: { startsWith: prefix } },
-      select: { code: true },
-    })
-    const maxCode = existingAccounts
-      .map(a => parseInt(a.code, 10))
-      .filter(n => Number.isInteger(n) && n >= base && n <= upperBound)
-      .reduce((max, n) => Math.max(max, n), base - 1)
-    const nextNum = maxCode + 1
-
-    if (nextNum > upperBound) {
-      return NextResponse.json(
-        { error: '해당 계정 유형에 할당 가능한 코드가 모두 사용되었습니다.' },
-        { status: 409 },
-      )
-    }
-
-    const code = String(nextNum)
-
     const openingBalanceRaw = (body as { openingBalance?: unknown }).openingBalance
     const openingBalance = openingBalanceRaw != null ? Number(openingBalanceRaw) : 0
 
@@ -129,51 +113,108 @@ export async function POST(request: NextRequest) {
     }
 
     const accountType = type as string
+    const prefix = String(TYPE_CODE_PREFIX[accountType]).slice(0, 1)
+    const base = TYPE_CODE_PREFIX[accountType]
+    const upperBound = base + 999
 
     if (openingBalance > 0) {
-      // Find or create the opening balance equity account
-      let openingEquityAccount = await prisma.account.findFirst({
-        where: { userId, name: OPENING_BALANCE_ACCOUNT_NAME, type: 'EQUITY' },
-      })
-
-      if (!openingEquityAccount) {
-        const equityPrefix = String(TYPE_CODE_PREFIX['EQUITY'])[0]
-        const existingEquityAccounts = await prisma.account.findMany({
-          where: { userId, code: { startsWith: equityPrefix } },
-          select: { code: true },
-        })
+      // All code allocation, account creation and entry creation in a single transaction
+      // to prevent partial-success and code-collision issues.
+      const account = await prisma.$transaction(async (tx) => {
         const equityBase = TYPE_CODE_PREFIX['EQUITY']
+        const equityPrefix = String(equityBase)[0]
         const equityUpperBound = equityBase + 999
-        const maxEquityCode = existingEquityAccounts
-          .map(a => parseInt(a.code, 10))
-          .filter(n => Number.isInteger(n) && n >= equityBase && n <= equityUpperBound)
-          .reduce((max, n) => Math.max(max, n), equityBase - 1)
-        const nextEquityNum = maxEquityCode + 1
 
-        if (nextEquityNum > equityUpperBound) {
-          return NextResponse.json(
-            { error: '개시잔액 계정을 생성할 수 없습니다. 자본 계정 코드가 모두 사용되었습니다.' },
-            { status: 409 },
+        let openingEquityAccount = await tx.account.findFirst({
+          where: { userId, name: OPENING_BALANCE_ACCOUNT_NAME, type: 'EQUITY' },
+        })
+
+        let newAccountCode: string
+
+        if (accountType === 'EQUITY' && !openingEquityAccount) {
+          // New account and opening balance account both need codes from the same EQUITY range.
+          // Allocate two distinct free codes in one pass to avoid collision.
+          const existingCodes = await tx.account.findMany({
+            where: { userId, code: { startsWith: equityPrefix } },
+            select: { code: true },
+          })
+          const usedCodes = new Set(
+            existingCodes
+              .map(a => parseInt(a.code, 10))
+              .filter(n => Number.isInteger(n) && n >= equityBase && n <= equityUpperBound),
           )
+
+          let firstFree = equityBase
+          while (usedCodes.has(firstFree)) firstFree++
+          if (firstFree > equityUpperBound) {
+            throw new AccountApiError('개시잔액 계정을 생성할 수 없습니다. 자본 계정 코드가 모두 사용되었습니다.', 409)
+          }
+          let secondFree = firstFree + 1
+          while (secondFree <= equityUpperBound && usedCodes.has(secondFree)) secondFree++
+          if (secondFree > equityUpperBound) {
+            throw new AccountApiError('해당 계정 유형에 할당 가능한 코드가 모두 사용되었습니다.', 409)
+          }
+
+          openingEquityAccount = await tx.account.create({
+            data: {
+              userId,
+              name: OPENING_BALANCE_ACCOUNT_NAME,
+              code: String(firstFree),
+              type: 'EQUITY',
+              description: OPENING_BALANCE_ACCOUNT_DESCRIPTION,
+            },
+          })
+          newAccountCode = String(secondFree)
+        } else {
+          if (!openingEquityAccount) {
+            const existingEquityAccounts = await tx.account.findMany({
+              where: { userId, code: { startsWith: equityPrefix } },
+              select: { code: true },
+            })
+            const maxEquityCode = existingEquityAccounts
+              .map(a => parseInt(a.code, 10))
+              .filter(n => Number.isInteger(n) && n >= equityBase && n <= equityUpperBound)
+              .reduce((max, n) => Math.max(max, n), equityBase - 1)
+            const nextEquityNum = maxEquityCode + 1
+
+            if (nextEquityNum > equityUpperBound) {
+              throw new AccountApiError('개시잔액 계정을 생성할 수 없습니다. 자본 계정 코드가 모두 사용되었습니다.', 409)
+            }
+
+            openingEquityAccount = await tx.account.create({
+              data: {
+                userId,
+                name: OPENING_BALANCE_ACCOUNT_NAME,
+                code: String(nextEquityNum),
+                type: 'EQUITY',
+                description: OPENING_BALANCE_ACCOUNT_DESCRIPTION,
+              },
+            })
+          }
+
+          // Compute code for the new account inside the transaction
+          const existingAccounts = await tx.account.findMany({
+            where: { userId, code: { startsWith: prefix } },
+            select: { code: true },
+          })
+          const maxCode = existingAccounts
+            .map(a => parseInt(a.code, 10))
+            .filter(n => Number.isInteger(n) && n >= base && n <= upperBound)
+            .reduce((max, n) => Math.max(max, n), base - 1)
+          const nextNum = maxCode + 1
+
+          if (nextNum > upperBound) {
+            throw new AccountApiError('해당 계정 유형에 할당 가능한 코드가 모두 사용되었습니다.', 409)
+          }
+
+          newAccountCode = String(nextNum)
         }
 
-        openingEquityAccount = await prisma.account.create({
-          data: {
-            userId,
-            name: OPENING_BALANCE_ACCOUNT_NAME,
-            code: String(nextEquityNum),
-            type: 'EQUITY',
-            description: OPENING_BALANCE_ACCOUNT_DESCRIPTION,
-          },
-        })
-      }
-
-      const account = await prisma.$transaction(async (tx) => {
         const newAccount = await tx.account.create({
           data: {
             userId,
             name: name as string,
-            code,
+            code: newAccountCode,
             type: accountType,
             description: description ? String(description) : undefined,
           },
@@ -182,8 +223,8 @@ export async function POST(request: NextRequest) {
         // Debit-normal types (ASSET, EXPENSE): Dr. new account / Cr. opening equity
         // Credit-normal types (LIABILITY, EQUITY, REVENUE): Dr. opening equity / Cr. new account
         const isDebitNormal = accountType === 'ASSET' || accountType === 'EXPENSE'
-        const debitAccountId = isDebitNormal ? newAccount.id : openingEquityAccount!.id
-        const creditAccountId = isDebitNormal ? openingEquityAccount!.id : newAccount.id
+        const debitAccountId = isDebitNormal ? newAccount.id : openingEquityAccount.id
+        const creditAccountId = isDebitNormal ? openingEquityAccount.id : newAccount.id
 
         await tx.transaction.create({
           data: {
@@ -207,6 +248,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(account, { status: 201 })
     }
 
+    // No opening balance — compute code and create account
+    const existingAccounts = await prisma.account.findMany({
+      where: { userId, code: { startsWith: prefix } },
+      select: { code: true },
+    })
+    const maxCode = existingAccounts
+      .map(a => parseInt(a.code, 10))
+      .filter(n => Number.isInteger(n) && n >= base && n <= upperBound)
+      .reduce((max, n) => Math.max(max, n), base - 1)
+    const nextNum = maxCode + 1
+
+    if (nextNum > upperBound) {
+      return NextResponse.json(
+        { error: '해당 계정 유형에 할당 가능한 코드가 모두 사용되었습니다.' },
+        { status: 409 },
+      )
+    }
+
+    const code = String(nextNum)
     const account = await prisma.account.create({
       data: {
         userId,
@@ -218,6 +278,9 @@ export async function POST(request: NextRequest) {
     })
     return NextResponse.json(account, { status: 201 })
   } catch (error) {
+    if (error instanceof AccountApiError) {
+      return NextResponse.json({ error: error.apiMessage }, { status: error.apiStatus })
+    }
     if (error instanceof Error && 'code' in error) {
       const prismaCode = (error as { code: string }).code
       if (prismaCode === 'P2002') {
