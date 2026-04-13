@@ -19,7 +19,7 @@ vi.mock('next/link', () => ({
 }))
 
 import LoginPage from '@/app/auth/login/page'
-import { signIn } from 'next-auth/react'
+import { signIn, type SignInResponse } from 'next-auth/react'
 
 describe('LoginPage', () => {
   beforeEach(() => {
@@ -41,7 +41,7 @@ describe('LoginPage', () => {
   })
 
   it('로그인 성공 시 대시보드로 이동한다', async () => {
-    vi.mocked(signIn).mockResolvedValue({ error: undefined, ok: true, status: 200, url: '' })
+    vi.mocked(signIn).mockResolvedValue({ error: null, ok: true, status: 200, url: '' })
     const user = userEvent.setup()
 
     render(<LoginPage />)
@@ -77,7 +77,7 @@ describe('LoginPage', () => {
   })
 
   it('로그인 중 버튼 텍스트가 변경된다', async () => {
-    let resolveSignIn: (value: { error: undefined; ok: true; status: 200; url: string }) => void
+    let resolveSignIn: (value: SignInResponse | undefined) => void
     vi.mocked(signIn).mockReturnValue(
       new Promise((resolve) => {
         resolveSignIn = resolve
@@ -94,6 +94,6 @@ describe('LoginPage', () => {
     expect(screen.getByText('로그인 중...')).toBeInTheDocument()
     expect(screen.getByRole('button')).toBeDisabled()
 
-    resolveSignIn!({ error: undefined, ok: true, status: 200, url: '' })
+    resolveSignIn!({ error: null, ok: true, status: 200, url: '' })
   })
 })
