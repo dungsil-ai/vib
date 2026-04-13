@@ -18,12 +18,17 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: '유효한 year/month를 입력해주세요.' }, { status: 400 })
   }
 
-  const budgets = await prisma.budget.findMany({
-    where: { userId: session.user.id, year, month },
-    include: { account: { select: { name: true, code: true, type: true } } },
-  })
+  try {
+    const budgets = await prisma.budget.findMany({
+      where: { userId: session.user.id, year, month },
+      include: { account: { select: { name: true, code: true, type: true } } },
+    })
 
-  return NextResponse.json(serializeData(budgets))
+    return NextResponse.json(serializeData(budgets))
+  } catch (error) {
+    console.error('[budget] GET error:', error)
+    return NextResponse.json({ error: '예산 목록을 불러오지 못했습니다.' }, { status: 500 })
+  }
 }
 
 export async function POST(request: NextRequest) {

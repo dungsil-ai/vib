@@ -10,16 +10,21 @@ export async function GET() {
     return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
   }
 
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: { currency: true },
-  })
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { currency: true },
+    })
 
-  if (!user) {
-    return NextResponse.json({ error: '사용자를 찾을 수 없습니다.' }, { status: 404 })
+    if (!user) {
+      return NextResponse.json({ error: '사용자를 찾을 수 없습니다.' }, { status: 404 })
+    }
+
+    return NextResponse.json({ currency: user.currency })
+  } catch (error) {
+    console.error('[settings] GET error:', error)
+    return NextResponse.json({ error: '설정을 불러오지 못했습니다.' }, { status: 500 })
   }
-
-  return NextResponse.json({ currency: user.currency })
 }
 
 export async function PATCH(request: NextRequest) {

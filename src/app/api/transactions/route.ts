@@ -46,23 +46,28 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  const transactions = await prisma.transaction.findMany({
-    where: {
-      userId: session.user.id,
-      ...(dateFilter ? { date: dateFilter } : {}),
-    },
-    orderBy: { date: 'desc' },
-    ...(dateFilter ? {} : { take: limit }),
-    include: {
-      entries: {
-        include: {
-          debitAccount: { select: { name: true, code: true, type: true } },
-          creditAccount: { select: { name: true, code: true, type: true } },
-        },      },
-    },
-  })
+  try {
+    const transactions = await prisma.transaction.findMany({
+      where: {
+        userId: session.user.id,
+        ...(dateFilter ? { date: dateFilter } : {}),
+      },
+      orderBy: { date: 'desc' },
+      ...(dateFilter ? {} : { take: limit }),
+      include: {
+        entries: {
+          include: {
+            debitAccount: { select: { name: true, code: true, type: true } },
+            creditAccount: { select: { name: true, code: true, type: true } },
+          },      },
+      },
+    })
 
-  return NextResponse.json(serializeData(transactions))
+    return NextResponse.json(serializeData(transactions))
+  } catch (error) {
+    console.error('[transactions] GET error:', error)
+    return NextResponse.json({ error: '거래 목록을 불러오지 못했습니다.' }, { status: 500 })
+  }
 }
 
 export async function POST(request: NextRequest) {

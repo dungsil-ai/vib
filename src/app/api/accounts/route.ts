@@ -10,69 +10,74 @@ export async function GET() {
     return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
   }
 
-  const accounts = await prisma.account.findMany({
-    where: { userId: session.user.id },
-    orderBy: { code: 'asc' },
-    select: {
-      id: true,
-      code: true,
-      name: true,
-      type: true,
-      currency: true,
-      description: true,
-    },
-  })
+  try {
+    const accounts = await prisma.account.findMany({
+      where: { userId: session.user.id },
+      orderBy: { code: 'asc' },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        type: true,
+        currency: true,
+        description: true,
+      },
+    })
 
-  const accountIds = accounts.map(a => a.id)
+    const accountIds = accounts.map(a => a.id)
 
-  // Fetch the user's base currency for balance conversion
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: { currency: true },
-  })
-  const baseCurrency = user?.currency ?? 'KRW'
+    // Fetch the user's base currency for balance conversion
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { currency: true },
+    })
+    const baseCurrency = user?.currency ?? 'KRW'
 
-  // Use raw SQL to compute balance in base currency: SUM(amount * exchangeRate)
-  const debitSums = accountIds.length > 0
-    ? await prisma.$queryRaw<Array<{ debitAccountId: string; total: string }>>`
-        SELECT "debitAccountId", SUM(amount * "exchangeRate")::text AS total
-        FROM "Entry"
-        WHERE "debitAccountId" = ANY(${accountIds}::text[])
-        GROUP BY "debitAccountId"
-      `
-    : []
+    // Use raw SQL to compute balance in base currency: SUM(amount * exchangeRate)
+    const debitSums = accountIds.length > 0
+      ? await prisma.$queryRaw<Array<{ debitAccountId: string; total: string }>>`
+          SELECT "debitAccountId", SUM(amount * "exchangeRate")::text AS total
+          FROM "Entry"
+          WHERE "debitAccountId" = ANY(${accountIds}::text[])
+          GROUP BY "debitAccountId"
+        `
+      : []
 
-  const creditSums = accountIds.length > 0
-    ? await prisma.$queryRaw<Array<{ creditAccountId: string; total: string }>>`
-        SELECT "creditAccountId", SUM(amount * "exchangeRate")::text AS total
-        FROM "Entry"
-        WHERE "creditAccountId" = ANY(${accountIds}::text[])
-        GROUP BY "creditAccountId"
-      `
-    : []
+    const creditSums = accountIds.length > 0
+      ? await prisma.$queryRaw<Array<{ creditAccountId: string; total: string }>>`
+          SELECT "creditAccountId", SUM(amount * "exchangeRate")::text AS total
+          FROM "Entry"
+          WHERE "creditAccountId" = ANY(${accountIds}::text[])
+          GROUP BY "creditAccountId"
+        `
+      : []
 
-  const debitByAccount = new Map(
-    debitSums.map(r => [r.debitAccountId, Number(r.total ?? 0)]),
-  )
-  const creditByAccount = new Map(
-    creditSums.map(r => [r.creditAccountId, Number(r.total ?? 0)]),
-  )
+    const debitByAccount = new Map(
+      debitSums.map(r => [r.debitAccountId, Number(r.total ?? 0)]),
+    )
+    const creditByAccount = new Map(
+      creditSums.map(r => [r.creditAccountId, Number(r.total ?? 0)]),
+    )
 
-  const accountsWithBalance = accounts.map(account => {
-    const totalDebits = debitByAccount.get(account.id) ?? 0
-    const totalCredits = creditByAccount.get(account.id) ?? 0
+    const accountsWithBalance = accounts.map(account => {
+      const totalDebits = debitByAccount.get(account.id) ?? 0
+      const totalCredits = creditByAccount.get(account.id) ?? 0
 
-    let balance = 0
-    if (account.type === 'ASSET' || account.type === 'EXPENSE') {
-      balance = totalDebits - totalCredits
-    } else {
-      balance = totalCredits - totalDebits
-    }
+      let balance = 0
+      if (account.type === 'ASSET' || account.type === 'EXPENSE') {
+        balance = totalDebits - totalCredits
+      } else {
+        balance = totalCredits - totalDebits
+      }
 
-    return { ...account, balance, baseCurrency }
-  })
+      return { ...account, balance, baseCurrency }
+    })
 
-  return NextResponse.json(accountsWithBalance)
+    return NextResponse.json(accountsWithBalance)
+  } catch (error) {
+    console.error('[accounts] GET error:', error)
+    return NextResponse.json({ error: '계정 목록을 불러오지 못했습니다.' }, { status: 500 })
+  }
 }
 
 const TYPE_CODE_PREFIX: Record<string, number> = {
