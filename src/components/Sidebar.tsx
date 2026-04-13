@@ -17,6 +17,7 @@ const navItems = [
   { href: '/dashboard', label: '대시보드', icon: 'lucide:layout-dashboard' },
   { href: '/accounts', label: '계정 관리', icon: 'lucide:book-open' },
   { href: '/transactions', label: '거래 내역', icon: 'lucide:credit-card' },
+  { href: '/recurring-transactions', label: '반복 거래', icon: 'lucide:repeat' },
   { href: '/budget', label: '예산 관리', icon: 'lucide:piggy-bank' },
 ]
 
