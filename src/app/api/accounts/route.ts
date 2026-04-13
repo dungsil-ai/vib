@@ -68,6 +68,10 @@ const TYPE_CODE_PREFIX: Record<string, number> = {
   EXPENSE: 5000,
 }
 
+const OPENING_BALANCE_ACCOUNT_NAME = '개시잔액'
+const OPENING_BALANCE_ACCOUNT_DESCRIPTION = '초기잔액 자동 분개용 계정'
+const OPENING_BALANCE_ENTRY_DESCRIPTION = '초기잔액 자동 분개'
+
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) {
@@ -129,11 +133,11 @@ export async function POST(request: NextRequest) {
     if (openingBalance > 0) {
       // Find or create the opening balance equity account
       let openingEquityAccount = await prisma.account.findFirst({
-        where: { userId, name: '개시잔액', type: 'EQUITY' },
+        where: { userId, name: OPENING_BALANCE_ACCOUNT_NAME, type: 'EQUITY' },
       })
 
       if (!openingEquityAccount) {
-        const equityPrefix = '3'
+        const equityPrefix = String(TYPE_CODE_PREFIX['EQUITY'])[0]
         const existingEquityAccounts = await prisma.account.findMany({
           where: { userId, code: { startsWith: equityPrefix } },
           select: { code: true },
@@ -156,10 +160,10 @@ export async function POST(request: NextRequest) {
         openingEquityAccount = await prisma.account.create({
           data: {
             userId,
-            name: '개시잔액',
+            name: OPENING_BALANCE_ACCOUNT_NAME,
             code: String(nextEquityNum),
             type: 'EQUITY',
-            description: '초기잔액 자동 분개용 계정',
+            description: OPENING_BALANCE_ACCOUNT_DESCRIPTION,
           },
         })
       }
@@ -185,13 +189,13 @@ export async function POST(request: NextRequest) {
           data: {
             userId,
             date: new Date(),
-            description: `${name as string} 초기잔액`,
+            description: `${name as string} ${OPENING_BALANCE_ACCOUNT_NAME}`,
             entries: {
               create: [{
                 debitAccountId,
                 creditAccountId,
                 amount: openingBalance,
-                description: '초기잔액 자동 분개',
+                description: OPENING_BALANCE_ENTRY_DESCRIPTION,
               }],
             },
           },
