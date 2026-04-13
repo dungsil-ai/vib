@@ -1,5 +1,22 @@
 export type RecurringFrequency = 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY'
 
+function getLastDayOfMonthUtc(year: number, monthIndex: number) {
+  return new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate()
+}
+
+function clampToUtcMonth(date: Date, monthOffset: number, dayOfMonth?: number | null) {
+  const nextDate = new Date(date)
+  const targetDay = dayOfMonth ?? nextDate.getUTCDate()
+
+  nextDate.setUTCDate(1)
+  nextDate.setUTCMonth(nextDate.getUTCMonth() + monthOffset)
+
+  const maxDay = getLastDayOfMonthUtc(nextDate.getUTCFullYear(), nextDate.getUTCMonth())
+  nextDate.setUTCDate(Math.min(targetDay, maxDay))
+
+  return nextDate
+}
+
 /**
  * 주어진 날짜로부터 다음 반복 실행 날짜를 계산합니다.
  */
@@ -9,37 +26,38 @@ export function computeNextRunAt(
   monthOfYear: number | null,
   from: Date,
 ): Date {
-  const d = new Date(from)
   switch (frequency) {
-    case 'DAILY':
-      d.setDate(d.getDate() + 1)
-      break
-    case 'WEEKLY':
-      d.setDate(d.getDate() + 7)
-      break
+    case 'DAILY': {
+      const nextDate = new Date(from)
+      nextDate.setUTCDate(nextDate.getUTCDate() + 1)
+      return nextDate
+    }
+    case 'WEEKLY': {
+      const nextDate = new Date(from)
+      nextDate.setUTCDate(nextDate.getUTCDate() + 7)
+      return nextDate
+    }
     case 'MONTHLY': {
-      d.setMonth(d.getMonth() + 1)
-      if (dayOfMonth) {
-        const maxDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
-        d.setDate(Math.min(dayOfMonth, maxDay))
-      }
-      break
+      return clampToUtcMonth(from, 1, dayOfMonth)
     }
     case 'YEARLY': {
-      d.setFullYear(d.getFullYear() + 1)
+      const nextDate = new Date(from)
+      const targetDay = dayOfMonth ?? nextDate.getUTCDate()
+
+      nextDate.setUTCDate(1)
+      nextDate.setUTCFullYear(nextDate.getUTCFullYear() + 1)
       if (monthOfYear) {
-        d.setMonth(monthOfYear - 1)
+        nextDate.setUTCMonth(monthOfYear - 1)
       }
-      if (dayOfMonth) {
-        const maxDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
-        d.setDate(Math.min(dayOfMonth, maxDay))
-      }
-      break
+
+      const maxDay = getLastDayOfMonthUtc(nextDate.getUTCFullYear(), nextDate.getUTCMonth())
+      nextDate.setUTCDate(Math.min(targetDay, maxDay))
+
+      return nextDate
     }
     default: {
       const _exhaustive: never = frequency
       throw new Error(`알 수 없는 반복 주기: ${_exhaustive}`)
     }
   }
-  return d
 }
