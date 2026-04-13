@@ -7,6 +7,13 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum RecurringFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+  YEARLY
+}
+
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
@@ -16,6 +23,7 @@ model User {
   accounts  Account[]
   transactions Transaction[]
   budgets   Budget[]
+  recurringTransactions RecurringTransaction[]
 }
 
 model Account {
@@ -30,8 +38,11 @@ model Account {
   debitEntries  Entry[] @relation("DebitAccount")
   creditEntries Entry[] @relation("CreditAccount")
   budgets   Budget[]
+  recurringDebitEntries  RecurringEntry[] @relation("RecurringDebitAccount")
+  recurringCreditEntries RecurringEntry[] @relation("RecurringCreditAccount")
 
   @@unique([userId, code])
+  @@index([userId, name, type])
 }
 
 model Transaction {
@@ -76,4 +87,38 @@ model Budget {
 
   @@unique([userId, accountId, year, month])
   @@index([userId, year, month])
+}
+
+model RecurringTransaction {
+  id          String               @id @default(cuid())
+  userId      String
+  user        User                 @relation(fields: [userId], references: [id])
+  description String
+  frequency   RecurringFrequency
+  dayOfMonth  Int?
+  monthOfYear Int?
+  startDate   DateTime
+  endDate     DateTime?
+  nextRunAt   DateTime
+  lastRunAt   DateTime?
+  isActive    Boolean              @default(true)
+  entries     RecurringEntry[]
+  createdAt   DateTime             @default(now())
+
+  @@index([userId, nextRunAt])
+}
+
+model RecurringEntry {
+  id                     String               @id @default(cuid())
+  recurringTransactionId String
+  recurringTransaction   RecurringTransaction @relation(fields: [recurringTransactionId], references: [id], onDelete: Cascade)
+  debitAccountId         String
+  debitAccount           Account              @relation("RecurringDebitAccount", fields: [debitAccountId], references: [id])
+  creditAccountId        String
+  creditAccount          Account              @relation("RecurringCreditAccount", fields: [creditAccountId], references: [id])
+  amount                 Decimal
+  description            String?
+  createdAt              DateTime             @default(now())
+
+  @@index([recurringTransactionId])
 }

@@ -114,7 +114,7 @@ describe('TransactionsPage', () => {
     render(<TransactionsPage />)
 
     await waitFor(() => {
-      expect(screen.getByText('거래 내역')).toBeInTheDocument()
+      expect(screen.getByRole('heading', { level: 1, name: '거래 내역' })).toBeInTheDocument()
     })
 
     expect(screen.getByText('거래 추가')).toBeInTheDocument()
