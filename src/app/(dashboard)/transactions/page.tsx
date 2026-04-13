@@ -161,7 +161,7 @@ function TransactionsTab({ accounts, accountsLoading, accountsError }: Transacti
   )
 
   const fetchTransactions = (isCancelled: () => boolean = () => false) => {
-    setListError(null)
+    if (!isCancelled()) setListError(null)
     fetch('/api/transactions')
       .then(res => {
         if (!res.ok) throw new Error(`거래 내역을 불러오지 못했습니다. (${res.status})`)
@@ -607,7 +607,7 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError }: 
   )
 
   const fetchRecurring = (isCancelled: () => boolean = () => false) => {
-    setListError(null)
+    if (!isCancelled()) setListError(null)
     fetch('/api/recurring-transactions')
       .then(res => {
         if (!res.ok) throw new Error(`반복 거래를 불러오지 못했습니다. (${res.status})`)
