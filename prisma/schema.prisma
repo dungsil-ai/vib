@@ -32,6 +32,7 @@ model Account {
   budgets   Budget[]
 
   @@unique([userId, code])
+  @@unique([userId, name, type])
 }
 
 model Transaction {

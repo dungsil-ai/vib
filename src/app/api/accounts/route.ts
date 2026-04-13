@@ -68,6 +68,7 @@ const TYPE_CODE_PREFIX: Record<string, number> = {
   EXPENSE: 5000,
 }
 
+const OPENING_BALANCE_ALLOWED_TYPES = new Set(['ASSET', 'LIABILITY', 'EQUITY'])
 const OPENING_BALANCE_ACCOUNT_NAME = '개시잔액'
 const OPENING_BALANCE_ACCOUNT_DESCRIPTION = '초기잔액 자동 분개용 계정'
 const OPENING_BALANCE_ENTRY_DESCRIPTION = '초기잔액 자동 분개'
