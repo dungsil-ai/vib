@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
+import { CURRENCY_CODES } from '@/lib/currencies'
 
 export async function POST(request: NextRequest) {
   try {
-    const { name, email, password } = await request.json()
+    const { name, email, password, currency } = await request.json()
 
     if (!name || !email || !password) {
       return NextResponse.json({ error: '모든 필드를 입력해주세요.' }, { status: 400 })
@@ -12,6 +13,12 @@ export async function POST(request: NextRequest) {
 
     if (password.length < 6) {
       return NextResponse.json({ error: '비밀번호는 6자 이상이어야 합니다.' }, { status: 400 })
+    }
+
+    // Validate currency if provided
+    const userCurrency = currency && typeof currency === 'string' ? currency : 'KRW'
+    if (!CURRENCY_CODES.includes(userCurrency)) {
+      return NextResponse.json({ error: '지원하지 않는 통화 코드입니다.' }, { status: 400 })
     }
 
     const normalizedEmail = email.trim().toLowerCase()
@@ -45,7 +52,7 @@ export async function POST(request: NextRequest) {
     // Create user and default accounts atomically
     await prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
-        data: { name, email: normalizedEmail, password: hashedPassword },
+        data: { name, email: normalizedEmail, password: hashedPassword, currency: userCurrency },
       })
       await tx.account.createMany({
         data: defaultAccounts.map(acc => ({ ...acc, userId: user.id })),

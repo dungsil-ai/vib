@@ -1,18 +1,22 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { formatCurrency } from '@/lib/currencies'
 
 interface DashboardData {
   totalAssets: number
   totalLiabilities: number
   totalEquity: number
   netWorth: number
+  baseCurrency: string
   recentTransactions: Array<{
     id: string
     date: string
     description: string
     entries: Array<{
       amount: string
+      currency: string
+      exchangeRate: string
       debitAccount: { name: string; code: string; type: string }
       creditAccount: { name: string; code: string; type: string }
     }>
@@ -30,7 +34,7 @@ function formatCurrency(amount: number) {
   return new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW' }).format(amount)
 }
 
-export default function DashboardPage() {
+function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -64,28 +68,34 @@ export default function DashboardPage() {
 
   if (!data) return null
 
+  const baseCurrency = data.baseCurrency ?? 'KRW'
+  const fmt = (amount: number) => formatCurrency(amount, baseCurrency)
+
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">대시보드</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">대시보드</h1>
+        <span className="text-sm text-gray-500 dark:text-gray-400">기준 통화: {baseCurrency}</span>
+      </div>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border dark:border-gray-700">
           <p className="text-sm text-gray-500 dark:text-gray-400">총 자산</p>
-          <p className="text-2xl font-bold text-blue-600 mt-1">{formatCurrency(data.totalAssets)}</p>
+          <p className="text-2xl font-bold text-blue-600 mt-1">{fmt(data.totalAssets)}</p>
         </div>
         <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border dark:border-gray-700">
           <p className="text-sm text-gray-500 dark:text-gray-400">총 부채</p>
-          <p className="text-2xl font-bold text-red-500 mt-1">{formatCurrency(data.totalLiabilities)}</p>
+          <p className="text-2xl font-bold text-red-500 mt-1">{fmt(data.totalLiabilities)}</p>
         </div>
         <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border dark:border-gray-700">
           <p className="text-sm text-gray-500 dark:text-gray-400">총 자본</p>
-          <p className="text-2xl font-bold text-green-600 mt-1">{formatCurrency(data.totalEquity)}</p>
+          <p className="text-2xl font-bold text-green-600 mt-1">{fmt(data.totalEquity)}</p>
         </div>
         <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border dark:border-gray-700">
           <p className="text-sm text-gray-500 dark:text-gray-400">순자산</p>
           <p className={`text-2xl font-bold mt-1 ${data.netWorth >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-            {formatCurrency(data.netWorth)}
+            {fmt(data.netWorth)}
           </p>
         </div>
       </div>
@@ -101,14 +111,14 @@ export default function DashboardPage() {
               <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">거래 내역이 없습니다.</p>
             ) : (
               data.recentTransactions.map(tx => {
-                const totalAmount = tx.entries.reduce((sum, e) => sum + Number(e.amount), 0)
+                const totalAmount = tx.entries.reduce((sum, e) => sum + Number(e.amount) * (Number(e.exchangeRate) || 1), 0)
                 return (
                   <div key={tx.id} className="flex items-center justify-between py-2 border-b dark:border-gray-700 last:border-0">
                     <div>
                       <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{tx.description}</p>
                       <p className="text-xs text-gray-500 dark:text-gray-400">{new Date(tx.date).toLocaleDateString('ko-KR')}</p>
                     </div>
-                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(totalAmount)}</p>
+                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{fmt(totalAmount)}</p>
                   </div>
                 )
               })
@@ -133,7 +143,7 @@ export default function DashboardPage() {
                     <div className="flex justify-between text-sm mb-1">
                       <span className="font-medium text-gray-700 dark:text-gray-300">{b.name}</span>
                       <span className={isOver ? 'text-red-500' : 'text-gray-600 dark:text-gray-400'}>
-                        {formatCurrency(b.actual)} / {formatCurrency(b.budget)}
+                        {fmt(b.actual)} / {fmt(b.budget)}
                       </span>
                     </div>
                     <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2">
@@ -152,3 +162,5 @@ export default function DashboardPage() {
     </div>
   )
 }
+
+export default DashboardPage

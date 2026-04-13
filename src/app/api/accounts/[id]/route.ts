@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { CURRENCY_CODES } from '@/lib/currencies'
 
 const VALID_ACCOUNT_TYPES = ['ASSET', 'LIABILITY', 'EQUITY', 'REVENUE', 'EXPENSE'] as const
 
@@ -12,7 +13,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   }
 
   const { id } = await params
-  const { name, code, type, description } = await request.json()
+  const { name, code, type, description, currency } = await request.json()
 
   // Validate type if provided
   if (type !== undefined && !VALID_ACCOUNT_TYPES.includes(type)) {
@@ -27,10 +28,15 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
   }
 
+  // Validate currency if provided
+  if (currency !== undefined && !CURRENCY_CODES.includes(currency)) {
+    return NextResponse.json({ error: '지원하지 않는 통화 코드입니다.' }, { status: 400 })
+  }
+
   try {
     const account = await prisma.account.updateMany({
       where: { id, userId: session.user.id },
-      data: { name, code, type, description },
+      data: { name, code, type, description, ...(currency !== undefined ? { currency } : {}) },
     })
     if (account.count === 0) {
       return NextResponse.json({ error: '계정을 찾을 수 없습니다.' }, { status: 404 })

@@ -12,11 +12,11 @@ const originalFetch = global.fetch
 const originalConfirm = window.confirm
 
 const mockAccounts = [
-  { id: '1', code: '101', name: '현금', type: 'ASSET', description: '현금 자산', balance: 1000000 },
-  { id: '2', code: '201', name: '카드대금', type: 'LIABILITY', description: null, balance: 500000 },
-  { id: '3', code: '301', name: '자본금', type: 'EQUITY', description: null, balance: 2000000 },
-  { id: '4', code: '501', name: '식비', type: 'EXPENSE', description: '식사 비용', balance: 300000 },
-  { id: '5', code: '401', name: '급여', type: 'REVENUE', description: null, balance: 3000000 },
+  { id: '1', code: '101', name: '현금', type: 'ASSET', currency: 'KRW', description: '현금 자산', balance: 1000000, baseCurrency: 'KRW' },
+  { id: '2', code: '201', name: '카드대금', type: 'LIABILITY', currency: 'KRW', description: null, balance: 500000, baseCurrency: 'KRW' },
+  { id: '3', code: '301', name: '자본금', type: 'EQUITY', currency: 'KRW', description: null, balance: 2000000, baseCurrency: 'KRW' },
+  { id: '4', code: '501', name: '식비', type: 'EXPENSE', currency: 'KRW', description: '식사 비용', balance: 300000, baseCurrency: 'KRW' },
+  { id: '5', code: '401', name: '급여', type: 'REVENUE', currency: 'KRW', description: null, balance: 3000000, baseCurrency: 'KRW' },
 ]
 
 describe('AccountsPage', () => {
@@ -30,6 +30,16 @@ describe('AccountsPage', () => {
     window.confirm = originalConfirm
   })
 
+  const setupDefaultFetch = (accounts = mockAccounts) => {
+    vi.mocked(global.fetch).mockImplementation(async (input) => {
+      const url = typeof input === 'string' ? input : (input as Request).url
+      if (url === '/api/settings') {
+        return { ok: true, json: () => Promise.resolve({ currency: 'KRW' }) } as Response
+      }
+      return { ok: true, json: () => Promise.resolve(accounts) } as Response
+    })
+  }
+
   it('로딩 중 상태를 표시한다', () => {
     vi.mocked(global.fetch).mockReturnValue(new Promise(() => {}))
     render(<AccountsPage />)
@@ -37,10 +47,7 @@ describe('AccountsPage', () => {
   })
 
   it('계정 목록을 유형별로 그룹화하여 표시한다', async () => {
-    vi.mocked(global.fetch).mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(mockAccounts),
-    } as Response)
+    setupDefaultFetch()
 
     render(<AccountsPage />)
 
@@ -55,10 +62,13 @@ describe('AccountsPage', () => {
   })
 
   it('API 에러 시 에러 메시지를 표시한다', async () => {
-    vi.mocked(global.fetch).mockResolvedValue({
-      ok: false,
-      json: () => Promise.resolve({ error: '서버 오류' }),
-    } as Response)
+    vi.mocked(global.fetch).mockImplementation(async (input) => {
+      const url = typeof input === 'string' ? input : (input as Request).url
+      if (url === '/api/settings') {
+        return { ok: true, json: () => Promise.resolve({ currency: 'KRW' }) } as Response
+      }
+      return { ok: false, json: () => Promise.resolve({ error: '서버 오류' }) } as Response
+    })
 
     render(<AccountsPage />)
 
@@ -68,10 +78,13 @@ describe('AccountsPage', () => {
   })
 
   it('계정 추가 폼을 열고 닫을 수 있다', async () => {
-    vi.mocked(global.fetch).mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve([]),
-    } as Response)
+    vi.mocked(global.fetch).mockImplementation(async (input) => {
+      const url = typeof input === 'string' ? input : (input as Request).url
+      if (url === '/api/settings') {
+        return { ok: true, json: () => Promise.resolve({ currency: 'KRW' }) } as Response
+      }
+      return { ok: true, json: () => Promise.resolve([]) } as Response
+    })
 
     const user = userEvent.setup()
     render(<AccountsPage />)
@@ -90,10 +103,13 @@ describe('AccountsPage', () => {
   })
 
   it('새 계정을 추가할 수 있다', async () => {
-    let getCallCount = 0
+    let accountCallCount = 0
     vi.mocked(global.fetch).mockImplementation(async (input) => {
       const url = typeof input === 'string' ? input : (input as Request).url
-      if (url === '/api/accounts' && getCallCount++ === 0) {
+      if (url === '/api/settings') {
+        return { ok: true, json: () => Promise.resolve({ currency: 'KRW' }) } as Response
+      }
+      if (url === '/api/accounts' && accountCallCount++ === 0) {
         return { ok: true, json: () => Promise.resolve([]) } as Response
       }
       if (url === '/api/accounts') {
@@ -101,7 +117,7 @@ describe('AccountsPage', () => {
           ok: true,
           json: () =>
             Promise.resolve([
-              { id: 'new', code: '101', name: '현금', type: 'ASSET', description: '', balance: 0 },
+              { id: 'new', code: '101', name: '현금', type: 'ASSET', currency: 'KRW', description: '', balance: 0, baseCurrency: 'KRW' },
             ]),
         } as Response
       }
@@ -132,6 +148,9 @@ describe('AccountsPage', () => {
     vi.mocked(global.fetch).mockImplementation(async (input, init) => {
       const url = typeof input === 'string' ? input : (input as Request).url
       const method = init?.method || 'GET'
+      if (url === '/api/settings') {
+        return { ok: true, json: () => Promise.resolve({ currency: 'KRW' }) } as Response
+      }
       if (url === '/api/accounts' && method === 'GET') {
         return { ok: true, json: () => Promise.resolve([]) } as Response
       }
@@ -163,10 +182,7 @@ describe('AccountsPage', () => {
   })
 
   it('계정을 삭제할 수 있다', async () => {
-    vi.mocked(global.fetch).mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(mockAccounts),
-    } as Response)
+    setupDefaultFetch()
 
     window.confirm = vi.fn(() => true)
     const user = userEvent.setup()
@@ -191,10 +207,7 @@ describe('AccountsPage', () => {
   })
 
   it('삭제 취소 시 API를 호출하지 않는다', async () => {
-    vi.mocked(global.fetch).mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(mockAccounts),
-    } as Response)
+    setupDefaultFetch()
 
     window.confirm = vi.fn(() => false)
     const user = userEvent.setup()

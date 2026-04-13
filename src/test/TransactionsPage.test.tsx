@@ -23,6 +23,8 @@ const mockTransactions = [
       {
         id: 'entry-1',
         amount: '15000',
+        currency: 'KRW',
+        exchangeRate: '1',
         description: null,
         debitAccount: { name: '식비', code: '501', type: 'EXPENSE' },
         creditAccount: { name: '현금', code: '101', type: 'ASSET' },
@@ -40,6 +42,8 @@ const mockTransactions = [
       {
         id: 'entry-2',
         amount: '3000000',
+        currency: 'KRW',
+        exchangeRate: '1',
         description: '1월 급여',
         debitAccount: { name: '현금', code: '101', type: 'ASSET' },
         creditAccount: { name: '급여', code: '401', type: 'REVENUE' },
@@ -49,6 +53,8 @@ const mockTransactions = [
       {
         id: 'entry-3',
         amount: '500000',
+        currency: 'KRW',
+        exchangeRate: '1',
         description: '보너스',
         debitAccount: { name: '현금', code: '101', type: 'ASSET' },
         creditAccount: { name: '급여', code: '401', type: 'REVENUE' },
@@ -69,6 +75,9 @@ function setupFetchMock(overrides: Partial<{
     const url = typeof input === 'string' ? input : (input as Request).url
     const method = init?.method || 'GET'
 
+    if (url === '/api/settings' && method === 'GET') {
+      return { ok: true, json: () => Promise.resolve({ currency: 'KRW' }) } as Response
+    }
     if (url === '/api/accounts' && method === 'GET') {
       return overrides.accounts ?? { ok: true, json: () => Promise.resolve(mockAccounts) } as Response
     }

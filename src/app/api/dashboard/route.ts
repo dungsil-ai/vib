@@ -18,31 +18,43 @@ export async function GET() {
     const startOfMonth = new Date(year, month - 1, 1)
     const endOfMonth = new Date(year, month, 0, 23, 59, 59, 999)
 
-    const accounts = await prisma.account.findMany({
-      where: { userId },
-      select: { id: true, type: true },
-    })
-
-    const accountIds = accounts.map(a => a.id)
-
-    const [debitSums, creditSums] = await Promise.all([
-      prisma.entry.groupBy({
-        by: ['debitAccountId'],
-        where: { debitAccountId: { in: accountIds } },
-        _sum: { amount: true },
-      }),
-      prisma.entry.groupBy({
-        by: ['creditAccountId'],
-        where: { creditAccountId: { in: accountIds } },
-        _sum: { amount: true },
+    const [user, accounts] = await Promise.all([
+      prisma.user.findUnique({ where: { id: userId }, select: { currency: true } }),
+      prisma.account.findMany({
+        where: { userId },
+        select: { id: true, type: true },
       }),
     ])
 
+    const baseCurrency = user?.currency ?? 'KRW'
+
+    const accountIds = accounts.map(a => a.id)
+
+    // Use SUM(amount * exchangeRate) to get values in user's base currency
+    const [debitSums, creditSums] = await Promise.all([
+      accountIds.length > 0
+        ? prisma.$queryRaw<Array<{ debitAccountId: string; total: string }>>`
+            SELECT "debitAccountId", SUM(amount * "exchangeRate")::text AS total
+            FROM "Entry"
+            WHERE "debitAccountId" = ANY(${accountIds}::text[])
+            GROUP BY "debitAccountId"
+          `
+        : Promise.resolve([]),
+      accountIds.length > 0
+        ? prisma.$queryRaw<Array<{ creditAccountId: string; total: string }>>`
+            SELECT "creditAccountId", SUM(amount * "exchangeRate")::text AS total
+            FROM "Entry"
+            WHERE "creditAccountId" = ANY(${accountIds}::text[])
+            GROUP BY "creditAccountId"
+          `
+        : Promise.resolve([]),
+    ])
+
     const debitByAccount = new Map(
-      debitSums.map(r => [r.debitAccountId, Number(r._sum.amount ?? 0)]),
+      (debitSums as Array<{ debitAccountId: string; total: string }>).map(r => [r.debitAccountId, Number(r.total ?? 0)]),
     )
     const creditByAccount = new Map(
-      creditSums.map(r => [r.creditAccountId, Number(r._sum.amount ?? 0)]),
+      (creditSums as Array<{ creditAccountId: string; total: string }>).map(r => [r.creditAccountId, Number(r.total ?? 0)]),
     )
 
     let totalAssets = 0
@@ -80,6 +92,8 @@ export async function GET() {
           entries: {
             select: {
               amount: true,
+              currency: true,
+              exchangeRate: true,
               debitAccount: {
                 select: {
                   id: true,
@@ -99,18 +113,17 @@ export async function GET() {
         },
       }),
       expenseAccountIds.length === 0
-        ? Promise.resolve([])
-        : prisma.entry.groupBy({
-            by: ['debitAccountId'],
-            where: {
-              transaction: {
-                userId,
-                date: { gte: startOfMonth, lte: endOfMonth },
-              },
-              debitAccountId: { in: expenseAccountIds },
-            },
-            _sum: { amount: true },
-          }),
+        ? Promise.resolve([] as Array<{ debitAccountId: string; total: string }>)
+        : prisma.$queryRaw<Array<{ debitAccountId: string; total: string }>>`
+            SELECT e."debitAccountId", SUM(e.amount * e."exchangeRate")::text AS total
+            FROM "Entry" e
+            JOIN "Transaction" t ON e."transactionId" = t.id
+            WHERE t."userId" = ${userId}
+              AND t.date >= ${startOfMonth}
+              AND t.date <= ${endOfMonth}
+              AND e."debitAccountId" = ANY(${expenseAccountIds}::text[])
+            GROUP BY e."debitAccountId"
+          `,
       prisma.budget.findMany({
         where: { userId, year, month },
         include: { account: { select: { name: true, code: true } } },
@@ -118,7 +131,7 @@ export async function GET() {
     ])
 
     const expenseByAccount = new Map<string, number>(
-      monthlyExpenseSums.map(row => [row.debitAccountId, Number(row._sum.amount ?? 0)]),
+      (monthlyExpenseSums as Array<{ debitAccountId: string; total: string }>).map(row => [row.debitAccountId, Number(row.total ?? 0)]),
     )
 
     const budgetOverview = budgets.map(b => ({
@@ -135,6 +148,7 @@ export async function GET() {
         totalLiabilities,
         totalEquity,
         netWorth: totalAssets - totalLiabilities,
+        baseCurrency,
         recentTransactions,
         budgetOverview,
       }),

@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { serializeData } from '@/lib/serialize'
+import { CURRENCY_CODES } from '@/lib/currencies'
 
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -57,8 +58,7 @@ export async function GET(request: NextRequest) {
         include: {
           debitAccount: { select: { name: true, code: true, type: true } },
           creditAccount: { select: { name: true, code: true, type: true } },
-        },
-      },
+        },      },
     },
   })
 
@@ -98,6 +98,17 @@ export async function POST(request: NextRequest) {
     if (entry.debitAccountId === entry.creditAccountId) {
       return NextResponse.json({ error: '차변 계정과 대변 계정은 달라야 합니다.' }, { status: 400 })
     }
+    // Validate entry currency if provided
+    if (entry.currency && !CURRENCY_CODES.includes(entry.currency)) {
+      return NextResponse.json({ error: '지원하지 않는 통화 코드입니다.' }, { status: 400 })
+    }
+    // Validate exchangeRate if provided
+    if (entry.exchangeRate !== undefined) {
+      const rate = Number(entry.exchangeRate)
+      if (!Number.isFinite(rate) || rate <= 0) {
+        return NextResponse.json({ error: '유효한 환율을 입력해주세요.' }, { status: 400 })
+      }
+    }
   }
 
   // Verify that all referenced accounts belong to the authenticated user
@@ -116,6 +127,13 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    // Get user's base currency for default exchange rate
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { currency: true },
+    })
+    const baseCurrency = user?.currency ?? 'KRW'
+
     const transaction = await prisma.transaction.create({
       data: {
         userId: session.user.id,
@@ -126,11 +144,15 @@ export async function POST(request: NextRequest) {
             debitAccountId: string
             creditAccountId: string
             amount: string
+            currency?: string
+            exchangeRate?: string
             description?: string
           }) => ({
             debitAccountId: entry.debitAccountId,
             creditAccountId: entry.creditAccountId,
             amount: entry.amount,
+            currency: entry.currency ?? baseCurrency,
+            exchangeRate: entry.exchangeRate ?? '1',
             description: entry.description,
           })),
         },

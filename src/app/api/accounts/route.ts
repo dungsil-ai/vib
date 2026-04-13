@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { CURRENCY_CODES } from '@/lib/currencies'
 
 export async function GET() {
   const session = await getServerSession(authOptions)
@@ -17,30 +18,44 @@ export async function GET() {
       code: true,
       name: true,
       type: true,
+      currency: true,
       description: true,
     },
   })
 
   const accountIds = accounts.map(a => a.id)
 
-  const [debitSums, creditSums] = await Promise.all([
-    prisma.entry.groupBy({
-      by: ['debitAccountId'],
-      where: { debitAccountId: { in: accountIds } },
-      _sum: { amount: true },
-    }),
-    prisma.entry.groupBy({
-      by: ['creditAccountId'],
-      where: { creditAccountId: { in: accountIds } },
-      _sum: { amount: true },
-    }),
-  ])
+  // Fetch the user's base currency for balance conversion
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { currency: true },
+  })
+  const baseCurrency = user?.currency ?? 'KRW'
+
+  // Use raw SQL to compute balance in base currency: SUM(amount * exchangeRate)
+  const debitSums = accountIds.length > 0
+    ? await prisma.$queryRaw<Array<{ debitAccountId: string; total: string }>>`
+        SELECT "debitAccountId", SUM(amount * "exchangeRate")::text AS total
+        FROM "Entry"
+        WHERE "debitAccountId" = ANY(${accountIds}::text[])
+        GROUP BY "debitAccountId"
+      `
+    : []
+
+  const creditSums = accountIds.length > 0
+    ? await prisma.$queryRaw<Array<{ creditAccountId: string; total: string }>>`
+        SELECT "creditAccountId", SUM(amount * "exchangeRate")::text AS total
+        FROM "Entry"
+        WHERE "creditAccountId" = ANY(${accountIds}::text[])
+        GROUP BY "creditAccountId"
+      `
+    : []
 
   const debitByAccount = new Map(
-    debitSums.map(r => [r.debitAccountId, Number(r._sum.amount ?? 0)]),
+    debitSums.map(r => [r.debitAccountId, Number(r.total ?? 0)]),
   )
   const creditByAccount = new Map(
-    creditSums.map(r => [r.creditAccountId, Number(r._sum.amount ?? 0)]),
+    creditSums.map(r => [r.creditAccountId, Number(r.total ?? 0)]),
   )
 
   const accountsWithBalance = accounts.map(account => {
@@ -54,7 +69,7 @@ export async function GET() {
       balance = totalCredits - totalDebits
     }
 
-    return { ...account, balance }
+    return { ...account, balance, baseCurrency }
   })
 
   return NextResponse.json(accountsWithBalance)
@@ -76,14 +91,14 @@ export async function POST(request: NextRequest) {
 
   const userId = session.user.id
 
-  let body: { name?: unknown; type?: unknown; description?: unknown }
+  let body: { name?: unknown; type?: unknown; description?: unknown; currency?: unknown }
   try {
     body = await request.json()
   } catch {
     return NextResponse.json({ error: '요청 본문을 파싱할 수 없습니다.' }, { status: 400 })
   }
 
-  const { name, type, description } = body
+  const { name, type, description, currency } = body
 
   try {
     if (!name || !type) {
@@ -92,6 +107,22 @@ export async function POST(request: NextRequest) {
 
     if (!Object.prototype.hasOwnProperty.call(TYPE_CODE_PREFIX, type as string)) {
       return NextResponse.json({ error: '올바른 계정 유형을 선택해주세요.' }, { status: 400 })
+    }
+
+    // Validate currency if provided
+    const accountCurrency = currency ? String(currency) : undefined
+    if (accountCurrency && !CURRENCY_CODES.includes(accountCurrency)) {
+      return NextResponse.json({ error: '지원하지 않는 통화 코드입니다.' }, { status: 400 })
+    }
+
+    // If no currency specified, use user's base currency
+    let finalCurrency = accountCurrency
+    if (!finalCurrency) {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { currency: true },
+      })
+      finalCurrency = user?.currency ?? 'KRW'
     }
 
     // Auto-generate the code: find the highest existing code within this type's numeric range
@@ -122,6 +153,7 @@ export async function POST(request: NextRequest) {
         name: name as string,
         code,
         type: type as string,
+        currency: finalCurrency,
         description: description ? String(description) : undefined,
       },
     })
