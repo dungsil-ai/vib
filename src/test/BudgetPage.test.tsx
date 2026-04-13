@@ -188,4 +188,81 @@ describe('BudgetPage', () => {
       }))
     })
   })
+
+  it('예산 초기화 버튼이 예산이 설정된 항목에 표시된다', async () => {
+    mockFetchResponses()
+
+    render(<BudgetPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('식비')).toBeInTheDocument()
+    })
+
+    expect(screen.getByText('초기화')).toBeInTheDocument()
+  })
+
+  it('예산을 초기화할 수 있다', async () => {
+    const originalConfirm = window.confirm
+    window.confirm = vi.fn(() => true)
+
+    vi.mocked(global.fetch).mockImplementation(async (input, init) => {
+      const url = typeof input === 'string' ? input : (input as Request).url
+      const method = (init?.method || 'GET').toUpperCase()
+      if (url === '/api/accounts') {
+        return { ok: true, json: () => Promise.resolve(mockAccounts) } as Response
+      }
+      if (url.startsWith('/api/budget/') && method === 'DELETE') {
+        return { ok: true, json: () => Promise.resolve({ message: '삭제되었습니다.' }) } as Response
+      }
+      if (url.startsWith('/api/budget')) {
+        return { ok: true, json: () => Promise.resolve(mockBudgets) } as Response
+      }
+      if (url.startsWith('/api/transactions')) {
+        return { ok: true, json: () => Promise.resolve(mockTransactions) } as Response
+      }
+      return { ok: true, json: () => Promise.resolve({}) } as Response
+    })
+
+    const user = userEvent.setup()
+    render(<BudgetPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('초기화')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByText('초기화'))
+
+    expect(window.confirm).toHaveBeenCalledWith('이 예산을 초기화하시겠습니까?')
+
+    await waitFor(() => {
+      expect(vi.mocked(global.fetch)).toHaveBeenCalledWith(
+        '/api/budget/bud-1',
+        { method: 'DELETE' },
+      )
+    })
+
+    window.confirm = originalConfirm
+  })
+
+  it('예산 초기화 취소 시 API를 호출하지 않는다', async () => {
+    const originalConfirm = window.confirm
+    window.confirm = vi.fn(() => false)
+    mockFetchResponses()
+
+    const user = userEvent.setup()
+    render(<BudgetPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('초기화')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByText('초기화'))
+
+    const deleteCalls = vi.mocked(global.fetch).mock.calls.filter(([url, options]) => {
+      return String(url).startsWith('/api/budget/') && options?.method === 'DELETE'
+    })
+    expect(deleteCalls).toHaveLength(0)
+
+    window.confirm = originalConfirm
+  })
 })

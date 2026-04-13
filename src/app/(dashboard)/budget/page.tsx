@@ -136,6 +136,19 @@ export default function BudgetPage() {
     setActualExpenses(actuals)
   }
 
+  const deleteBudget = async (budgetId: string) => {
+    if (!confirm('이 예산을 초기화하시겠습니까?')) return
+    const res = await fetch(`/api/budget/${budgetId}`, { method: 'DELETE' })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      setError(data.error || '예산 삭제에 실패했습니다.')
+      return
+    }
+    const { rows: newRows, actuals } = await loadBudgetData(year, month)
+    setRows(newRows)
+    setActualExpenses(actuals)
+  }
+
   const updateEditAmount = (index: number, value: string) => {
     const updated = [...rows]
     updated[index].editAmount = value
@@ -251,12 +264,22 @@ export default function BudgetPage() {
                           </button>
                         </div>
                       ) : (
-                        <button
-                          onClick={() => startEditing(index)}
-                          className="text-sm font-medium text-blue-600 hover:text-blue-800 min-w-[120px] text-right"
-                        >
-                          예산: {hasBudget ? formatCurrency(budget) : '설정 없음'}
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => startEditing(index)}
+                            className="text-sm font-medium text-blue-600 hover:text-blue-800 min-w-[120px] text-right"
+                          >
+                            예산: {hasBudget ? formatCurrency(budget) : '설정 없음'}
+                          </button>
+                          {hasBudget && row.budget && (
+                            <button
+                              onClick={() => deleteBudget(row.budget!.id)}
+                              className="text-xs text-red-500 hover:text-red-700"
+                            >
+                              초기화
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
                   </div>
