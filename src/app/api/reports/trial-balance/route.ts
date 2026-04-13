@@ -40,17 +40,22 @@ export async function GET(request: NextRequest) {
   })
 
   const accountIds = accounts.map(a => a.id)
-  const txDateFilter = dateFilter ? { transaction: { date: dateFilter } } : {}
+  const transactionFilter = {
+    transaction: {
+      userId,
+      ...(dateFilter ? { date: dateFilter } : {}),
+    },
+  }
 
   const [debitSums, creditSums] = await Promise.all([
     prisma.entry.groupBy({
       by: ['debitAccountId'],
-      where: { debitAccountId: { in: accountIds }, ...txDateFilter },
+      where: { debitAccountId: { in: accountIds }, ...transactionFilter },
       _sum: { amount: true },
     }),
     prisma.entry.groupBy({
       by: ['creditAccountId'],
-      where: { creditAccountId: { in: accountIds }, ...txDateFilter },
+      where: { creditAccountId: { in: accountIds }, ...transactionFilter },
       _sum: { amount: true },
     }),
   ])

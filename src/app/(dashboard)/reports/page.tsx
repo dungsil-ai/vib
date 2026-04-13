@@ -190,9 +190,16 @@ function Ledger() {
 
   useEffect(() => {
     fetch('/api/accounts')
-      .then(r => r.json())
-      .then((list: SimpleAccount[]) => setAccounts(list))
-      .catch(() => {})
+      .then(async res => {
+        const json = await res.json()
+        if (!res.ok) throw new Error(json.error ?? '계정 목록을 불러오지 못했습니다.')
+        return json
+      })
+      .then((list: SimpleAccount[]) => setAccounts(Array.isArray(list) ? list : []))
+      .catch((err) => {
+        setAccounts([])
+        setError(err instanceof Error ? err.message : '계정 목록을 불러오는 중 오류가 발생했습니다.')
+      })
   }, [])
 
   const load = useCallback(async () => {
@@ -511,17 +518,54 @@ function SectionTable({ title, rows, total, colorClass }: {
   )
 }
 
+function isBalanceSheetData(value: unknown): value is BalanceSheetData {
+  if (!value || typeof value !== 'object') return false
+  const data = value as Record<string, unknown>
+  return (
+    Array.isArray(data.assets) &&
+    Array.isArray(data.liabilities) &&
+    Array.isArray(data.equity) &&
+    typeof data.totalAssets === 'number' &&
+    typeof data.totalLiabilities === 'number' &&
+    typeof data.totalEquity === 'number'
+  )
+}
+
 function BalanceSheet() {
   const [data, setData] = useState<BalanceSheetData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    fetch('/api/reports/balance-sheet')
-      .then(r => r.json())
-      .then((json: BalanceSheetData) => setData(json))
-      .catch(() => setError('재무상태표를 불러오는 중 오류가 발생했습니다.'))
-      .finally(() => setLoading(false))
+    const loadBalanceSheet = async () => {
+      try {
+        const res = await fetch('/api/reports/balance-sheet')
+        const json: unknown = await res.json()
+
+        if (!res.ok) {
+          const message =
+            json &&
+            typeof json === 'object' &&
+            'error' in json &&
+            typeof (json as { error?: unknown }).error === 'string'
+              ? (json as { error: string }).error
+              : '재무상태표를 불러오는 중 오류가 발생했습니다.'
+          throw new Error(message)
+        }
+
+        if (!isBalanceSheetData(json)) {
+          throw new Error('재무상태표 응답 형식이 올바르지 않습니다.')
+        }
+
+        setData(json)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : '재무상태표를 불러오는 중 오류가 발생했습니다.')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadBalanceSheet()
   }, [])
 
   if (loading) return <div className="text-center py-8 text-gray-500 dark:text-gray-400">로딩 중...</div>

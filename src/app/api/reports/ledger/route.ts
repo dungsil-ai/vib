@@ -50,25 +50,34 @@ export async function GET(request: NextRequest) {
   // Compute opening balance (entries before startDate)
   let openingBalance = 0
   if (startDate) {
-    const priorEntries = await prisma.entry.findMany({
-      where: {
-        OR: [{ debitAccountId: accountId }, { creditAccountId: accountId }],
-        transaction: { date: { lt: startDate } },
-      },
-      select: { debitAccountId: true, amount: true },
-    })
-    for (const e of priorEntries) {
-      const isDebit = e.debitAccountId === accountId
-      const amount = Number(e.amount)
-      if (account.type === 'ASSET' || account.type === 'EXPENSE') {
-        openingBalance += isDebit ? amount : -amount
-      } else {
-        openingBalance += isDebit ? -amount : amount
-      }
+    const [priorDebitSumResult, priorCreditSumResult] = await Promise.all([
+      prisma.entry.aggregate({
+        where: {
+          debitAccountId: accountId,
+          transaction: { userId, date: { lt: startDate } },
+        },
+        _sum: { amount: true },
+      }),
+      prisma.entry.aggregate({
+        where: {
+          creditAccountId: accountId,
+          transaction: { userId, date: { lt: startDate } },
+        },
+        _sum: { amount: true },
+      }),
+    ])
+
+    const priorDebitSum = Number(priorDebitSumResult._sum.amount ?? 0)
+    const priorCreditSum = Number(priorCreditSumResult._sum.amount ?? 0)
+
+    if (account.type === 'ASSET' || account.type === 'EXPENSE') {
+      openingBalance = priorDebitSum - priorCreditSum
+    } else {
+      openingBalance = priorCreditSum - priorDebitSum
     }
   }
 
-  const txFilter: { date?: { gte?: Date; lte?: Date } } = {}
+  const txFilter: { userId: string; date?: { gte?: Date; lte?: Date } } = { userId }
   if (startDate || endDate) {
     txFilter.date = {}
     if (startDate) txFilter.date.gte = startDate
@@ -78,14 +87,18 @@ export async function GET(request: NextRequest) {
   const entries = await prisma.entry.findMany({
     where: {
       OR: [{ debitAccountId: accountId }, { creditAccountId: accountId }],
-      ...(Object.keys(txFilter).length > 0 ? { transaction: txFilter } : {}),
+      transaction: txFilter,
     },
     include: {
       transaction: { select: { id: true, date: true, description: true } },
       debitAccount: { select: { name: true } },
       creditAccount: { select: { name: true } },
     },
-    orderBy: { transaction: { date: 'asc' } },
+    orderBy: [
+      { transaction: { date: 'asc' } },
+      { transaction: { id: 'asc' } },
+      { id: 'asc' },
+    ],
   })
 
   let balance = openingBalance

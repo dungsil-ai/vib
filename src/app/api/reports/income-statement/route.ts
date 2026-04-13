@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
   const revenueIds = accounts.filter(a => a.type === 'REVENUE').map(a => a.id)
   const expenseIds = accounts.filter(a => a.type === 'EXPENSE').map(a => a.id)
 
-  const txFilter = { transaction: { date: dateFilter } }
+  const txFilter = { transaction: { userId, date: dateFilter } }
 
   const [revDebitSums, revCreditSums, expDebitSums, expCreditSums] = await Promise.all([
     revenueIds.length === 0

@@ -236,7 +236,7 @@ describe('ReportsPage', () => {
       await userEvent_.click(screen.getByRole('button', { name: '재무상태표' }))
 
       await waitFor(() => {
-        expect(screen.getByText('재무상태표를 불러오는 중 오류가 발생했습니다.')).toBeInTheDocument()
+        expect(screen.getByText('network error')).toBeInTheDocument()
       })
     })
   })

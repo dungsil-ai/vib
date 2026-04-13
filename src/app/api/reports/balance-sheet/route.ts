@@ -22,12 +22,12 @@ export async function GET() {
   const [debitSums, creditSums] = await Promise.all([
     prisma.entry.groupBy({
       by: ['debitAccountId'],
-      where: { debitAccountId: { in: accountIds } },
+      where: { debitAccountId: { in: accountIds }, transaction: { userId } },
       _sum: { amount: true },
     }),
     prisma.entry.groupBy({
       by: ['creditAccountId'],
-      where: { creditAccountId: { in: accountIds } },
+      where: { creditAccountId: { in: accountIds }, transaction: { userId } },
       _sum: { amount: true },
     }),
   ])
