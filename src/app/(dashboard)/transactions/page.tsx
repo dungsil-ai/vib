@@ -876,7 +876,6 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError }: 
     let cancelled = false
     fetchRecurring(() => cancelled)
     return () => { cancelled = true }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const resetForm = () => {

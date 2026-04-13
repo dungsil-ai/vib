@@ -98,7 +98,15 @@ describe('trial-balance GET', () => {
 // ─── ledger endDate 보정 테스트 ─────────────────────────────────────────────
 
 describe('ledger GET', () => {
-  const mockAccount = { id: 'acc-1', code: '1001', name: '현금', type: 'ASSET' }
+  const mockAccount = {
+    id: 'acc-1',
+    code: '1001',
+    name: '현금',
+    type: 'ASSET',
+    userId: 'user-1',
+    description: null,
+    createdAt: new Date('2024-01-01T00:00:00.000Z'),
+  }
 
   beforeEach(() => {
     vi.clearAllMocks()
