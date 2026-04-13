@@ -23,9 +23,9 @@ export function computeNextRunAt(
       break
     case 'MONTHLY': {
       const sourceDay = dayOfMonth ?? d.getUTCDate()
-      const targetMonthIndex = d.getUTCMonth() + 1
-      const targetYear = d.getUTCFullYear() + Math.floor(targetMonthIndex / 12)
-      const normalizedMonthIndex = targetMonthIndex % 12
+      const totalMonths = d.getUTCFullYear() * 12 + d.getUTCMonth() + 1
+      const targetYear = Math.floor(totalMonths / 12)
+      const normalizedMonthIndex = totalMonths % 12
       const targetDay = Math.min(sourceDay, getMaxUtcDay(targetYear, normalizedMonthIndex))
 
       d.setUTCFullYear(targetYear, normalizedMonthIndex, targetDay)
