@@ -336,6 +336,7 @@ export default function TransactionsPage() {
       setListError(null)
       const res = await fetch(`/api/transactions/${id}`, { method: 'DELETE' })
       if (!res.ok) throw new Error(`거래를 삭제하지 못했습니다. (${res.status})`)
+      setListLoading(true)
       fetchTransactions(listPage)
     } catch (err) {
       setListError(err instanceof Error ? err.message : '거래를 삭제하는 중 오류가 발생했습니다.')
@@ -750,46 +751,54 @@ export default function TransactionsPage() {
                 </tbody>
               </table>
             </div>
+          </div>
+        )}
 
-            {/* ── Pagination ── */}
-            {listTotal > LIST_PAGE_SIZE && (
-              <div className="flex items-center justify-between px-4 py-3 border-t dark:border-gray-700">
-                <span className="text-xs text-gray-500 dark:text-gray-400">
-                  총 {listTotal}건 중 {(listPage - 1) * LIST_PAGE_SIZE + 1}–{Math.min(listPage * LIST_PAGE_SIZE, listTotal)}건
-                </span>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    disabled={listPage <= 1 || listLoading}
-                    onClick={() => {
-                      const prev = listPage - 1
-                      setListPage(prev)
-                      setListLoading(true)
-                      fetchTransactions(prev)
-                    }}
-                    className="px-3 py-1 text-xs border dark:border-gray-600 rounded-lg disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-700 dark:text-gray-300"
-                  >
-                    이전
-                  </button>
-                  <span className="text-xs text-gray-700 dark:text-gray-300">
-                    {listPage} / {Math.ceil(listTotal / LIST_PAGE_SIZE)}
-                  </span>
-                  <button
-                    type="button"
-                    disabled={listPage >= Math.ceil(listTotal / LIST_PAGE_SIZE) || listLoading}
-                    onClick={() => {
-                      const next = listPage + 1
-                      setListPage(next)
-                      setListLoading(true)
-                      fetchTransactions(next)
-                    }}
-                    className="px-3 py-1 text-xs border dark:border-gray-600 rounded-lg disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-700 dark:text-gray-300"
-                  >
-                    다음
-                  </button>
-                </div>
-              </div>
-            )}
+        {/* ── Pagination ── */}
+        {!listLoading && listTotal > 0 && (listTotal > LIST_PAGE_SIZE || listPage > 1) && (
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border dark:border-gray-700 flex items-center justify-between px-4 py-3">
+            <span className="text-xs text-gray-500 dark:text-gray-400">
+              {(() => {
+                const totalPages = Math.max(1, Math.ceil(listTotal / LIST_PAGE_SIZE))
+                const currentPage = Math.min(listPage, totalPages)
+                const start = (currentPage - 1) * LIST_PAGE_SIZE + 1
+                const end = Math.min(currentPage * LIST_PAGE_SIZE, listTotal)
+                return <>총 {listTotal}건 중 {start}–{end}건</>
+              })()}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={listPage <= 1 || listLoading}
+                onClick={() => {
+                  const totalPages = Math.max(1, Math.ceil(listTotal / LIST_PAGE_SIZE))
+                  const prev = Math.max(1, Math.min(listPage - 1, totalPages))
+                  setListPage(prev)
+                  setListLoading(true)
+                  fetchTransactions(prev)
+                }}
+                className="px-3 py-1 text-xs border dark:border-gray-600 rounded-lg disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-700 dark:text-gray-300"
+              >
+                이전
+              </button>
+              <span className="text-xs text-gray-700 dark:text-gray-300">
+                {Math.min(listPage, Math.max(1, Math.ceil(listTotal / LIST_PAGE_SIZE)))} / {Math.max(1, Math.ceil(listTotal / LIST_PAGE_SIZE))}
+              </span>
+              <button
+                type="button"
+                disabled={listPage >= Math.max(1, Math.ceil(listTotal / LIST_PAGE_SIZE)) || listLoading}
+                onClick={() => {
+                  const totalPages = Math.max(1, Math.ceil(listTotal / LIST_PAGE_SIZE))
+                  const next = Math.max(1, Math.min(listPage + 1, totalPages))
+                  setListPage(next)
+                  setListLoading(true)
+                  fetchTransactions(next)
+                }}
+                className="px-3 py-1 text-xs border dark:border-gray-600 rounded-lg disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-700 dark:text-gray-300"
+              >
+                다음
+              </button>
+            </div>
           </div>
         )}
       </div>

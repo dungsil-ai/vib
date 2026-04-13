@@ -69,8 +69,9 @@ export async function GET(request: NextRequest) {
       if (parts.length !== 3 || parts.some(isNaN)) {
         return NextResponse.json({ error: '유효한 startDate를 입력해주세요.' }, { status: 400 })
       }
-      const d = new Date(parts[0], parts[1] - 1, parts[2])
-      if (isNaN(d.getTime())) {
+      const [sy, sm, sd] = parts
+      const d = new Date(sy, sm - 1, sd)
+      if (isNaN(d.getTime()) || d.getFullYear() !== sy || d.getMonth() !== sm - 1 || d.getDate() !== sd) {
         return NextResponse.json({ error: '유효한 startDate를 입력해주세요.' }, { status: 400 })
       }
       dateWhere.gte = d
@@ -80,8 +81,9 @@ export async function GET(request: NextRequest) {
       if (parts.length !== 3 || parts.some(isNaN)) {
         return NextResponse.json({ error: '유효한 endDate를 입력해주세요.' }, { status: 400 })
       }
-      const d = new Date(parts[0], parts[1] - 1, parts[2], 23, 59, 59, 999)
-      if (isNaN(d.getTime())) {
+      const [ey, em, ed] = parts
+      const d = new Date(ey, em - 1, ed, 23, 59, 59, 999)
+      if (isNaN(d.getTime()) || d.getFullYear() !== ey || d.getMonth() !== em - 1 || d.getDate() !== ed) {
         return NextResponse.json({ error: '유효한 endDate를 입력해주세요.' }, { status: 400 })
       }
       dateWhere.lte = d
