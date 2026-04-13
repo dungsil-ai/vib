@@ -30,10 +30,6 @@ interface DashboardData {
   }>
 }
 
-function formatCurrency(amount: number) {
-  return new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW' }).format(amount)
-}
-
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
