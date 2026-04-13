@@ -44,6 +44,7 @@ export async function GET(request: NextRequest) {
     if (isNaN(d.getTime())) {
       return NextResponse.json({ error: '유효한 endDate를 입력해주세요.' }, { status: 400 })
     }
+    d.setHours(23, 59, 59, 999)
     endDate = d
   }
 
