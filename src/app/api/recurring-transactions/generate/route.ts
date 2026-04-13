@@ -3,43 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { serializeData } from '@/lib/serialize'
-
-function computeNextRunAt(
-  frequency: string,
-  dayOfMonth: number | null,
-  monthOfYear: number | null,
-  from: Date,
-): Date {
-  const d = new Date(from)
-  switch (frequency) {
-    case 'DAILY':
-      d.setDate(d.getDate() + 1)
-      break
-    case 'WEEKLY':
-      d.setDate(d.getDate() + 7)
-      break
-    case 'MONTHLY': {
-      d.setMonth(d.getMonth() + 1)
-      if (dayOfMonth) {
-        const maxDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
-        d.setDate(Math.min(dayOfMonth, maxDay))
-      }
-      break
-    }
-    case 'YEARLY': {
-      d.setFullYear(d.getFullYear() + 1)
-      if (monthOfYear) {
-        d.setMonth(monthOfYear - 1)
-      }
-      if (dayOfMonth) {
-        const maxDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
-        d.setDate(Math.min(dayOfMonth, maxDay))
-      }
-      break
-    }
-  }
-  return d
-}
+import { computeNextRunAt } from '@/lib/recurring'
 
 export async function POST(_request: NextRequest) {
   const session = await getServerSession(authOptions)
