@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
+import type { Account } from '@prisma/client'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
@@ -142,7 +143,7 @@ export async function POST(request: NextRequest) {
           where: { userId_name_type: { userId, name: OPENING_BALANCE_ACCOUNT_NAME, type: 'EQUITY' } },
         })
 
-        let openingEquityAccount: { id: string; code: string; name: string; type: string }
+        let openingEquityAccount: Account
         let newAccountCode: string
 
         if (accountType === 'EQUITY' && !existingOpeningEquityAccount) {
