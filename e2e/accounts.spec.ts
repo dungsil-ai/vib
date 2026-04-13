@@ -33,7 +33,8 @@ test.describe('계정 삭제 제한', () => {
     await page.goto('/transactions')
     await expect(page.getByText('차변 (Debit)', { exact: true })).toBeVisible({ timeout: 10000 })
 
-    const today = new Date().toISOString().split('T')[0]
+    const d = new Date()
+    const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
     await page.locator('input[type="date"]').fill(today)
     await page.getByPlaceholder('거래 내용을 입력하세요').fill(`e2e 삭제 제한 테스트 ${Date.now()}`)
 
@@ -65,8 +66,8 @@ test.describe('계정 삭제 제한', () => {
     const 현금Row = page.locator('tr:has(td:first-child:text-is("현금"))').first()
     await expect(현금Row).toBeVisible({ timeout: 10000 })
 
-    // 확인 대화상자를 수락하도록 등록
-    page.on('dialog', dialog => dialog.accept())
+    // 확인 대화상자를 1회만 수락하도록 등록
+    page.once('dialog', dialog => dialog.accept())
     await 현금Row.getByRole('button', { name: '삭제' }).click()
 
     // 삭제 불가 오류 메시지 확인

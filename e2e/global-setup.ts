@@ -16,12 +16,21 @@ async function globalSetup(config: FullConfig) {
     fs.mkdirSync(authDir, { recursive: true })
   }
 
-  // 테스트 사용자 등록 (이미 존재하면 무시)
-  await fetch(`${baseURL}/api/auth/register`, {
+  // 테스트 사용자 등록 (이미 존재하면 무시, 그 외 오류는 예외 처리)
+  const res = await fetch(`${baseURL}/api/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(TEST_USER),
   })
+
+  if (!res.ok) {
+    const status = res.status
+    // 400/409는 이미 존재하는 사용자로 간주해 계속 진행
+    if (status !== 400 && status !== 409) {
+      const body = await res.text().catch(() => '(응답 없음)')
+      throw new Error(`테스트 사용자 등록 실패 (HTTP ${status}): ${body}`)
+    }
+  }
 
   // 브라우저로 로그인 후 인증 상태 저장
   const browser = await chromium.launch()
