@@ -2,7 +2,7 @@ import { chromium, FullConfig } from '@playwright/test'
 import * as fs from 'fs'
 import * as path from 'path'
 
-export const TEST_USER = {
+const TEST_USER = {
   name: 'E2E 테스트 사용자',
   email: 'e2e-test@vib.example.com',
   password: 'e2eTestPassword123',

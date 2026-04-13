@@ -63,12 +63,12 @@ test.describe('계정 삭제 제한', () => {
     await expect(page.getByRole('heading', { name: '계정 관리' })).toBeVisible()
 
     // 현금 행을 찾아 삭제 버튼 클릭
-    const 현금Row = page.locator('tr:has(td:first-child:text-is("현금"))').first()
-    await expect(현금Row).toBeVisible({ timeout: 10000 })
+    const cashRow = page.locator('tr:has(td:first-child:text-is("현금"))').first()
+    await expect(cashRow).toBeVisible({ timeout: 10000 })
 
     // 확인 대화상자를 1회만 수락하도록 등록
     page.once('dialog', dialog => dialog.accept())
-    await 현금Row.getByRole('button', { name: '삭제' }).click()
+    await cashRow.getByRole('button', { name: '삭제' }).click()
 
     // 삭제 불가 오류 메시지 확인
     await expect(
