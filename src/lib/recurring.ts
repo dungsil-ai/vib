@@ -27,10 +27,16 @@ export function computeNextRunAt(
   from: Date,
 ): Date {
   switch (frequency) {
-    case 'DAILY':
-      return new Date(from.getTime() + 24 * 60 * 60 * 1000)
-    case 'WEEKLY':
-      return new Date(from.getTime() + 7 * 24 * 60 * 60 * 1000)
+    case 'DAILY': {
+      const nextDate = new Date(from)
+      nextDate.setUTCDate(nextDate.getUTCDate() + 1)
+      return nextDate
+    }
+    case 'WEEKLY': {
+      const nextDate = new Date(from)
+      nextDate.setUTCDate(nextDate.getUTCDate() + 7)
+      return nextDate
+    }
     case 'MONTHLY': {
       return clampToUtcMonth(from, 1, dayOfMonth)
     }
