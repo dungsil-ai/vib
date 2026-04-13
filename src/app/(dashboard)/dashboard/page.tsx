@@ -34,7 +34,7 @@ function formatCurrency(amount: number) {
   return new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW' }).format(amount)
 }
 
-function DashboardPage() {
+export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -162,5 +162,3 @@ function DashboardPage() {
     </div>
   )
 }
-
-export default DashboardPage

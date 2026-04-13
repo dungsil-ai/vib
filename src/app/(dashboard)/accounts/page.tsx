@@ -59,17 +59,19 @@ export default function AccountsPage() {
   }
 
   useEffect(() => {
+    let cancelled = false
     // Load user's base currency for the form default
     fetch('/api/settings')
       .then(r => r.json())
       .then(d => {
-        if (d.currency) {
+        if (!cancelled && d.currency) {
           setFormData(prev => ({ ...prev, currency: d.currency }))
           setUserCurrency(d.currency)
         }
       })
       .catch(() => {})
     fetchAccounts()
+    return () => { cancelled = true }
   }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
