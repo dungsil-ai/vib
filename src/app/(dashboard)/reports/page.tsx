@@ -344,7 +344,12 @@ function IncomeStatement() {
   const [month, setMonth] = useState('')
 
   const load = useCallback(async () => {
-    if (!year) return
+    if (!year) {
+      setData(null)
+      setError('연도를 입력해주세요.')
+      setLoading(false)
+      return
+    }
     setLoading(true)
     setError(null)
     try {

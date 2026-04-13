@@ -18,22 +18,25 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'year를 입력해주세요.' }, { status: 400 })
   }
 
-  const year = parseInt(yearParam, 10)
+  if (!/^\d+$/.test(yearParam)) {
+    return NextResponse.json({ error: '유효한 year를 입력해주세요.' }, { status: 400 })
+  }
+
+  const year = Number(yearParam)
   if (!Number.isFinite(year)) {
     return NextResponse.json({ error: '유효한 year를 입력해주세요.' }, { status: 400 })
   }
 
   let dateFilter: { gte: Date; lte: Date }
   if (monthParam) {
-    const month = parseInt(monthParam, 10)
-    if (!Number.isFinite(month) || month < 1 || month > 12) {
+    if (!/^(?:[1-9]|1[0-2])$/.test(monthParam)) {
       return NextResponse.json({ error: '유효한 month를 입력해주세요.' }, { status: 400 })
     }
+    const month = Number(monthParam)
     dateFilter = {
       gte: new Date(year, month - 1, 1),
       lte: new Date(year, month, 0, 23, 59, 59, 999),
     }
-  } else {
     dateFilter = {
       gte: new Date(year, 0, 1),
       lte: new Date(year, 11, 31, 23, 59, 59, 999),

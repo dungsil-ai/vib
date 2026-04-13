@@ -31,6 +31,9 @@ export async function GET(request: NextRequest) {
       }
       dateFilter.lte = d
     }
+    if (dateFilter.gte && dateFilter.lte && dateFilter.gte > dateFilter.lte) {
+      return NextResponse.json({ error: 'startDate는 endDate보다 늦을 수 없습니다.' }, { status: 400 })
+    }
   }
 
   const accounts = await prisma.account.findMany({

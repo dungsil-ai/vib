@@ -47,6 +47,13 @@ export async function GET(request: NextRequest) {
     endDate = d
   }
 
+  if (startDate && endDate && startDate > endDate) {
+    return NextResponse.json(
+      { error: 'startDate는 endDate보다 늦을 수 없습니다.' },
+      { status: 400 }
+    )
+  }
+
   // Compute opening balance (entries before startDate)
   let openingBalance = 0
   if (startDate) {
