@@ -226,9 +226,10 @@ export default function BudgetPage() {
             {rows.map((row, index) => {
               const actual = actualExpenses[row.account.id] || 0
               const budget = Number(row.budget?.amount || 0)
-              const hasBudget = budget > 0
-              const pct = hasBudget ? Math.min((actual / budget) * 100, 100) : 0
-              const isOver = hasBudget && actual > budget
+              const hasBudget = row.budget != null
+              const hasPositiveBudget = budget > 0
+              const pct = hasPositiveBudget ? Math.min((actual / budget) * 100, 100) : 0
+              const isOver = hasPositiveBudget && actual > budget
 
               return (
                 <div key={row.account.id} className="p-4">
@@ -275,9 +276,9 @@ export default function BudgetPage() {
                           >
                             예산: {hasBudget ? formatCurrency(budget) : '설정 없음'}
                           </button>
-                          {hasBudget && row.budget && (
+                          {row.budget && (
                             <button
-                              onClick={() => deleteBudget(row.budget!.id)}
+                              onClick={() => deleteBudget(row.budget.id)}
                               className="text-xs text-red-500 hover:text-red-700"
                             >
                               초기화
@@ -287,7 +288,7 @@ export default function BudgetPage() {
                       )}
                     </div>
                   </div>
-                  {hasBudget && (
+                  {hasPositiveBudget && (
                     <div className="mt-2">
                       <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2">
                         <div
