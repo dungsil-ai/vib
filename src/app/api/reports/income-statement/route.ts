@@ -37,6 +37,7 @@ export async function GET(request: NextRequest) {
       gte: new Date(year, month - 1, 1),
       lte: new Date(year, month, 0, 23, 59, 59, 999),
     }
+  } else {
     dateFilter = {
       gte: new Date(year, 0, 1),
       lte: new Date(year, 11, 31, 23, 59, 59, 999),
