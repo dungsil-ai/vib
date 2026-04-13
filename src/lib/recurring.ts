@@ -11,7 +11,7 @@ export function computeNextRunAt(
 ): Date {
   const d = new Date(from)
 
-  const getMaxUtcDay = (year: number, monthIndex: number) =>
+  const getUtcMonthLastDay = (year: number, monthIndex: number) =>
     new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate()
 
   switch (frequency) {
@@ -23,19 +23,19 @@ export function computeNextRunAt(
       break
     case 'MONTHLY': {
       const sourceDay = dayOfMonth ?? d.getUTCDate()
-      const totalMonths = d.getUTCFullYear() * 12 + d.getUTCMonth() + 1
-      const targetYear = Math.floor(totalMonths / 12)
-      const normalizedMonthIndex = totalMonths % 12
-      const targetDay = Math.min(sourceDay, getMaxUtcDay(targetYear, normalizedMonthIndex))
+      const currentMonthIndex = d.getUTCMonth()
+      const targetMonthIndex = (currentMonthIndex + 1) % 12
+      const targetYear = d.getUTCFullYear() + (currentMonthIndex === 11 ? 1 : 0)
+      const targetDay = Math.min(sourceDay, getUtcMonthLastDay(targetYear, targetMonthIndex))
 
-      d.setUTCFullYear(targetYear, normalizedMonthIndex, targetDay)
+      d.setUTCFullYear(targetYear, targetMonthIndex, targetDay)
       break
     }
     case 'YEARLY': {
       const targetYear = d.getUTCFullYear() + 1
       const targetMonthIndex = monthOfYear ? monthOfYear - 1 : d.getUTCMonth()
       const sourceDay = dayOfMonth ?? d.getUTCDate()
-      const targetDay = Math.min(sourceDay, getMaxUtcDay(targetYear, targetMonthIndex))
+      const targetDay = Math.min(sourceDay, getUtcMonthLastDay(targetYear, targetMonthIndex))
 
       d.setUTCFullYear(targetYear, targetMonthIndex, targetDay)
       break
