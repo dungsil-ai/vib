@@ -118,4 +118,6 @@ model RecurringEntry {
   amount                 Decimal
   description            String?
   createdAt              DateTime             @default(now())
+
+  @@index([recurringTransactionId])
 }

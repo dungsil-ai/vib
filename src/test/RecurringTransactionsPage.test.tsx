@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
-import RecurringTransactionsPage from '@/app/(dashboard)/recurring-transactions/page'
+import TransactionsPage from '@/app/(dashboard)/transactions/page'
 
 const originalFetch = global.fetch
 const originalConfirm = window.confirm
@@ -75,6 +75,7 @@ const mockRecurring = [
 
 function setupFetchMock(overrides: Partial<{
   accounts: Response
+  transactions: Response
   recurring: Response
   post: Response
   put: Response
@@ -87,6 +88,9 @@ function setupFetchMock(overrides: Partial<{
 
     if (url === '/api/accounts' && method === 'GET') {
       return overrides.accounts ?? { ok: true, json: () => Promise.resolve(mockAccounts) } as Response
+    }
+    if (url === '/api/transactions' && method === 'GET') {
+      return overrides.transactions ?? { ok: true, json: () => Promise.resolve([]) } as Response
     }
     if (url === '/api/recurring-transactions' && method === 'GET') {
       return overrides.recurring ?? { ok: true, json: () => Promise.resolve(mockRecurring) } as Response
@@ -107,7 +111,7 @@ function setupFetchMock(overrides: Partial<{
   })
 }
 
-describe('RecurringTransactionsPage', () => {
+describe('RecurringTransactionsPage (반복 거래 탭)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     global.fetch = vi.fn()
@@ -121,27 +125,50 @@ describe('RecurringTransactionsPage', () => {
     window.confirm = originalConfirm
   })
 
-  it('로딩 중 상태를 표시한다', () => {
-    vi.mocked(global.fetch).mockReturnValue(new Promise(() => {}))
-    render(<RecurringTransactionsPage />)
+  it('반복 거래 탭 전환 후 로딩 중 상태를 표시한다', async () => {
+    // accounts는 즉시 반환, 나머지는 pending
+    vi.mocked(global.fetch).mockImplementation(async (input, init) => {
+      const url = typeof input === 'string' ? input : (input as Request).url
+      const method = init?.method || 'GET'
+      if (url === '/api/accounts' && method === 'GET') {
+        return { ok: true, json: () => Promise.resolve(mockAccounts) } as Response
+      }
+      if (url === '/api/transactions' && method === 'GET') {
+        return { ok: true, json: () => Promise.resolve([]) } as Response
+      }
+      // recurring-transactions는 pending
+      return new Promise(() => {})
+    })
+
+    const user = userEvent.setup()
+    render(<TransactionsPage />)
+
+    // 반복 거래 탭으로 전환
+    await user.click(screen.getByRole('button', { name: '반복 거래' }))
+
     expect(screen.getByText('로딩 중...')).toBeInTheDocument()
   })
 
-  it('페이지 제목과 폼을 렌더링한다', async () => {
+  it('반복 거래 탭 전환 후 폼과 목록을 렌더링한다', async () => {
     setupFetchMock()
-    render(<RecurringTransactionsPage />)
+    const user = userEvent.setup()
+    render(<TransactionsPage />)
+
+    await user.click(screen.getByRole('button', { name: '반복 거래' }))
 
     await waitFor(() => {
-      expect(screen.getByText('반복 거래')).toBeInTheDocument()
+      expect(screen.getByText('반복 거래 추가')).toBeInTheDocument()
     })
 
-    expect(screen.getByText('반복 거래 추가')).toBeInTheDocument()
     expect(screen.getByText('반복 거래 목록')).toBeInTheDocument()
   })
 
   it('반복 거래 목록을 표시한다', async () => {
     setupFetchMock()
-    render(<RecurringTransactionsPage />)
+    const user = userEvent.setup()
+    render(<TransactionsPage />)
+
+    await user.click(screen.getByRole('button', { name: '반복 거래' }))
 
     await waitFor(() => {
       expect(screen.getByText('월세')).toBeInTheDocument()
@@ -152,7 +179,10 @@ describe('RecurringTransactionsPage', () => {
 
   it('다중 항목 거래에 항목 수 배지를 표시한다', async () => {
     setupFetchMock()
-    render(<RecurringTransactionsPage />)
+    const user = userEvent.setup()
+    render(<TransactionsPage />)
+
+    await user.click(screen.getByRole('button', { name: '반복 거래' }))
 
     await waitFor(() => {
       expect(screen.getByText('2개 항목')).toBeInTheDocument()
@@ -161,7 +191,10 @@ describe('RecurringTransactionsPage', () => {
 
   it('활성/비활성 상태를 표시한다', async () => {
     setupFetchMock()
-    render(<RecurringTransactionsPage />)
+    const user = userEvent.setup()
+    render(<TransactionsPage />)
+
+    await user.click(screen.getByRole('button', { name: '반복 거래' }))
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: '비활성화' })).toBeInTheDocument()
@@ -174,7 +207,10 @@ describe('RecurringTransactionsPage', () => {
       recurring: { ok: true, json: () => Promise.resolve([]) } as Response,
     })
 
-    render(<RecurringTransactionsPage />)
+    const user = userEvent.setup()
+    render(<TransactionsPage />)
+
+    await user.click(screen.getByRole('button', { name: '반복 거래' }))
 
     await waitFor(() => {
       expect(screen.getByText(/등록된 반복 거래가 없습니다/)).toBeInTheDocument()
@@ -186,7 +222,10 @@ describe('RecurringTransactionsPage', () => {
       recurring: { ok: false, status: 500 } as Response,
     })
 
-    render(<RecurringTransactionsPage />)
+    const user = userEvent.setup()
+    render(<TransactionsPage />)
+
+    await user.click(screen.getByRole('button', { name: '반복 거래' }))
 
     await waitFor(() => {
       expect(screen.getByText(/반복 거래를 불러오지 못했습니다/)).toBeInTheDocument()
@@ -197,7 +236,9 @@ describe('RecurringTransactionsPage', () => {
     setupFetchMock()
     const user = userEvent.setup()
 
-    render(<RecurringTransactionsPage />)
+    render(<TransactionsPage />)
+
+    await user.click(screen.getByRole('button', { name: '반복 거래' }))
 
     await waitFor(() => {
       expect(screen.getByText('통신비')).toBeInTheDocument()
@@ -221,7 +262,9 @@ describe('RecurringTransactionsPage', () => {
     setupFetchMock()
     const user = userEvent.setup()
 
-    render(<RecurringTransactionsPage />)
+    render(<TransactionsPage />)
+
+    await user.click(screen.getByRole('button', { name: '반복 거래' }))
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: '비활성화' })).toBeInTheDocument()
@@ -240,7 +283,9 @@ describe('RecurringTransactionsPage', () => {
     window.confirm = vi.fn(() => true)
     const user = userEvent.setup()
 
-    render(<RecurringTransactionsPage />)
+    render(<TransactionsPage />)
+
+    await user.click(screen.getByRole('button', { name: '반복 거래' }))
 
     await waitFor(() => {
       expect(screen.getByText('월세')).toBeInTheDocument()
@@ -259,7 +304,9 @@ describe('RecurringTransactionsPage', () => {
     window.confirm = vi.fn(() => false)
     const user = userEvent.setup()
 
-    render(<RecurringTransactionsPage />)
+    render(<TransactionsPage />)
+
+    await user.click(screen.getByRole('button', { name: '반복 거래' }))
 
     await waitFor(() => {
       expect(screen.getByText('월세')).toBeInTheDocument()
@@ -279,7 +326,9 @@ describe('RecurringTransactionsPage', () => {
     setupFetchMock()
     const user = userEvent.setup()
 
-    render(<RecurringTransactionsPage />)
+    render(<TransactionsPage />)
+
+    await user.click(screen.getByRole('button', { name: '반복 거래' }))
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: '지금 자동 생성' })).toBeInTheDocument()
@@ -303,7 +352,9 @@ describe('RecurringTransactionsPage', () => {
     setupFetchMock()
     const user = userEvent.setup()
 
-    render(<RecurringTransactionsPage />)
+    render(<TransactionsPage />)
+
+    await user.click(screen.getByRole('button', { name: '반복 거래' }))
 
     await waitFor(() => {
       expect(screen.getByText('반복 거래 추가')).toBeInTheDocument()
@@ -328,7 +379,9 @@ describe('RecurringTransactionsPage', () => {
     setupFetchMock()
     const user = userEvent.setup()
 
-    render(<RecurringTransactionsPage />)
+    render(<TransactionsPage />)
+
+    await user.click(screen.getByRole('button', { name: '반복 거래' }))
 
     await waitFor(() => {
       expect(screen.getByText('반복 거래 추가')).toBeInTheDocument()
@@ -354,7 +407,9 @@ describe('RecurringTransactionsPage', () => {
     setupFetchMock()
     const user = userEvent.setup()
 
-    render(<RecurringTransactionsPage />)
+    render(<TransactionsPage />)
+
+    await user.click(screen.getByRole('button', { name: '반복 거래' }))
 
     await waitFor(() => {
       expect(screen.getByText('반복 거래 추가')).toBeInTheDocument()
@@ -372,7 +427,9 @@ describe('RecurringTransactionsPage', () => {
     setupFetchMock()
     const user = userEvent.setup()
 
-    render(<RecurringTransactionsPage />)
+    render(<TransactionsPage />)
+
+    await user.click(screen.getByRole('button', { name: '반복 거래' }))
 
     await waitFor(() => {
       expect(screen.getByText('반복 거래 추가')).toBeInTheDocument()
@@ -411,7 +468,9 @@ describe('RecurringTransactionsPage', () => {
     })
     const user = userEvent.setup()
 
-    render(<RecurringTransactionsPage />)
+    render(<TransactionsPage />)
+
+    await user.click(screen.getByRole('button', { name: '반복 거래' }))
 
     await waitFor(() => {
       expect(screen.getByText('반복 거래 추가')).toBeInTheDocument()
@@ -438,7 +497,10 @@ describe('RecurringTransactionsPage', () => {
       accounts: { ok: false, status: 500 } as Response,
     })
 
-    render(<RecurringTransactionsPage />)
+    const user = userEvent.setup()
+    render(<TransactionsPage />)
+
+    await user.click(screen.getByRole('button', { name: '반복 거래' }))
 
     await waitFor(() => {
       const alerts = screen.getAllByText(/계정 목록을 불러오지 못했습니다/)

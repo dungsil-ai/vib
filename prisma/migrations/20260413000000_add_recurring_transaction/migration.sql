@@ -35,6 +35,9 @@ CREATE TABLE "RecurringEntry" (
 -- CreateIndex
 CREATE INDEX "RecurringTransaction_userId_nextRunAt_idx" ON "RecurringTransaction"("userId", "nextRunAt");
 
+-- CreateIndex
+CREATE INDEX "RecurringEntry_recurringTransactionId_idx" ON "RecurringEntry"("recurringTransactionId");
+
 -- AddForeignKey
 ALTER TABLE "RecurringTransaction" ADD CONSTRAINT "RecurringTransaction_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 

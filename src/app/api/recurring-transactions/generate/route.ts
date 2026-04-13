@@ -33,33 +33,6 @@ export async function POST(_request: NextRequest) {
   const created = []
 
   for (const recurring of due) {
-    // Create the actual transaction
-    const transaction = await prisma.transaction.create({
-      data: {
-        userId: session.user.id,
-        date: recurring.nextRunAt,
-        description: recurring.description,
-        entries: {
-          create: recurring.entries.map(entry => ({
-            debitAccountId: entry.debitAccountId,
-            creditAccountId: entry.creditAccountId,
-            amount: entry.amount,
-            description: entry.description,
-          })),
-        },
-      },
-      include: {
-        entries: {
-          include: {
-            debitAccount: { select: { name: true, code: true } },
-            creditAccount: { select: { name: true, code: true } },
-          },
-        },
-      },
-    })
-    created.push(transaction)
-
-    // Compute next run date
     const nextRunAt = computeNextRunAt(
       recurring.frequency,
       recurring.dayOfMonth,
@@ -67,16 +40,54 @@ export async function POST(_request: NextRequest) {
       recurring.nextRunAt,
     )
 
-    // Update recurring transaction
-    await prisma.recurringTransaction.update({
-      where: { id: recurring.id },
-      data: {
-        lastRunAt: recurring.nextRunAt,
-        nextRunAt,
-        // Deactivate if endDate has been surpassed
-        ...(recurring.endDate && nextRunAt > recurring.endDate ? { isActive: false } : {}),
-      },
+    const transaction = await prisma.$transaction(async tx => {
+      // nextRunAt 일치 조건으로 낙관적 동시성 제어 - 중복 생성 방지
+      const updateResult = await tx.recurringTransaction.updateMany({
+        where: {
+          id: recurring.id,
+          userId: session.user.id,
+          isActive: true,
+          nextRunAt: recurring.nextRunAt,
+        },
+        data: {
+          lastRunAt: recurring.nextRunAt,
+          nextRunAt,
+          ...(recurring.endDate && nextRunAt > recurring.endDate ? { isActive: false } : {}),
+        },
+      })
+
+      if (updateResult.count === 0) {
+        return null
+      }
+
+      return tx.transaction.create({
+        data: {
+          userId: session.user.id,
+          date: recurring.nextRunAt,
+          description: recurring.description,
+          entries: {
+            create: recurring.entries.map(entry => ({
+              debitAccountId: entry.debitAccountId,
+              creditAccountId: entry.creditAccountId,
+              amount: entry.amount,
+              description: entry.description,
+            })),
+          },
+        },
+        include: {
+          entries: {
+            include: {
+              debitAccount: { select: { name: true, code: true } },
+              creditAccount: { select: { name: true, code: true } },
+            },
+          },
+        },
+      })
     })
+
+    if (transaction) {
+      created.push(transaction)
+    }
   }
 
   return NextResponse.json({ generated: created.length, transactions: serializeData(created) })

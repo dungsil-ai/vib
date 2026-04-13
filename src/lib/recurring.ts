@@ -1,8 +1,10 @@
+export type RecurringFrequency = 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY'
+
 /**
  * 주어진 날짜로부터 다음 반복 실행 날짜를 계산합니다.
  */
 export function computeNextRunAt(
-  frequency: string,
+  frequency: RecurringFrequency,
   dayOfMonth: number | null,
   monthOfYear: number | null,
   from: Date,
@@ -33,6 +35,10 @@ export function computeNextRunAt(
         d.setDate(Math.min(dayOfMonth, maxDay))
       }
       break
+    }
+    default: {
+      const _exhaustive: never = frequency
+      throw new Error(`알 수 없는 반복 주기: ${_exhaustive}`)
     }
   }
   return d
