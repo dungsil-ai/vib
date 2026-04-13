@@ -96,10 +96,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: '요청 본문을 파싱할 수 없습니다.' }, { status: 400 })
   }
 
-  const { name, type, description } = body
+  const { name: nameRaw, type, description } = body
+  const accountName = typeof nameRaw === 'string' ? nameRaw.trim() : ''
 
   try {
-    if (!name || !type) {
+    if (!accountName || !type) {
       return NextResponse.json({ error: '필수 필드를 입력해주세요.' }, { status: 400 })
     }
 
@@ -109,7 +110,7 @@ export async function POST(request: NextRequest) {
 
     const accountType = type as string
 
-    if (name === OPENING_BALANCE_ACCOUNT_NAME) {
+    if (accountName === OPENING_BALANCE_ACCOUNT_NAME) {
       return NextResponse.json({ error: `'${OPENING_BALANCE_ACCOUNT_NAME}'은 예약된 계정명입니다.` }, { status: 400 })
     }
 
@@ -138,9 +139,10 @@ export async function POST(request: NextRequest) {
         const equityPrefix = String(equityBase)[0]
         const equityUpperBound = equityBase + 999
 
-        // Use findUnique for deterministic lookup (@@unique([userId, name, type]) guarantees at most one record)
-        const existingOpeningEquityAccount = await tx.account.findUnique({
-          where: { userId_name_type: { userId, name: OPENING_BALANCE_ACCOUNT_NAME, type: 'EQUITY' } },
+        // Use findFirst with orderBy for deterministic lookup
+        const existingOpeningEquityAccount = await tx.account.findFirst({
+          where: { userId, name: OPENING_BALANCE_ACCOUNT_NAME, type: 'EQUITY' },
+          orderBy: { createdAt: 'asc' },
         })
 
         let openingEquityAccount: Account
@@ -196,11 +198,9 @@ export async function POST(request: NextRequest) {
             throw new AccountApiError('개시잔액 계정을 생성할 수 없습니다. 자본 계정 코드가 모두 사용되었습니다.', 409)
           }
 
-          // upsert guarantees exactly one opening balance account (create if absent, no-op if present)
-          openingEquityAccount = await tx.account.upsert({
-            where: { userId_name_type: { userId, name: OPENING_BALANCE_ACCOUNT_NAME, type: 'EQUITY' } },
-            update: {},
-            create: {
+          // create opening balance account if it doesn't already exist
+          openingEquityAccount = existingOpeningEquityAccount ?? await tx.account.create({
+            data: {
               userId,
               name: OPENING_BALANCE_ACCOUNT_NAME,
               code: String(nextEquityNum),
@@ -230,7 +230,7 @@ export async function POST(request: NextRequest) {
         const newAccount = await tx.account.create({
           data: {
             userId,
-            name: name as string,
+            name: accountName,
             code: newAccountCode,
             type: accountType,
             description: description ? String(description) : undefined,
@@ -247,7 +247,7 @@ export async function POST(request: NextRequest) {
           data: {
             userId,
             date: new Date(),
-            description: `${name as string} ${OPENING_BALANCE_ACCOUNT_NAME}`,
+            description: `${accountName} ${OPENING_BALANCE_ACCOUNT_NAME}`,
             entries: {
               create: [{
                 debitAccountId,
@@ -287,7 +287,7 @@ export async function POST(request: NextRequest) {
     const account = await prisma.account.create({
       data: {
         userId,
-        name: name as string,
+        name: accountName,
         code,
         type: accountType,
         description: description ? String(description) : undefined,
