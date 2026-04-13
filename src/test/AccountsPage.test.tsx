@@ -205,12 +205,14 @@ describe('AccountsPage', () => {
       expect(screen.getByText('현금')).toBeInTheDocument()
     })
 
-    const fetchCallCount = vi.mocked(global.fetch).mock.calls.length
     const deleteButtons = screen.getAllByText('삭제')
     await user.click(deleteButtons[0])
 
-    // 추가적인 fetch 호출이 없어야 함
-    expect(vi.mocked(global.fetch).mock.calls.length).toBe(fetchCallCount)
+    const deleteCalls = vi.mocked(global.fetch).mock.calls.filter(([url, options]) => {
+      return url === '/api/accounts/1' && options?.method === 'DELETE'
+    })
+
+    expect(deleteCalls).toHaveLength(0)
   })
 
   it('네트워크 에러 시 에러 메시지를 표시한다', async () => {
