@@ -62,6 +62,10 @@ describe('BudgetPage', () => {
     global.fetch = vi.fn()
   })
 
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
   it('로딩 중 상태를 표시한다', () => {
     vi.mocked(global.fetch).mockReturnValue(new Promise(() => {}))
     render(<BudgetPage />)
@@ -202,8 +206,7 @@ describe('BudgetPage', () => {
   })
 
   it('예산을 초기화할 수 있다', async () => {
-    const originalConfirm = window.confirm
-    window.confirm = vi.fn(() => true)
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
 
     vi.mocked(global.fetch).mockImplementation(async (input, init) => {
       const url = typeof input === 'string' ? input : (input as Request).url
@@ -240,13 +243,10 @@ describe('BudgetPage', () => {
         { method: 'DELETE' },
       )
     })
-
-    window.confirm = originalConfirm
   })
 
   it('예산 초기화 취소 시 API를 호출하지 않는다', async () => {
-    const originalConfirm = window.confirm
-    window.confirm = vi.fn(() => false)
+    vi.spyOn(window, 'confirm').mockReturnValue(false)
     mockFetchResponses()
 
     const user = userEvent.setup()
@@ -262,7 +262,5 @@ describe('BudgetPage', () => {
       return String(url).startsWith('/api/budget/') && options?.method === 'DELETE'
     })
     expect(deleteCalls).toHaveLength(0)
-
-    window.confirm = originalConfirm
   })
 })

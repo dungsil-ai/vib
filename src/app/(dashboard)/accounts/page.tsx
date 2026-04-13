@@ -109,9 +109,14 @@ export default function AccountsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: editData.name, description: editData.description }),
       })
-      const data = await res.json()
+      let data: { error?: string } | null = null
+      try {
+        data = await res.json()
+      } catch {
+        data = null
+      }
       if (!res.ok) {
-        setEditError(data.error || '수정에 실패했습니다.')
+        setEditError(data?.error || '수정에 실패했습니다.')
       } else {
         cancelEditing()
         fetchAccounts()
@@ -283,7 +288,7 @@ export default function AccountsPage() {
               ) : (
                 <div className="p-3">
                   <button
-                    onClick={() => { setShowFormFor(type); setFormData({ name: '', description: '' }); setFormError('') }}
+                    onClick={() => { cancelEditing(); setShowFormFor(type); setFormData({ name: '', description: '' }); setFormError('') }}
                     className="w-full py-2 border-2 border-dashed border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-blue-400 hover:text-blue-500 rounded-lg text-sm"
                   >
                     + 계정 추가
