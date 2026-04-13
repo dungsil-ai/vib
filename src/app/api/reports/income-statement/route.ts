@@ -82,17 +82,28 @@ export async function GET(request: NextRequest) {
         }),
   ])
 
-  const revDebitMap = new Map(
-    (revDebitSums as Array<{ debitAccountId: string; _sum: { amount: unknown } }>).map(r => [r.debitAccountId, Number(r._sum.amount ?? 0)]),
+  function toAmountMap<T extends { _sum: { amount: unknown } }>(
+    sums: T[],
+    getId: (item: T) => string,
+  ): Map<string, number> {
+    return new Map((sums as T[]).map(r => [getId(r), Number(r._sum.amount ?? 0)]))
+  }
+
+  const revDebitMap = toAmountMap(
+    revDebitSums as Array<{ debitAccountId: string; _sum: { amount: unknown } }>,
+    r => r.debitAccountId,
   )
-  const revCreditMap = new Map(
-    (revCreditSums as Array<{ creditAccountId: string; _sum: { amount: unknown } }>).map(r => [r.creditAccountId, Number(r._sum.amount ?? 0)]),
+  const revCreditMap = toAmountMap(
+    revCreditSums as Array<{ creditAccountId: string; _sum: { amount: unknown } }>,
+    r => r.creditAccountId,
   )
-  const expDebitMap = new Map(
-    (expDebitSums as Array<{ debitAccountId: string; _sum: { amount: unknown } }>).map(r => [r.debitAccountId, Number(r._sum.amount ?? 0)]),
+  const expDebitMap = toAmountMap(
+    expDebitSums as Array<{ debitAccountId: string; _sum: { amount: unknown } }>,
+    r => r.debitAccountId,
   )
-  const expCreditMap = new Map(
-    (expCreditSums as Array<{ creditAccountId: string; _sum: { amount: unknown } }>).map(r => [r.creditAccountId, Number(r._sum.amount ?? 0)]),
+  const expCreditMap = toAmountMap(
+    expCreditSums as Array<{ creditAccountId: string; _sum: { amount: unknown } }>,
+    r => r.creditAccountId,
   )
 
   let totalRevenue = 0

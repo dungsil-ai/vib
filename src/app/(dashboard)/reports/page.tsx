@@ -25,6 +25,8 @@ function formatCurrency(amount: number) {
   return new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW' }).format(amount)
 }
 
+const BALANCE_TOLERANCE = 0.01
+
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString('ko-KR')
 }
@@ -526,7 +528,7 @@ function BalanceSheet() {
   if (error) return <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
   if (!data) return null
 
-  const balanced = Math.abs(data.totalAssets - data.totalLiabilities - data.totalEquity) < 0.01
+  const balanced = Math.abs(data.totalAssets - data.totalLiabilities - data.totalEquity) < BALANCE_TOLERANCE
 
   return (
     <div className="space-y-4">

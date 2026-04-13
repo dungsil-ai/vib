@@ -19,14 +19,14 @@ export async function GET(request: NextRequest) {
     dateFilter = {}
     if (startDateParam) {
       const d = new Date(startDateParam)
-      if (Number.isNaN(d.getTime())) {
+      if (isNaN(d.getTime())) {
         return NextResponse.json({ error: '유효한 startDate를 입력해주세요.' }, { status: 400 })
       }
       dateFilter.gte = d
     }
     if (endDateParam) {
       const d = new Date(endDateParam)
-      if (Number.isNaN(d.getTime())) {
+      if (isNaN(d.getTime())) {
         return NextResponse.json({ error: '유효한 endDate를 입력해주세요.' }, { status: 400 })
       }
       dateFilter.lte = d
