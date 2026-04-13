@@ -185,22 +185,17 @@ describe('TransactionsPage', () => {
       expect(screen.getByLabelText('계정 검색')).toBeInTheDocument()
     })
 
-    // 검색 전에는 모든 계정이 보임
-    expect(screen.getByRole('button', { name: '101 현금' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '501 식비' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '401 급여' })).toBeInTheDocument()
-
+    // 검색 전에는 모든 계정이 보임 (차변/대변 섹션 각각 3개 = 6개)
     const allBadgesBefore = screen.getAllByRole('button', { name: /101 현금|501 식비|401 급여/ })
-    expect(allBadgesBefore).toHaveLength(3)
+    expect(allBadgesBefore).toHaveLength(6)
 
     await user.type(screen.getByLabelText('계정 검색'), '현금')
 
-    // 검색 후에는 현금만 보이고 다른 계정은 사라짐
+    // 검색 후에는 현금만 보이고 다른 계정은 사라짐 (차변/대변 각 1개 = 2개)
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: '101 현금' })).toBeInTheDocument()
+      expect(screen.getAllByRole('button', { name: '101 현금' })).toHaveLength(2)
       expect(screen.queryByRole('button', { name: '501 식비' })).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: '401 급여' })).not.toBeInTheDocument()
-      expect(screen.getAllByRole('button', { name: /101 현금|501 식비|401 급여/ })).toHaveLength(1)
     })
   })
 
@@ -417,14 +412,33 @@ describe('TransactionsPage', () => {
     // 설명 입력
     await user.type(screen.getByPlaceholderText('거래 내용을 입력하세요'), '점심')
 
+    // 저장 전 fetch 호출 수 기록
+    const fetchCallsBefore = vi.mocked(global.fetch).mock.calls.length
+
     // 저장
     await user.click(screen.getByRole('button', { name: '거래 저장' }))
 
+    // POST 호출 검증
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith('/api/transactions', expect.objectContaining({
         method: 'POST',
       }))
     })
+
+    // 폼 초기화 검증: 설명 필드가 빈 값으로 리셋
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('거래 내용을 입력하세요')).toHaveValue('')
+    })
+
+    // 금액 필드도 초기화 확인 (number input은 빈 값이 null)
+    expect(screen.getByPlaceholderText('0')).toHaveValue(null)
+
+    // 목록 새로고침 검증: 저장 후 /api/transactions GET이 다시 호출됨
+    const getTransactionCalls = vi.mocked(global.fetch).mock.calls.filter(
+      ([url, opts]) => url === '/api/transactions' && (!opts || (opts as RequestInit).method === undefined || (opts as RequestInit).method === 'GET')
+    )
+    // 초기 로딩 1회 + 저장 후 새로고침 1회 이상
+    expect(getTransactionCalls.length).toBeGreaterThanOrEqual(2)
   })
 
   it('거래 저장 실패 시 에러를 표시한다', async () => {
