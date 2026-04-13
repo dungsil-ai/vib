@@ -24,10 +24,7 @@ type CredentialsAuthorize = (
   credentials: Record<string, string> | undefined
 ) => Promise<{ id: string; email: string; name: string } | null>
 
-const credentialsProvider = authOptions.providers.find(
-  (
-    provider
-  ): provider is typeof provider & {
+const credentialsProvider = authOptions.providers.find((provider): provider is typeof provider & {
     options: { authorize: CredentialsAuthorize }
   } => {
     const opts = (provider as { options?: { authorize?: unknown } }).options

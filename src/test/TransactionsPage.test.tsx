@@ -461,16 +461,12 @@ describe('TransactionsPage', () => {
 
     // 차변 선택
     const debitSection = screen.getByText('차변 (Debit)').closest('div')!
-    const debitAccountButton = await waitFor(() =>
-      within(debitSection).getByRole('button', { name: '501 식비' }),
-    )
+    const debitAccountButton = await within(debitSection).findByRole('button', { name: '501 식비' })
     await user.click(debitAccountButton)
 
     // 대변 선택
     const creditSection = screen.getByText('대변 (Credit)').closest('div')!
-    const creditAccountButton = await waitFor(() =>
-      within(creditSection).getByRole('button', { name: '101 현금' }),
-    )
+    const creditAccountButton = await within(creditSection).findByRole('button', { name: '101 현금' })
     await user.click(creditAccountButton)
 
     // 금액 입력
