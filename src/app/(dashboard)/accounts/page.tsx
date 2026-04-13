@@ -204,7 +204,7 @@ export default function AccountsPage() {
                       <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">통화</label>
                       <select
                         value={formData.currency}
-                        onChange={e => setFormData({ ...formData, currency: e.target.value })}
+                        onChange={e => setFormData({ ...formData, currency: e.target.value as SupportedCurrency })}
                         className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
                       >
                         {SUPPORTED_CURRENCIES.map(cur => (
