@@ -32,6 +32,7 @@ import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { GET as trialBalanceGET } from '@/app/api/reports/trial-balance/route'
 import { GET as ledgerGET } from '@/app/api/reports/ledger/route'
+import { GET as incomeStatementGET } from '@/app/api/reports/income-statement/route'
 import { NextRequest } from 'next/server'
 
 const mockSession = { user: { id: 'user-1', email: 'test@example.com', name: 'Test' } }

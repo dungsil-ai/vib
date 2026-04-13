@@ -23,8 +23,15 @@ export async function GET(request: NextRequest) {
   }
 
   const year = Number(yearParam)
-  if (!Number.isFinite(year)) {
+  if (!Number.isFinite(year) || year < 1000 || year > 9999) {
     return NextResponse.json({ error: '유효한 year를 입력해주세요.' }, { status: 400 })
+  }
+
+  function makeUTCDate(y: number, month0: number, day: number, hh = 0, mm = 0, ss = 0, ms = 0): Date {
+    const d = new Date(0)
+    d.setUTCFullYear(y, month0, day)
+    d.setUTCHours(hh, mm, ss, ms)
+    return d
   }
 
   let dateFilter: { gte: Date; lte: Date }
@@ -33,14 +40,18 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: '유효한 month를 입력해주세요.' }, { status: 400 })
     }
     const month = Number(monthParam)
+    // month의 마지막 날: 다음 달 1일 - 1ms
+    const lastDay = new Date(0)
+    lastDay.setUTCFullYear(year, month, 0) // month는 0-based이므로 month = month+1-1
+    lastDay.setUTCHours(23, 59, 59, 999)
     dateFilter = {
-      gte: new Date(year, month - 1, 1),
-      lte: new Date(year, month, 0, 23, 59, 59, 999),
+      gte: makeUTCDate(year, month - 1, 1),
+      lte: lastDay,
     }
   } else {
     dateFilter = {
-      gte: new Date(year, 0, 1),
-      lte: new Date(year, 11, 31, 23, 59, 59, 999),
+      gte: makeUTCDate(year, 0, 1),
+      lte: makeUTCDate(year, 11, 31, 23, 59, 59, 999),
     }
   }
 
