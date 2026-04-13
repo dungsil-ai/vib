@@ -106,6 +106,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '올바른 계정 유형을 선택해주세요.' }, { status: 400 })
     }
 
+    const accountType = type as string
+
+    if (name === OPENING_BALANCE_ACCOUNT_NAME) {
+      return NextResponse.json({ error: `'${OPENING_BALANCE_ACCOUNT_NAME}'은 예약된 계정명입니다.` }, { status: 400 })
+    }
+
     const openingBalanceRaw = (body as { openingBalance?: unknown }).openingBalance
     const openingBalance = openingBalanceRaw != null ? Number(openingBalanceRaw) : 0
 
@@ -113,7 +119,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '초기잔액은 0 이상의 숫자여야 합니다.' }, { status: 400 })
     }
 
-    const accountType = type as string
+    if (openingBalance > 0 && !OPENING_BALANCE_ALLOWED_TYPES.has(accountType)) {
+      return NextResponse.json(
+        { error: '초기잔액은 자산, 부채, 자본 계정에만 설정할 수 있습니다.' },
+        { status: 400 },
+      )
+    }
     const prefix = String(TYPE_CODE_PREFIX[accountType]).slice(0, 1)
     const base = TYPE_CODE_PREFIX[accountType]
     const upperBound = base + 999
@@ -126,13 +137,15 @@ export async function POST(request: NextRequest) {
         const equityPrefix = String(equityBase)[0]
         const equityUpperBound = equityBase + 999
 
-        let openingEquityAccount = await tx.account.findFirst({
-          where: { userId, name: OPENING_BALANCE_ACCOUNT_NAME, type: 'EQUITY' },
+        // Use findUnique for deterministic lookup (@@unique([userId, name, type]) guarantees at most one record)
+        const existingOpeningEquityAccount = await tx.account.findUnique({
+          where: { userId_name_type: { userId, name: OPENING_BALANCE_ACCOUNT_NAME, type: 'EQUITY' } },
         })
 
+        let openingEquityAccount: { id: string; code: string; name: string; type: string }
         let newAccountCode: string
 
-        if (accountType === 'EQUITY' && !openingEquityAccount) {
+        if (accountType === 'EQUITY' && !existingOpeningEquityAccount) {
           // New account and opening balance account both need codes from the same EQUITY range.
           // Allocate two distinct free codes in one pass to avoid collision.
           const existingCodes = await tx.account.findMany({
@@ -167,31 +180,33 @@ export async function POST(request: NextRequest) {
           })
           newAccountCode = String(secondFree)
         } else {
-          if (!openingEquityAccount) {
-            const existingEquityAccounts = await tx.account.findMany({
-              where: { userId, code: { startsWith: equityPrefix } },
-              select: { code: true },
-            })
-            const maxEquityCode = existingEquityAccounts
-              .map(a => parseInt(a.code, 10))
-              .filter(n => Number.isInteger(n) && n >= equityBase && n <= equityUpperBound)
-              .reduce((max, n) => Math.max(max, n), equityBase - 1)
-            const nextEquityNum = maxEquityCode + 1
+          // Compute next equity code (used only when creating the opening balance account)
+          const existingEquityAccounts = await tx.account.findMany({
+            where: { userId, code: { startsWith: equityPrefix } },
+            select: { code: true },
+          })
+          const maxEquityCode = existingEquityAccounts
+            .map(a => parseInt(a.code, 10))
+            .filter(n => Number.isInteger(n) && n >= equityBase && n <= equityUpperBound)
+            .reduce((max, n) => Math.max(max, n), equityBase - 1)
+          const nextEquityNum = maxEquityCode + 1
 
-            if (nextEquityNum > equityUpperBound) {
-              throw new AccountApiError('개시잔액 계정을 생성할 수 없습니다. 자본 계정 코드가 모두 사용되었습니다.', 409)
-            }
-
-            openingEquityAccount = await tx.account.create({
-              data: {
-                userId,
-                name: OPENING_BALANCE_ACCOUNT_NAME,
-                code: String(nextEquityNum),
-                type: 'EQUITY',
-                description: OPENING_BALANCE_ACCOUNT_DESCRIPTION,
-              },
-            })
+          if (!existingOpeningEquityAccount && nextEquityNum > equityUpperBound) {
+            throw new AccountApiError('개시잔액 계정을 생성할 수 없습니다. 자본 계정 코드가 모두 사용되었습니다.', 409)
           }
+
+          // upsert guarantees exactly one opening balance account (create if absent, no-op if present)
+          openingEquityAccount = await tx.account.upsert({
+            where: { userId_name_type: { userId, name: OPENING_BALANCE_ACCOUNT_NAME, type: 'EQUITY' } },
+            update: {},
+            create: {
+              userId,
+              name: OPENING_BALANCE_ACCOUNT_NAME,
+              code: String(nextEquityNum),
+              type: 'EQUITY',
+              description: OPENING_BALANCE_ACCOUNT_DESCRIPTION,
+            },
+          })
 
           // Compute code for the new account inside the transaction
           const existingAccounts = await tx.account.findMany({

@@ -308,4 +308,38 @@ describe('AccountsPage', () => {
       expect(screen.getByText('Failed to fetch')).toBeInTheDocument()
     })
   })
+
+  it("'개시잔액' 이름으로 계정 생성 시 API 에러 메시지를 표시한다", async () => {
+    vi.mocked(global.fetch).mockImplementation(async (input, init) => {
+      const url = typeof input === 'string' ? input : (input as Request).url
+      const method = init?.method || 'GET'
+      if (url === '/api/accounts' && method === 'GET') {
+        return { ok: true, json: () => Promise.resolve([]) } as Response
+      }
+      if (url === '/api/accounts' && method === 'POST') {
+        return {
+          ok: false,
+          json: () => Promise.resolve({ error: "'개시잔액'은 예약된 계정명입니다." }),
+        } as Response
+      }
+      return { ok: true, json: () => Promise.resolve({}) } as Response
+    })
+
+    const user = userEvent.setup()
+    render(<AccountsPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('계정 관리')).toBeInTheDocument()
+    })
+
+    const assetSection = screen.getByText('자산').closest('[class*="rounded-xl"]') as HTMLElement
+    await user.click(within(assetSection).getByText('+ 계정 추가'))
+
+    await user.type(screen.getByPlaceholderText('예: 현금'), '개시잔액')
+    await user.click(screen.getByRole('button', { name: '저장' }))
+
+    await waitFor(() => {
+      expect(screen.getByText("'개시잔액'은 예약된 계정명입니다.")).toBeInTheDocument()
+    })
+  })
 })
