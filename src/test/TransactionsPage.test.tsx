@@ -185,11 +185,23 @@ describe('TransactionsPage', () => {
       expect(screen.getByLabelText('계정 검색')).toBeInTheDocument()
     })
 
+    // 검색 전에는 모든 계정이 보임
+    expect(screen.getByRole('button', { name: '101 현금' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '501 식비' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '401 급여' })).toBeInTheDocument()
+
+    const allBadgesBefore = screen.getAllByRole('button', { name: /101 현금|501 식비|401 급여/ })
+    expect(allBadgesBefore).toHaveLength(3)
+
     await user.type(screen.getByLabelText('계정 검색'), '현금')
 
-    // 현금만 보이고 다른 계정은 안 보임
-    const badges = screen.getAllByRole('button', { name: /101 현금/ })
-    expect(badges.length).toBeGreaterThan(0)
+    // 검색 후에는 현금만 보이고 다른 계정은 사라짐
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '101 현금' })).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: '501 식비' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: '401 급여' })).not.toBeInTheDocument()
+      expect(screen.getAllByRole('button', { name: /101 현금|501 식비|401 급여/ })).toHaveLength(1)
+    })
   })
 
   it('항목 추가 및 삭제가 동작한다', async () => {
