@@ -37,6 +37,11 @@ export async function GET(request: NextRequest) {
   const pageParam = searchParams.get('page')
   const pageSizeParam = searchParams.get('pageSize')
 
+  // Validate keyword length
+  if (keywordParam !== null && keywordParam.length > 100) {
+    return NextResponse.json({ error: '키워드는 100자 이하로 입력해주세요.' }, { status: 400 })
+  }
+
   // year/month must be supplied together
   if ((yearParam && !monthParam) || (!yearParam && monthParam)) {
     return NextResponse.json({ error: 'year와 month를 함께 입력해주세요.' }, { status: 400 })

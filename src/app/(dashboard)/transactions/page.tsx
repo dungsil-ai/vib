@@ -127,6 +127,7 @@ export default function TransactionsPage() {
 
   // --- list filter state ---
   const [listKeyword, setListKeyword] = useState('')
+  const [debouncedKeyword, setDebouncedKeyword] = useState('')
   const [listAccountId, setListAccountId] = useState('')
   const [listStartDate, setListStartDate] = useState('')
   const [listEndDate, setListEndDate] = useState('')
@@ -170,7 +171,7 @@ export default function TransactionsPage() {
     const qs = new URLSearchParams()
     qs.set('page', String(page))
     qs.set('pageSize', String(LIST_PAGE_SIZE))
-    if (listKeyword.trim()) qs.set('keyword', listKeyword.trim())
+    if (debouncedKeyword.trim()) qs.set('keyword', debouncedKeyword.trim())
     if (listAccountId) qs.set('accountId', listAccountId)
     if (listStartDate) qs.set('startDate', listStartDate)
     if (listEndDate) qs.set('endDate', listEndDate)
@@ -179,7 +180,7 @@ export default function TransactionsPage() {
     if (listSortBy !== 'date') qs.set('sortBy', listSortBy)
     if (listSortOrder !== 'desc') qs.set('sortOrder', listSortOrder)
     return `/api/transactions?${qs.toString()}`
-  }, [listKeyword, listAccountId, listStartDate, listEndDate, listMinAmount, listMaxAmount, listSortBy, listSortOrder])
+  }, [debouncedKeyword, listAccountId, listStartDate, listEndDate, listMinAmount, listMaxAmount, listSortBy, listSortOrder])
 
   const fetchTransactions = useCallback(async (page: number, isCancelled: () => boolean = () => false) => {
     try {
@@ -207,6 +208,14 @@ export default function TransactionsPage() {
     }
   }, [buildListUrl])
 
+  // Debounce keyword input (300ms)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedKeyword(listKeyword)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [listKeyword])
+
   // Re-fetch when filters change (reset to page 1)
   useEffect(() => {
     let cancelled = false
@@ -218,7 +227,7 @@ export default function TransactionsPage() {
   useEffect(() => {
     let cancelled = false
 
-    const init = async () => {
+    const fetchAccounts = async () => {
       try {
         const res = await fetch('/api/accounts')
         if (!res.ok) {
@@ -240,7 +249,7 @@ export default function TransactionsPage() {
       }
     }
 
-    init()
+    fetchAccounts()
 
     return () => { cancelled = true }
   }, [])
@@ -630,6 +639,7 @@ export default function TransactionsPage() {
               type="button"
               onClick={() => {
                 setListKeyword('')
+                setDebouncedKeyword('')
                 setListAccountId('')
                 setListStartDate('')
                 setListEndDate('')
