@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 vi.mock('@iconify/react', () => ({
@@ -40,10 +40,13 @@ describe('AccountsPage', () => {
     })
   }
 
-  it('로딩 중 상태를 표시한다', () => {
+  it('로딩 중 상태를 표시한다', async () => {
     vi.mocked(global.fetch).mockReturnValue(new Promise(() => {}))
     render(<AccountsPage />)
-    expect(screen.getByText('로딩 중...')).toBeInTheDocument()
+
+    await waitFor(() => {
+      expect(screen.getByText('로딩 중...')).toBeInTheDocument()
+    })
   })
 
   it('계정 목록을 유형별로 그룹화하여 표시한다', async () => {
@@ -103,16 +106,21 @@ describe('AccountsPage', () => {
   })
 
   it('새 계정을 추가할 수 있다', async () => {
-    let accountCallCount = 0
-    vi.mocked(global.fetch).mockImplementation(async (input) => {
+    let getCallCount = 0
+    vi.mocked(global.fetch).mockImplementation(async (input, init) => {
       const url = typeof input === 'string' ? input : (input as Request).url
+      const method = (init?.method ?? 'GET').toUpperCase()
+
       if (url === '/api/settings') {
         return { ok: true, json: () => Promise.resolve({ currency: 'KRW' }) } as Response
       }
-      if (url === '/api/accounts' && accountCallCount++ === 0) {
+      if (url === '/api/accounts' && method === 'GET' && getCallCount++ === 0) {
         return { ok: true, json: () => Promise.resolve([]) } as Response
       }
-      if (url === '/api/accounts') {
+      if (url === '/api/accounts' && method === 'POST') {
+        return { ok: true, json: () => Promise.resolve({}) } as Response
+      }
+      if (url === '/api/accounts' && method === 'GET') {
         return {
           ok: true,
           json: () =>
@@ -182,7 +190,34 @@ describe('AccountsPage', () => {
   })
 
   it('계정을 삭제할 수 있다', async () => {
-    setupDefaultFetch()
+    let getCallCount = 0
+    vi.mocked(global.fetch).mockImplementation(async (input, init) => {
+      const url = typeof input === 'string' ? input : (input as Request).url
+      const method = (init?.method ?? 'GET').toUpperCase()
+
+      if (url === '/api/settings') {
+        return { ok: true, json: () => Promise.resolve({ currency: 'KRW' }) } as Response
+      }
+      if (url === '/api/accounts' && method === 'GET') {
+        if (getCallCount++ === 0) {
+          return { ok: true, json: () => Promise.resolve(mockAccounts) } as Response
+        }
+        return {
+          ok: true,
+          json: () => Promise.resolve(mockAccounts.filter((account) => account.id !== '1')),
+        } as Response
+      }
+      if (url === '/api/accounts/1' && method === 'DELETE') {
+        return {
+          ok: true,
+          json: () => Promise.resolve({}),
+        } as Response
+      }
+      return {
+        ok: true,
+        json: () => Promise.resolve({}),
+      } as Response
+    })
 
     window.confirm = vi.fn(() => true)
     const user = userEvent.setup()
@@ -221,11 +256,94 @@ describe('AccountsPage', () => {
     const deleteButtons = screen.getAllByText('삭제')
     await user.click(deleteButtons[0])
 
-    const deleteCalls = vi.mocked(global.fetch).mock.calls.filter(([url, options]) => {
-      return url === '/api/accounts/1' && options?.method === 'DELETE'
+    expect(vi.mocked(global.fetch)).not.toHaveBeenCalledWith(
+      '/api/accounts/1',
+      expect.objectContaining({ method: 'DELETE' }),
+    )
+  })
+
+  it('자산 계정 추가 폼에 초기잔액 입력 필드가 표시된다', async () => {
+    vi.mocked(global.fetch).mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve([]),
+    } as Response)
+
+    const user = userEvent.setup()
+    render(<AccountsPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('계정 관리')).toBeInTheDocument()
     })
 
-    expect(deleteCalls).toHaveLength(0)
+    // ASSET 섹션 내부로 범위를 좁혀 버튼 클릭
+    const assetSection = screen.getByText('자산').closest('[class*="rounded-xl"]') as HTMLElement
+    await user.click(within(assetSection).getByText('+ 계정 추가'))
+
+    expect(screen.getByPlaceholderText('예: 현금')).toBeInTheDocument()
+    expect(screen.getByLabelText(/초기잔액/)).toBeInTheDocument()
+  })
+
+  it('비용 계정 추가 폼에는 초기잔액 입력 필드가 표시되지 않는다', async () => {
+    vi.mocked(global.fetch).mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve([]),
+    } as Response)
+
+    const user = userEvent.setup()
+    render(<AccountsPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('계정 관리')).toBeInTheDocument()
+    })
+
+    // EXPENSE 섹션 내부로 범위를 좁혀 버튼 클릭
+    const expenseSection = screen.getByText('비용').closest('[class*="rounded-xl"]') as HTMLElement
+    await user.click(within(expenseSection).getByText('+ 계정 추가'))
+
+    expect(screen.getByPlaceholderText('예: 현금')).toBeInTheDocument()
+    expect(screen.queryByLabelText(/초기잔액/)).not.toBeInTheDocument()
+  })
+
+  it('초기잔액을 포함하여 계정을 추가할 수 있다', async () => {
+    let getCallCount = 0
+    let postBody: Record<string, unknown> | null = null
+    vi.mocked(global.fetch).mockImplementation(async (input, init) => {
+      const url = typeof input === 'string' ? input : (input as Request).url
+      const method = init?.method || 'GET'
+      if (url === '/api/accounts' && method === 'GET') {
+        if (getCallCount++ === 0) return { ok: true, json: () => Promise.resolve([]) } as Response
+        return {
+          ok: true,
+          json: () => Promise.resolve([
+            { id: 'new', code: '101', name: '현금', type: 'ASSET', description: '', balance: 100000 },
+          ]),
+        } as Response
+      }
+      if (url === '/api/accounts' && method === 'POST') {
+        postBody = JSON.parse(init?.body as string)
+        return { ok: true, json: () => Promise.resolve({ id: 'new' }) } as Response
+      }
+      return { ok: true, json: () => Promise.resolve({}) } as Response
+    })
+
+    const user = userEvent.setup()
+    render(<AccountsPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('계정 관리')).toBeInTheDocument()
+    })
+
+    // ASSET 섹션 내부로 범위를 좁혀 버튼 클릭
+    const assetSection = screen.getByText('자산').closest('[class*="rounded-xl"]') as HTMLElement
+    await user.click(within(assetSection).getByText('+ 계정 추가'))
+
+    await user.type(screen.getByPlaceholderText('예: 현금'), '현금')
+    await user.type(screen.getByLabelText(/초기잔액/), '100000')
+    await user.click(screen.getByRole('button', { name: '저장' }))
+
+    await waitFor(() => {
+      expect(postBody).toMatchObject({ name: '현금', type: 'ASSET', openingBalance: 100000 })
+    })
   })
 
   it('네트워크 에러 시 에러 메시지를 표시한다', async () => {
@@ -235,6 +353,40 @@ describe('AccountsPage', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Failed to fetch')).toBeInTheDocument()
+    })
+  })
+
+  it("'개시잔액' 이름으로 계정 생성 시 API 에러 메시지를 표시한다", async () => {
+    vi.mocked(global.fetch).mockImplementation(async (input, init) => {
+      const url = typeof input === 'string' ? input : (input as Request).url
+      const method = init?.method || 'GET'
+      if (url === '/api/accounts' && method === 'GET') {
+        return { ok: true, json: () => Promise.resolve([]) } as Response
+      }
+      if (url === '/api/accounts' && method === 'POST') {
+        return {
+          ok: false,
+          json: () => Promise.resolve({ error: "'개시잔액'은 예약된 계정명입니다." }),
+        } as Response
+      }
+      return { ok: true, json: () => Promise.resolve({}) } as Response
+    })
+
+    const user = userEvent.setup()
+    render(<AccountsPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('계정 관리')).toBeInTheDocument()
+    })
+
+    const assetSection = screen.getByText('자산').closest('[class*="rounded-xl"]') as HTMLElement
+    await user.click(within(assetSection).getByText('+ 계정 추가'))
+
+    await user.type(screen.getByPlaceholderText('예: 현금'), '개시잔액')
+    await user.click(screen.getByRole('button', { name: '저장' }))
+
+    await waitFor(() => {
+      expect(screen.getByText("'개시잔액'은 예약된 계정명입니다.")).toBeInTheDocument()
     })
   })
 })

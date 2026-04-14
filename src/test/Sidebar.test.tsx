@@ -34,6 +34,7 @@ describe('Sidebar', () => {
     expect(screen.getByText('계정 관리')).toBeInTheDocument()
     expect(screen.getByText('거래 내역')).toBeInTheDocument()
     expect(screen.getByText('예산 관리')).toBeInTheDocument()
+    expect(screen.getByText('보고서')).toBeInTheDocument()
   })
 
   it('현재 경로의 메뉴에 활성화 스타일을 적용한다', async () => {

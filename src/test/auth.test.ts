@@ -27,8 +27,8 @@ type CredentialsAuthorize = (
 const credentialsProvider = authOptions.providers.find((provider): provider is typeof provider & {
     options: { authorize: CredentialsAuthorize }
   } => {
-    const opts = (provider as { options?: { authorize?: unknown } }).options
-    return typeof opts?.authorize === 'function'
+    const providerOptions = (provider as { options?: { authorize?: unknown } }).options
+    return typeof providerOptions?.authorize === 'function'
   }
 )
 
@@ -140,7 +140,7 @@ describe('auth - callbacks', () => {
     const result = await jwt({
       token: { sub: '', id: 'existing-id' },
       trigger: 'update',
-    } as Parameters<typeof jwt>[0])
+    } as unknown as Parameters<typeof jwt>[0])
     expect(result.id).toBe('existing-id')
   })
 
@@ -149,7 +149,7 @@ describe('auth - callbacks', () => {
     const result = await session({
       session: { user: { name: '테스트', email: 'test@example.com' }, expires: '' },
       token: { id: 'user-1', sub: '' },
-    } as Parameters<typeof session>[0])
+    } as unknown as Parameters<typeof session>[0])
     expect((result.user as { id: string }).id).toBe('user-1')
   })
 })
