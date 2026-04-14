@@ -61,8 +61,9 @@ export async function POST(request: NextRequest) {
   }
 
   if (frequency === 'MONTHLY' || frequency === 'YEARLY') {
-    if (!dayOfMonth || !Number.isFinite(Number(dayOfMonth)) || Number(dayOfMonth) < 1 || Number(dayOfMonth) > 28) {
-      return NextResponse.json({ error: '월 반복의 경우 1~28 사이의 날짜를 입력해주세요.' }, { status: 400 })
+    const rangeLabel = frequency === 'MONTHLY' ? '월' : '연'
+    if (!dayOfMonth || !Number.isFinite(Number(dayOfMonth)) || Number(dayOfMonth) < 1 || Number(dayOfMonth) > 31) {
+      return NextResponse.json({ error: `${rangeLabel} 반복의 경우 1~31 사이의 날짜를 입력해주세요.` }, { status: 400 })
     }
   }
 
@@ -109,9 +110,16 @@ export async function POST(request: NextRequest) {
     }
   }
   if (frequency === 'YEARLY' && monthOfYear) {
-    nextRunAt = new Date(nextRunAt.getFullYear(), Number(monthOfYear) - 1, dayOfMonth ? Math.min(Number(dayOfMonth), 28) : 1)
+    const targetMonthIndex = Number(monthOfYear) - 1
+    let targetYear = nextRunAt.getFullYear()
+    const maxDayOfTargetMonth = new Date(targetYear, targetMonthIndex + 1, 0).getDate()
+    const targetDay = dayOfMonth ? Math.min(Number(dayOfMonth), maxDayOfTargetMonth) : 1
+    nextRunAt = new Date(targetYear, targetMonthIndex, targetDay)
     if (nextRunAt < parsedStart) {
-      nextRunAt.setFullYear(nextRunAt.getFullYear() + 1)
+      targetYear += 1
+      const maxDayOfNextYear = new Date(targetYear, targetMonthIndex + 1, 0).getDate()
+      const clampedDay = dayOfMonth ? Math.min(Number(dayOfMonth), maxDayOfNextYear) : 1
+      nextRunAt = new Date(targetYear, targetMonthIndex, clampedDay)
     }
   }
 

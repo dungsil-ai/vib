@@ -30,10 +30,13 @@ describe('AccountsPage', () => {
     window.confirm = originalConfirm
   })
 
-  it('로딩 중 상태를 표시한다', () => {
+  it('로딩 중 상태를 표시한다', async () => {
     vi.mocked(global.fetch).mockReturnValue(new Promise(() => {}))
     render(<AccountsPage />)
-    expect(screen.getByText('로딩 중...')).toBeInTheDocument()
+
+    await waitFor(() => {
+      expect(screen.getByText('로딩 중...')).toBeInTheDocument()
+    })
   })
 
   it('계정 목록을 유형별로 그룹화하여 표시한다', async () => {
@@ -91,12 +94,17 @@ describe('AccountsPage', () => {
 
   it('새 계정을 추가할 수 있다', async () => {
     let getCallCount = 0
-    vi.mocked(global.fetch).mockImplementation(async (input) => {
+    vi.mocked(global.fetch).mockImplementation(async (input, init) => {
       const url = typeof input === 'string' ? input : (input as Request).url
-      if (url === '/api/accounts' && getCallCount++ === 0) {
+      const method = (init?.method ?? 'GET').toUpperCase()
+
+      if (url === '/api/accounts' && method === 'GET' && getCallCount++ === 0) {
         return { ok: true, json: () => Promise.resolve([]) } as Response
       }
-      if (url === '/api/accounts') {
+      if (url === '/api/accounts' && method === 'POST') {
+        return { ok: true, json: () => Promise.resolve({}) } as Response
+      }
+      if (url === '/api/accounts' && method === 'GET') {
         return {
           ok: true,
           json: () =>
@@ -163,10 +171,33 @@ describe('AccountsPage', () => {
   })
 
   it('계정을 삭제할 수 있다', async () => {
-    vi.mocked(global.fetch).mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(mockAccounts),
-    } as Response)
+    let getCallCount = 0
+    vi.mocked(global.fetch).mockImplementation(async (input, init) => {
+      const url = typeof input === 'string' ? input : (input as Request).url
+      const method = (init?.method ?? 'GET').toUpperCase()
+
+      if (url === '/api/accounts' && method === 'GET') {
+        if (getCallCount++ === 0) {
+          return { ok: true, json: () => Promise.resolve(mockAccounts) } as Response
+        }
+        return {
+          ok: true,
+          json: () => Promise.resolve(mockAccounts.filter((account) => account.id !== '1')),
+        } as Response
+      }
+
+      if (url === '/api/accounts/1' && method === 'DELETE') {
+        return {
+          ok: true,
+          json: () => Promise.resolve({}),
+        } as Response
+      }
+
+      return {
+        ok: true,
+        json: () => Promise.resolve({}),
+      } as Response
+    })
 
     window.confirm = vi.fn(() => true)
     const user = userEvent.setup()
@@ -208,11 +239,10 @@ describe('AccountsPage', () => {
     const deleteButtons = screen.getAllByText('삭제')
     await user.click(deleteButtons[0])
 
-    const deleteCalls = vi.mocked(global.fetch).mock.calls.filter(([url, options]) => {
-      return url === '/api/accounts/1' && options?.method === 'DELETE'
-    })
-
-    expect(deleteCalls).toHaveLength(0)
+    expect(vi.mocked(global.fetch)).not.toHaveBeenCalledWith(
+      '/api/accounts/1',
+      expect.objectContaining({ method: 'DELETE' }),
+    )
   })
 
   it('자산 계정 추가 폼에 초기잔액 입력 필드가 표시된다', async () => {

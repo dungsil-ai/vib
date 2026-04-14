@@ -77,7 +77,7 @@ describe('LoginPage', () => {
   })
 
   it('로그인 중 버튼 텍스트가 변경된다', async () => {
-    let resolveSignIn: (value: SignInResponse | undefined) => void
+    let resolveSignIn: (value: SignInResponse | undefined) => void = () => {}
     vi.mocked(signIn).mockReturnValue(
       new Promise((resolve) => {
         resolveSignIn = resolve
@@ -94,6 +94,6 @@ describe('LoginPage', () => {
     expect(screen.getByText('로그인 중...')).toBeInTheDocument()
     expect(screen.getByRole('button')).toBeDisabled()
 
-    resolveSignIn!({ error: null, ok: true, status: 200, url: '' })
+    resolveSignIn({ error: null, ok: true, status: 200, url: '' })
   })
 })
