@@ -449,7 +449,6 @@ describe('AccountsPage', () => {
       expect(screen.getByText('이미 존재하는 계정명입니다.')).toBeInTheDocument()
     })
   })
-
   it("'개시잔액' 이름으로 계정 생성 시 API 에러 메시지를 표시한다", async () => {
     vi.mocked(global.fetch).mockImplementation(async (input, init) => {
       const url = typeof input === 'string' ? input : (input as Request).url
