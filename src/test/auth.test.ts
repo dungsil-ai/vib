@@ -27,8 +27,8 @@ type CredentialsAuthorize = (
 const credentialsProvider = authOptions.providers.find((provider): provider is typeof provider & {
     options: { authorize: CredentialsAuthorize }
   } => {
-    const opts = (provider as { options?: { authorize?: unknown } }).options
-    return typeof opts?.authorize === 'function'
+    const providerOptions = (provider as { options?: { authorize?: unknown } }).options
+    return typeof providerOptions?.authorize === 'function'
   }
 )
 

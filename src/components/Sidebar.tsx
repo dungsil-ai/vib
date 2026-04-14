@@ -18,6 +18,7 @@ const navItems = [
   { href: '/accounts', label: '계정 관리', icon: 'lucide:book-open' },
   { href: '/transactions', label: '거래 내역', icon: 'lucide:credit-card' },
   { href: '/budget', label: '예산 관리', icon: 'lucide:piggy-bank' },
+  { href: '/reports', label: '보고서', icon: 'lucide:file-bar-chart' },
 ]
 
 export function Sidebar({ user }: SidebarProps) {

@@ -72,8 +72,11 @@ function setupFetchMock(overrides: Partial<{
     if (url === '/api/accounts' && method === 'GET') {
       return overrides.accounts ?? { ok: true, json: () => Promise.resolve(mockAccounts) } as Response
     }
-    if (url === '/api/transactions' && method === 'GET') {
-      return overrides.transactions ?? { ok: true, json: () => Promise.resolve(mockTransactions) } as Response
+    if (url.startsWith('/api/transactions') && !url.includes('/api/transactions/') && method === 'GET') {
+      return overrides.transactions ?? {
+        ok: true,
+        json: () => Promise.resolve({ data: mockTransactions, total: mockTransactions.length, page: 1, pageSize: 20 }),
+      } as Response
     }
     if (url === '/api/transactions' && method === 'POST') {
       return overrides.post ?? { ok: true, json: () => Promise.resolve({ id: 'new-tx' }) } as Response
@@ -441,7 +444,10 @@ describe('TransactionsPage', () => {
 
     // 목록 새로고침 검증: 저장 후 /api/transactions GET이 다시 호출됨
     const getTransactionCalls = vi.mocked(global.fetch).mock.calls.filter(
-      ([url, opts]) => url === '/api/transactions' && (!opts || (opts as RequestInit).method === undefined || (opts as RequestInit).method === 'GET')
+      ([url, opts]) => {
+        const urlStr = typeof url === 'string' ? url : (url as Request).url
+        return urlStr.startsWith('/api/transactions') && !urlStr.includes('/api/transactions/') && (!opts || (opts as RequestInit).method === undefined || (opts as RequestInit).method === 'GET')
+      }
     )
     // 초기 로딩 1회 + 저장 후 새로고침 1회 이상
     expect(getTransactionCalls.length).toBeGreaterThanOrEqual(2)
@@ -493,6 +499,147 @@ describe('TransactionsPage', () => {
     await waitFor(() => {
       const alerts = screen.getAllByText(/계정 목록을 불러오지 못했습니다/)
       expect(alerts.length).toBeGreaterThanOrEqual(1)
+    })
+  })
+
+  it('키워드 필터 입력 시 쿼리 파라미터에 반영된다', async () => {
+    setupFetchMock()
+    const user = userEvent.setup()
+
+    render(<TransactionsPage />)
+
+    const keywordInput = await screen.findByLabelText('키워드')
+    await user.type(keywordInput, '식사')
+
+    await waitFor(() => {
+      const getCalls = vi.mocked(global.fetch).mock.calls.filter(([url, opts]) => {
+        const urlStr = typeof url === 'string' ? url : (url as Request).url
+        return urlStr.includes('keyword=') && (!opts || (opts as RequestInit).method === undefined)
+      })
+      expect(getCalls.length).toBeGreaterThanOrEqual(1)
+      const lastUrl = typeof getCalls[getCalls.length - 1][0] === 'string'
+        ? getCalls[getCalls.length - 1][0] as string
+        : (getCalls[getCalls.length - 1][0] as Request).url
+      expect(lastUrl).toContain('keyword=%EC%8B%9D%EC%82%AC')
+    })
+  })
+
+  it('계정 필터 변경 시 쿼리 파라미터에 반영된다', async () => {
+    setupFetchMock()
+    const user = userEvent.setup()
+
+    render(<TransactionsPage />)
+
+    // 계정 목록 로딩 대기
+    await waitFor(() => {
+      expect(screen.getByLabelText('계정')).toBeInTheDocument()
+    })
+
+    const accountSelect = screen.getByLabelText('계정')
+    await user.selectOptions(accountSelect, 'acc-1')
+
+    await waitFor(() => {
+      const getCalls = vi.mocked(global.fetch).mock.calls.filter(([url, opts]) => {
+        const urlStr = typeof url === 'string' ? url : (url as Request).url
+        return urlStr.includes('accountId=acc-1') && (!opts || (opts as RequestInit).method === undefined)
+      })
+      expect(getCalls.length).toBeGreaterThanOrEqual(1)
+    })
+  })
+
+  it('필터 초기화 버튼이 동작한다', async () => {
+    setupFetchMock()
+    const user = userEvent.setup()
+
+    render(<TransactionsPage />)
+
+    const keywordInput = await screen.findByLabelText('키워드')
+    await user.type(keywordInput, '테스트')
+
+    await user.click(screen.getByRole('button', { name: '필터 초기화' }))
+
+    expect(screen.getByLabelText('키워드')).toHaveValue('')
+  })
+
+  it('페이지네이션 UI가 총 건수 초과 시 표시된다', async () => {
+    setupFetchMock({
+      transactions: {
+        ok: true,
+        json: () => Promise.resolve({ data: mockTransactions, total: 50, page: 1, pageSize: 20 }),
+      } as Response,
+    })
+
+    render(<TransactionsPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText(/총 50건/)).toBeInTheDocument()
+    })
+
+    expect(screen.getByRole('button', { name: '이전' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '다음' })).toBeInTheDocument()
+  })
+
+  it('총 건수가 pageSize 이하이면 페이지네이션을 표시하지 않는다', async () => {
+    setupFetchMock()
+
+    render(<TransactionsPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('점심 식사')).toBeInTheDocument()
+    })
+
+    expect(screen.queryByRole('button', { name: '이전' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '다음' })).not.toBeInTheDocument()
+  })
+
+  it('다음 페이지 버튼 클릭 시 page 파라미터가 증가하고 UI가 업데이트된다', async () => {
+    const fetchMock = vi.mocked(global.fetch)
+    // Setup accounts mock first
+    setupFetchMock({
+      transactions: {
+        ok: true,
+        json: () => Promise.resolve({ data: mockTransactions, total: 50, page: 1, pageSize: 20 }),
+      } as Response,
+    })
+    // Override to return correct page number based on URL
+    fetchMock.mockImplementation(async (input, init) => {
+      const urlStr = typeof input === 'string' ? input : (input as Request).url
+      const method = (init as RequestInit | undefined)?.method ?? 'GET'
+
+      if (urlStr === '/api/accounts' && method === 'GET') {
+        return { ok: true, json: () => Promise.resolve(mockAccounts) } as Response
+      }
+      if (urlStr.startsWith('/api/transactions') && !urlStr.includes('/api/transactions/') && method === 'GET') {
+        const page = Number(new URL(urlStr, 'http://localhost').searchParams.get('page') ?? '1')
+        return {
+          ok: true,
+          json: () => Promise.resolve({ data: mockTransactions, total: 50, page, pageSize: 20 }),
+        } as Response
+      }
+      return { ok: true, json: () => Promise.resolve({}) } as Response
+    })
+
+    const user = userEvent.setup()
+    render(<TransactionsPage />)
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '다음' })).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('button', { name: '다음' }))
+
+    // page=2 요청이 발생했는지 확인
+    await waitFor(() => {
+      const getCalls = vi.mocked(global.fetch).mock.calls.filter(([url, opts]) => {
+        const urlStr = typeof url === 'string' ? url : (url as Request).url
+        return urlStr.includes('page=2') && (!opts || (opts as RequestInit).method === undefined)
+      })
+      expect(getCalls.length).toBeGreaterThanOrEqual(1)
+    })
+
+    // 2페이지로 UI가 업데이트되었는지 확인
+    await waitFor(() => {
+      expect(screen.getByText('2 / 3')).toBeInTheDocument()
     })
   })
 })

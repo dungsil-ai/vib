@@ -42,6 +42,13 @@ describe('computeNextRunAt', () => {
       expect(result.getUTCDate()).toBe(15)
     })
 
+    it('dayOfMonth가 없어도 월말에서는 다음 달 말일로 보정된다', () => {
+      const from = new Date('2024-01-31T00:00:00.000Z')
+      const result = computeNextRunAt('MONTHLY', null, null, from)
+      expect(result.getUTCMonth()).toBe(1) // February
+      expect(result.getUTCDate()).toBe(29) // 2024 is leap year
+    })
+
     it('dayOfMonth를 지정하면 해당 일로 설정된다', () => {
       const from = new Date('2024-01-01T00:00:00.000Z')
       const result = computeNextRunAt('MONTHLY', 25, null, from)
@@ -77,6 +84,14 @@ describe('computeNextRunAt', () => {
       const result = computeNextRunAt('YEARLY', null, null, from)
       expect(result.getUTCFullYear()).toBe(2025)
       expect(result.getUTCMonth()).toBe(5) // June
+    })
+
+    it('윤년 2월 29일에서 1년 뒤는 2월 28일로 보정된다', () => {
+      const from = new Date('2024-02-29T00:00:00.000Z')
+      const result = computeNextRunAt('YEARLY', null, null, from)
+      expect(result.getUTCFullYear()).toBe(2025)
+      expect(result.getUTCMonth()).toBe(1) // February
+      expect(result.getUTCDate()).toBe(28)
     })
 
     it('monthOfYear와 dayOfMonth를 지정하면 해당 날짜로 설정된다', () => {

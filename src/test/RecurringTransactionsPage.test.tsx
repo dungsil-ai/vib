@@ -89,8 +89,11 @@ function setupFetchMock(overrides: Partial<{
     if (url === '/api/accounts' && method === 'GET') {
       return overrides.accounts ?? { ok: true, json: () => Promise.resolve(mockAccounts) } as Response
     }
-    if (url === '/api/transactions' && method === 'GET') {
-      return overrides.transactions ?? { ok: true, json: () => Promise.resolve([]) } as Response
+    if (url.startsWith('/api/transactions') && !url.includes('/api/transactions/') && method === 'GET') {
+      return overrides.transactions ?? {
+        ok: true,
+        json: () => Promise.resolve({ data: [], total: 0, page: 1, pageSize: 20 }),
+      } as Response
     }
     if (url === '/api/recurring-transactions' && method === 'GET') {
       return overrides.recurring ?? { ok: true, json: () => Promise.resolve(mockRecurring) } as Response
@@ -133,8 +136,11 @@ describe('RecurringTransactionsPage (반복 거래 탭)', () => {
       if (url === '/api/accounts' && method === 'GET') {
         return { ok: true, json: () => Promise.resolve(mockAccounts) } as Response
       }
-      if (url === '/api/transactions' && method === 'GET') {
-        return { ok: true, json: () => Promise.resolve([]) } as Response
+      if (url.startsWith('/api/transactions') && !url.includes('/api/transactions/') && method === 'GET') {
+        return {
+          ok: true,
+          json: () => Promise.resolve({ data: [], total: 0, page: 1, pageSize: 20 }),
+        } as Response
       }
       // recurring-transactions는 pending
       return new Promise(() => {})

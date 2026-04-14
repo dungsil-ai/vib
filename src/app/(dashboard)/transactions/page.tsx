@@ -1,6 +1,6 @@
 'use client'
 
-import React, { memo, useEffect, useMemo, useState } from 'react'
+import React, { memo, useCallback, useEffect, useMemo, useState } from 'react'
 
 // ─── Shared types ──────────────────────────────────────────────────────────────
 
@@ -133,11 +133,29 @@ interface TransactionsTabProps {
 }
 
 function TransactionsTab({ accounts, accountsLoading, accountsError }: TransactionsTabProps) {
+  // --- list state ---
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [listLoading, setListLoading] = useState(true)
   const [listError, setListError] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
+  // --- list filter state ---
+  const [listKeyword, setListKeyword] = useState('')
+  const [debouncedKeyword, setDebouncedKeyword] = useState('')
+  const [listAccountId, setListAccountId] = useState('')
+  const [listStartDate, setListStartDate] = useState('')
+  const [listEndDate, setListEndDate] = useState('')
+  const [listMinAmount, setListMinAmount] = useState('')
+  const [listMaxAmount, setListMaxAmount] = useState('')
+  const [listSortBy, setListSortBy] = useState('date')
+  const [listSortOrder, setListSortOrder] = useState('desc')
+
+  // --- pagination state ---
+  const [listPage, setListPage] = useState(1)
+  const LIST_PAGE_SIZE = 20
+  const [listTotal, setListTotal] = useState(0)
+
+  // --- form state ---
   const [accountFilter, setAccountFilter] = useState('')
   const [date, setDate] = useState(todayDate())
   const [txDescription, setTxDescription] = useState('')
@@ -160,24 +178,63 @@ function TransactionsTab({ accounts, accountsLoading, accountsError }: Transacti
     [filteredAccounts],
   )
 
-  const fetchTransactions = (isCancelled: () => boolean = () => false) => {
-    if (!isCancelled()) setListError(null)
-    fetch('/api/transactions')
-      .then(res => {
-        if (!res.ok) throw new Error(`거래 내역을 불러오지 못했습니다. (${res.status})`)
-        return res.json()
-      })
-      .then(data => { if (!isCancelled()) setTransactions(data) })
-      .catch(err => { if (!isCancelled()) setListError(err instanceof Error ? err.message : '거래 내역을 불러오는 중 오류가 발생했습니다.') })
-      .finally(() => { if (!isCancelled()) setListLoading(false) })
-  }
+  const buildListUrl = useCallback((page: number) => {
+    const qs = new URLSearchParams()
+    qs.set('page', String(page))
+    qs.set('pageSize', String(LIST_PAGE_SIZE))
+    if (debouncedKeyword.trim()) qs.set('keyword', debouncedKeyword.trim())
+    if (listAccountId) qs.set('accountId', listAccountId)
+    if (listStartDate) qs.set('startDate', listStartDate)
+    if (listEndDate) qs.set('endDate', listEndDate)
+    if (listMinAmount) qs.set('minAmount', listMinAmount)
+    if (listMaxAmount) qs.set('maxAmount', listMaxAmount)
+    if (listSortBy !== 'date') qs.set('sortBy', listSortBy)
+    if (listSortOrder !== 'desc') qs.set('sortOrder', listSortOrder)
+    return `/api/transactions?${qs.toString()}`
+  }, [debouncedKeyword, listAccountId, listStartDate, listEndDate, listMinAmount, listMaxAmount, listSortBy, listSortOrder])
 
+  const fetchTransactions = useCallback(async (page: number, isCancelled: () => boolean = () => false) => {
+    try {
+      if (!isCancelled()) {
+        setListError(null)
+      }
+      const res = await fetch(buildListUrl(page))
+      if (!res.ok) {
+        throw new Error(`거래 내역을 불러오지 못했습니다. (${res.status})`)
+      }
+      const body = await res.json()
+      if (!isCancelled()) {
+        setTransactions(body.data ?? body)
+        setListTotal(body.total ?? 0)
+        setListPage(body.page ?? page)
+      }
+    } catch (err) {
+      if (!isCancelled()) {
+        setListError(err instanceof Error ? err.message : '거래 내역을 불러오는 중 오류가 발생했습니다.')
+      }
+    } finally {
+      if (!isCancelled()) {
+        setListLoading(false)
+      }
+    }
+  }, [buildListUrl])
+
+  // Debounce keyword input (300ms)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedKeyword(listKeyword)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [listKeyword])
+
+  // Re-fetch when filters change (reset to page 1)
   useEffect(() => {
     let cancelled = false
-    fetchTransactions(() => cancelled)
+    setListLoading(true)
+    fetchTransactions(1, () => cancelled)
     return () => { cancelled = true }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [fetchTransactions])
+
 
   const resetForm = () => {
     setFormError('')
@@ -186,6 +243,7 @@ function TransactionsTab({ accounts, accountsLoading, accountsError }: Transacti
     setEntries([defaultEntry()])
   }
 
+  // --- entry helpers ---
   const addEntry = () => setEntries(prev => [...prev, defaultEntry()])
   const removeEntry = (index: number) => {
     setEntries(prev => {
@@ -245,7 +303,7 @@ function TransactionsTab({ accounts, accountsLoading, accountsError }: Transacti
 
       resetForm()
       setListLoading(true)
-      fetchTransactions()
+      fetchTransactions(listPage)
     } catch {
       setFormError('거래 저장 중 오류가 발생했습니다.')
     } finally {
@@ -253,13 +311,15 @@ function TransactionsTab({ accounts, accountsLoading, accountsError }: Transacti
     }
   }
 
+  // --- delete ---
   const handleDelete = async (id: string) => {
     if (!confirm('이 거래를 삭제하시겠습니까?')) return
     try {
       setListError(null)
       const res = await fetch(`/api/transactions/${id}`, { method: 'DELETE' })
       if (!res.ok) throw new Error(`거래를 삭제하지 못했습니다. (${res.status})`)
-      fetchTransactions()
+      setListLoading(true)
+      fetchTransactions(listPage)
     } catch (err) {
       setListError(err instanceof Error ? err.message : '거래를 삭제하는 중 오류가 발생했습니다.')
     }
@@ -267,6 +327,7 @@ function TransactionsTab({ accounts, accountsLoading, accountsError }: Transacti
 
   return (
     <div className="space-y-6">
+
       {/* ── Add transaction form ── */}
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border dark:border-gray-700 p-6">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">거래 추가</h2>
@@ -345,7 +406,9 @@ function TransactionsTab({ accounts, accountsLoading, accountsError }: Transacti
                     )}
                   </div>
                   <div className="space-y-3">
+                    {/* Debit / Credit badge pickers — side by side */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {/* Debit account badge picker */}
                       <AccountBadgePicker
                         label="차변 (Debit)"
                         labelClassName="text-red-700"
@@ -358,6 +421,8 @@ function TransactionsTab({ accounts, accountsLoading, accountsError }: Transacti
                         activeClassName="bg-red-100 text-red-700 border-red-300"
                         inactiveClassName="bg-white text-gray-600 border-gray-300 hover:border-red-300 hover:text-red-600"
                       />
+
+                      {/* Credit account badge picker */}
                       <AccountBadgePicker
                         label="대변 (Credit)"
                         labelClassName="text-green-700"
@@ -371,6 +436,8 @@ function TransactionsTab({ accounts, accountsLoading, accountsError }: Transacti
                         inactiveClassName="bg-white text-gray-600 border-gray-300 hover:border-green-300 hover:text-green-600"
                       />
                     </div>
+
+                    {/* Amount & memo */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div>
                         <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">금액 (원)</label>
@@ -431,6 +498,144 @@ function TransactionsTab({ accounts, accountsLoading, accountsError }: Transacti
       {/* ── Transaction list ── */}
       <div>
         <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">거래 목록</h2>
+
+        {/* ── Filter bar ── */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border dark:border-gray-700 p-4 mb-3 space-y-3">
+          {/* Row 1: keyword + account + sort */}
+          <div className="flex flex-wrap gap-3 items-end">
+            <div className="flex-1 min-w-[180px]">
+              <label htmlFor="list-keyword" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                키워드
+              </label>
+              <input
+                id="list-keyword"
+                type="text"
+                value={listKeyword}
+                onChange={e => setListKeyword(e.target.value)}
+                placeholder="거래 설명 검색"
+                className="w-full px-3 py-1.5 border dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
+              />
+            </div>
+            <div className="flex-1 min-w-[160px]">
+              <label htmlFor="list-account" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                계정
+              </label>
+              <select
+                id="list-account"
+                value={listAccountId}
+                onChange={e => setListAccountId(e.target.value)}
+                className="w-full px-3 py-1.5 border dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
+              >
+                <option value="">전체 계정</option>
+                {accounts.map(acc => (
+                  <option key={acc.id} value={acc.id}>{acc.code} {acc.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex gap-2 items-end">
+              <div>
+                <label htmlFor="list-sort-by" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                  정렬 기준
+                </label>
+                <select
+                  id="list-sort-by"
+                  value={listSortBy}
+                  onChange={e => setListSortBy(e.target.value)}
+                  className="px-3 py-1.5 border dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
+                >
+                  <option value="date">날짜</option>
+                  <option value="createdAt">등록일</option>
+                </select>
+              </div>
+              <div>
+                <label htmlFor="list-sort-order" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                  정렬 방향
+                </label>
+                <select
+                  id="list-sort-order"
+                  value={listSortOrder}
+                  onChange={e => setListSortOrder(e.target.value)}
+                  className="px-3 py-1.5 border dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
+                >
+                  <option value="desc">최신순</option>
+                  <option value="asc">오래된순</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          {/* Row 2: date range + amount range */}
+          <div className="flex flex-wrap gap-3 items-end">
+            <div>
+              <label htmlFor="list-start-date" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                시작일
+              </label>
+              <input
+                id="list-start-date"
+                type="date"
+                value={listStartDate}
+                onChange={e => setListStartDate(e.target.value)}
+                className="px-3 py-1.5 border dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
+              />
+            </div>
+            <div>
+              <label htmlFor="list-end-date" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                종료일
+              </label>
+              <input
+                id="list-end-date"
+                type="date"
+                value={listEndDate}
+                onChange={e => setListEndDate(e.target.value)}
+                className="px-3 py-1.5 border dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
+              />
+            </div>
+            <div>
+              <label htmlFor="list-min-amount" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                최소 금액
+              </label>
+              <input
+                id="list-min-amount"
+                type="number"
+                value={listMinAmount}
+                onChange={e => setListMinAmount(e.target.value)}
+                placeholder="최소"
+                min="0"
+                className="w-32 px-3 py-1.5 border dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
+              />
+            </div>
+            <div>
+              <label htmlFor="list-max-amount" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                최대 금액
+              </label>
+              <input
+                id="list-max-amount"
+                type="number"
+                value={listMaxAmount}
+                onChange={e => setListMaxAmount(e.target.value)}
+                placeholder="제한 없음"
+                min="0"
+                className="w-32 px-3 py-1.5 border dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setListKeyword('')
+                setDebouncedKeyword('')
+                setListAccountId('')
+                setListStartDate('')
+                setListEndDate('')
+                setListMinAmount('')
+                setListMaxAmount('')
+                setListSortBy('date')
+                setListSortOrder('desc')
+              }}
+              className="px-3 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg text-sm hover:bg-gray-200 dark:hover:bg-gray-600"
+            >
+              필터 초기화
+            </button>
+          </div>
+        </div>
 
         {listError && (
           <div className="mb-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded text-sm">
@@ -529,10 +734,59 @@ function TransactionsTab({ accounts, accountsLoading, accountsError }: Transacti
             </div>
           </div>
         )}
+
+        {/* ── Pagination ── */}
+        {!listLoading && listTotal > 0 && (listTotal > LIST_PAGE_SIZE || listPage > 1) && (
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border dark:border-gray-700 flex items-center justify-between px-4 py-3">
+            <span className="text-xs text-gray-500 dark:text-gray-400">
+              {(() => {
+                const totalPages = Math.max(1, Math.ceil(listTotal / LIST_PAGE_SIZE))
+                const currentPage = Math.min(listPage, totalPages)
+                const start = (currentPage - 1) * LIST_PAGE_SIZE + 1
+                const end = Math.min(currentPage * LIST_PAGE_SIZE, listTotal)
+                return <>총 {listTotal}건 중 {start}–{end}건</>
+              })()}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={listPage <= 1 || listLoading}
+                onClick={() => {
+                  const totalPages = Math.max(1, Math.ceil(listTotal / LIST_PAGE_SIZE))
+                  const prev = Math.max(1, Math.min(listPage - 1, totalPages))
+                  setListPage(prev)
+                  setListLoading(true)
+                  fetchTransactions(prev)
+                }}
+                className="px-3 py-1 text-xs border dark:border-gray-600 rounded-lg disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-700 dark:text-gray-300"
+              >
+                이전
+              </button>
+              <span className="text-xs text-gray-700 dark:text-gray-300">
+                {Math.min(listPage, Math.max(1, Math.ceil(listTotal / LIST_PAGE_SIZE)))} / {Math.max(1, Math.ceil(listTotal / LIST_PAGE_SIZE))}
+              </span>
+              <button
+                type="button"
+                disabled={listPage >= Math.max(1, Math.ceil(listTotal / LIST_PAGE_SIZE)) || listLoading}
+                onClick={() => {
+                  const totalPages = Math.max(1, Math.ceil(listTotal / LIST_PAGE_SIZE))
+                  const next = Math.max(1, Math.min(listPage + 1, totalPages))
+                  setListPage(next)
+                  setListLoading(true)
+                  fetchTransactions(next)
+                }}
+                className="px-3 py-1 text-xs border dark:border-gray-600 rounded-lg disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-700 dark:text-gray-300"
+              >
+                다음
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
 }
+
 
 // ─── Recurring transactions tab ───────────────────────────────────────────────
 
@@ -622,7 +876,6 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError }: 
     let cancelled = false
     fetchRecurring(() => cancelled)
     return () => { cancelled = true }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const resetForm = () => {

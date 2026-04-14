@@ -7,13 +7,13 @@ import { Prisma } from '@prisma/client'
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function serializeData(data: unknown): any {
-  if (data === undefined) return undefined
-  return JSON.parse(
-    JSON.stringify(data, (_key, value) => {
-      if (value instanceof Prisma.Decimal) {
-        return value.toString()
-      }
-      return value
-    }),
-  )
+  const json = JSON.stringify(data, (_key, value) => {
+    if (value instanceof Prisma.Decimal) {
+      return value.toString()
+    }
+    return value
+  })
+
+  if (json === undefined) return undefined
+  return JSON.parse(json)
 }
