@@ -136,6 +136,23 @@ export default function BudgetPage() {
     setActualExpenses(actuals)
   }
 
+  const deleteBudget = async (budgetId: string) => {
+    if (!confirm('이 예산을 초기화하시겠습니까?')) return
+    try {
+      const res = await fetch(`/api/budget/${budgetId}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setError(data.error || '예산 초기화에 실패했습니다.')
+        return
+      }
+      const { rows: newRows, actuals } = await loadBudgetData(year, month)
+      setRows(newRows)
+      setActualExpenses(actuals)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '예산 초기화에 실패했습니다.')
+    }
+  }
+
   const updateEditAmount = (index: number, value: string) => {
     const updated = [...rows]
     updated[index].editAmount = value
@@ -208,10 +225,12 @@ export default function BudgetPage() {
           <div className="divide-y dark:divide-gray-700">
             {rows.map((row, index) => {
               const actual = actualExpenses[row.account.id] || 0
-              const budget = Number(row.budget?.amount || 0)
-              const hasBudget = budget > 0
-              const pct = hasBudget ? Math.min((actual / budget) * 100, 100) : 0
-              const isOver = hasBudget && actual > budget
+              const rowBudget = row.budget
+              const budget = Number(rowBudget?.amount || 0)
+              const hasBudget = rowBudget != null
+              const hasPositiveBudget = budget > 0
+              const pct = hasPositiveBudget ? Math.min((actual / budget) * 100, 100) : 0
+              const isOver = hasPositiveBudget && actual > budget
 
               return (
                 <div key={row.account.id} className="p-4">
@@ -251,16 +270,26 @@ export default function BudgetPage() {
                           </button>
                         </div>
                       ) : (
-                        <button
-                          onClick={() => startEditing(index)}
-                          className="text-sm font-medium text-blue-600 hover:text-blue-800 min-w-[120px] text-right"
-                        >
-                          예산: {hasBudget ? formatCurrency(budget) : '설정 없음'}
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => startEditing(index)}
+                            className="text-sm font-medium text-blue-600 hover:text-blue-800 min-w-[120px] text-right"
+                          >
+                            예산: {hasBudget ? formatCurrency(budget) : '설정 없음'}
+                          </button>
+                          {rowBudget && (
+                            <button
+                              onClick={() => deleteBudget(rowBudget.id)}
+                              className="text-xs text-red-500 hover:text-red-700"
+                            >
+                              초기화
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
                   </div>
-                  {hasBudget && (
+                  {hasPositiveBudget && (
                     <div className="mt-2">
                       <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2">
                         <div

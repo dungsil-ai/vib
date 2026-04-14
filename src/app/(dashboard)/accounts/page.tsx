@@ -38,6 +38,9 @@ export default function AccountsPage() {
   const [formData, setFormData] = useState({ name: '', description: '', openingBalance: '' })
   const [error, setError] = useState('')
   const [formError, setFormError] = useState('')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editData, setEditData] = useState({ name: '', description: '' })
+  const [editError, setEditError] = useState('')
 
   const fetchAccounts = async () => {
     setError('')
@@ -85,6 +88,46 @@ export default function AccountsPage() {
       }
     } catch {
       setFormError('네트워크 오류가 발생했습니다.')
+    }
+  }
+
+  const startEditing = (account: Account) => {
+    setEditingId(account.id)
+    setEditData({ name: account.name, description: account.description || '' })
+    setEditError('')
+    setShowFormFor(null)
+  }
+
+  const cancelEditing = () => {
+    setEditingId(null)
+    setEditData({ name: '', description: '' })
+    setEditError('')
+  }
+
+  const handleEdit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingId) return
+    setEditError('')
+    try {
+      const res = await fetch(`/api/accounts/${editingId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: editData.name, description: editData.description }),
+      })
+      let data: { error?: string } | null = null
+      try {
+        data = await res.json()
+      } catch {
+        data = null
+      }
+      if (!res.ok) {
+        setEditError(data?.error || '수정에 실패했습니다.')
+      } else {
+        cancelEditing()
+        fetchAccounts()
+      }
+    } catch {
+      setEditError('네트워크 오류가 발생했습니다.')
     }
   }
 
@@ -149,23 +192,59 @@ export default function AccountsPage() {
                     </thead>
                     <tbody className="divide-y dark:divide-gray-700">
                       {typeAccounts.map(account => (
-                        <tr key={account.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                          <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{account.name}</td>
-                          <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{account.description || '-'}</td>
-                          <td className="px-4 py-3 text-right font-medium">
-                            <span className={account.balance >= 0 ? 'text-gray-900 dark:text-gray-100' : 'text-red-500'}>
-                              {formatCurrency(account.balance)}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            <button
-                              onClick={() => handleDelete(account.id)}
-                              className="text-xs text-red-600 hover:text-red-800"
-                            >
-                              삭제
-                            </button>
-                          </td>
-                        </tr>
+                        editingId === account.id ? (
+                          <tr key={account.id} className="bg-blue-50 dark:bg-blue-900/20">
+                            <td colSpan={4} className="px-4 py-3">
+                              {editError && <div className="mb-2 text-red-600 text-sm">{editError}</div>}
+                              <form onSubmit={handleEdit} className="flex items-center gap-2 flex-wrap">
+                                <input
+                                  type="text"
+                                  value={editData.name}
+                                  onChange={e => setEditData({ ...editData, name: e.target.value })}
+                                  className="px-2 py-1 border dark:border-gray-600 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
+                                  placeholder="계정명"
+                                  required
+                                  autoFocus
+                                />
+                                <input
+                                  type="text"
+                                  value={editData.description}
+                                  onChange={e => setEditData({ ...editData, description: e.target.value })}
+                                  className="flex-1 px-2 py-1 border dark:border-gray-600 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
+                                  placeholder="설명 (선택)"
+                                />
+                                <button type="submit" className="px-3 py-1 bg-blue-600 text-white rounded text-xs font-medium hover:bg-blue-700">저장</button>
+                                <button type="button" onClick={cancelEditing} className="px-3 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded text-xs font-medium hover:bg-gray-200 dark:hover:bg-gray-600">취소</button>
+                              </form>
+                            </td>
+                          </tr>
+                        ) : (
+                          <tr key={account.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                            <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{account.name}</td>
+                            <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{account.description || '-'}</td>
+                            <td className="px-4 py-3 text-right font-medium">
+                              <span className={account.balance >= 0 ? 'text-gray-900 dark:text-gray-100' : 'text-red-500'}>
+                                {formatCurrency(account.balance)}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <div className="flex items-center justify-center gap-2">
+                                <button
+                                  onClick={() => startEditing(account)}
+                                  className="text-xs text-blue-600 hover:text-blue-800"
+                                >
+                                  수정
+                                </button>
+                                <button
+                                  onClick={() => handleDelete(account.id)}
+                                  className="text-xs text-red-600 hover:text-red-800"
+                                >
+                                  삭제
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        )
                       ))}
                     </tbody>
                   </table>
@@ -229,7 +308,7 @@ export default function AccountsPage() {
               ) : (
                 <div className="p-3">
                   <button
-                    onClick={() => { setShowFormFor(type); setFormData({ name: '', description: '', openingBalance: '' }); setFormError('') }}
+                    onClick={() => { cancelEditing(); setShowFormFor(type); setFormData({ name: '', description: '', openingBalance: '' }); setFormError('') }}
                     className="w-full py-2 border-2 border-dashed border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-blue-400 hover:text-blue-500 rounded-lg text-sm"
                   >
                     + 계정 추가

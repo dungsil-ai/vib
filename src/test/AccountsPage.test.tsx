@@ -339,6 +339,116 @@ describe('AccountsPage', () => {
     })
   })
 
+  it('계정 수정 버튼 클릭 시 인라인 편집 폼이 열린다', async () => {
+    vi.mocked(global.fetch).mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(mockAccounts),
+    } as Response)
+
+    const user = userEvent.setup()
+    render(<AccountsPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('현금')).toBeInTheDocument()
+    })
+
+    const editButtons = screen.getAllByText('수정')
+    await user.click(editButtons[0])
+
+    expect(screen.getByPlaceholderText('계정명')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('설명 (선택)')).toBeInTheDocument()
+  })
+
+  it('계정 수정을 취소하면 폼이 닫힌다', async () => {
+    vi.mocked(global.fetch).mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(mockAccounts),
+    } as Response)
+
+    const user = userEvent.setup()
+    render(<AccountsPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('현금')).toBeInTheDocument()
+    })
+
+    const editButtons = screen.getAllByText('수정')
+    await user.click(editButtons[0])
+
+    expect(screen.getByPlaceholderText('계정명')).toBeInTheDocument()
+
+    const cancelButtons = screen.getAllByRole('button', { name: '취소' })
+    await user.click(cancelButtons[0])
+
+    expect(screen.queryByPlaceholderText('계정명')).not.toBeInTheDocument()
+  })
+
+  it('계정 수정 후 PUT API를 호출한다', async () => {
+    vi.mocked(global.fetch).mockImplementation(async (input, init) => {
+      const url = typeof input === 'string' ? input : (input as Request).url
+      const method = (init?.method || 'GET').toUpperCase()
+      if (url === '/api/accounts' && method === 'GET') {
+        return { ok: true, json: () => Promise.resolve(mockAccounts) } as Response
+      }
+      if (url.startsWith('/api/accounts/') && method === 'PUT') {
+        return { ok: true, json: () => Promise.resolve({ message: '업데이트되었습니다.' }) } as Response
+      }
+      return { ok: true, json: () => Promise.resolve({}) } as Response
+    })
+
+    const user = userEvent.setup()
+    render(<AccountsPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('현금')).toBeInTheDocument()
+    })
+
+    const editButtons = screen.getAllByText('수정')
+    await user.click(editButtons[0])
+
+    const nameInput = screen.getByPlaceholderText('계정명')
+    await user.clear(nameInput)
+    await user.type(nameInput, '현금(수정)')
+
+    await user.click(screen.getByRole('button', { name: '저장' }))
+
+    await waitFor(() => {
+      expect(vi.mocked(global.fetch)).toHaveBeenCalledWith(
+        '/api/accounts/1',
+        expect.objectContaining({ method: 'PUT' }),
+      )
+    })
+  })
+
+  it('계정 수정 실패 시 에러를 표시한다', async () => {
+    vi.mocked(global.fetch).mockImplementation(async (input, init) => {
+      const url = typeof input === 'string' ? input : (input as Request).url
+      const method = (init?.method || 'GET').toUpperCase()
+      if (url === '/api/accounts' && method === 'GET') {
+        return { ok: true, json: () => Promise.resolve(mockAccounts) } as Response
+      }
+      if (url.startsWith('/api/accounts/') && method === 'PUT') {
+        return { ok: false, json: () => Promise.resolve({ error: '이미 존재하는 계정명입니다.' }) } as Response
+      }
+      return { ok: true, json: () => Promise.resolve({}) } as Response
+    })
+
+    const user = userEvent.setup()
+    render(<AccountsPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('현금')).toBeInTheDocument()
+    })
+
+    const editButtons = screen.getAllByText('수정')
+    await user.click(editButtons[0])
+
+    await user.click(screen.getByRole('button', { name: '저장' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('이미 존재하는 계정명입니다.')).toBeInTheDocument()
+    })
+  })
   it("'개시잔액' 이름으로 계정 생성 시 API 에러 메시지를 표시한다", async () => {
     vi.mocked(global.fetch).mockImplementation(async (input, init) => {
       const url = typeof input === 'string' ? input : (input as Request).url
