@@ -35,7 +35,7 @@ test.describe('계정 삭제 제한', () => {
 
     const d = new Date()
     const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-    await page.locator('input[type="date"]').fill(today)
+    await page.getByLabel('날짜').fill(today)
     await page.getByPlaceholder('거래 내용을 입력하세요').fill(`e2e 삭제 제한 테스트 ${Date.now()}`)
 
     // 차변: 현금 (1001)
