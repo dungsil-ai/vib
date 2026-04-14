@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
+import type { Account } from '@prisma/client'
 import { CURRENCY_CODES } from '@/lib/currencies'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
