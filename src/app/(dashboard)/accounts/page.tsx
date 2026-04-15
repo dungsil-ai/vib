@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { SUPPORTED_CURRENCIES, formatCurrency } from '@/lib/currencies'
 
 const ACCOUNT_TYPE_LABELS: Record<string, string> = {
   ASSET: '자산',
@@ -23,19 +24,18 @@ interface Account {
   code: string
   name: string
   type: string
+  currency: string
   description: string | null
   balance: number
-}
-
-function formatCurrency(amount: number) {
-  return new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW' }).format(amount)
+  baseCurrency: string
 }
 
 export default function AccountsPage() {
   const [accounts, setAccounts] = useState<Account[]>([])
   const [loading, setLoading] = useState(true)
   const [showFormFor, setShowFormFor] = useState<string | null>(null)
-  const [formData, setFormData] = useState({ name: '', description: '', openingBalance: '' })
+  const [formData, setFormData] = useState({ name: '', description: '', currency: 'KRW', openingBalance: '' })
+  const [userCurrency, setUserCurrency] = useState('KRW')
   const [error, setError] = useState('')
   const [formError, setFormError] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -51,6 +51,9 @@ export default function AccountsPage() {
         throw new Error(data?.error || '계정 목록을 불러오지 못했습니다.')
       }
       setAccounts(data)
+      if (data.length > 0 && data[0].baseCurrency) {
+        setUserCurrency(data[0].baseCurrency)
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : '계정 목록을 불러오지 못했습니다.')
     } finally {
@@ -58,7 +61,21 @@ export default function AccountsPage() {
     }
   }
 
-  useEffect(() => { fetchAccounts() }, [])
+  useEffect(() => {
+    let cancelled = false
+    // Load user's base currency for the form default
+    fetch('/api/settings')
+      .then(r => r.json())
+      .then(d => {
+        if (!cancelled && d.currency) {
+          setFormData(prev => ({ ...prev, currency: d.currency }))
+          setUserCurrency(d.currency)
+        }
+      })
+      .catch(() => {})
+    fetchAccounts()
+    return () => { cancelled = true }
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -83,7 +100,7 @@ export default function AccountsPage() {
         setFormError(data.error || '오류가 발생했습니다.')
       } else {
         setShowFormFor(null)
-        setFormData({ name: '', description: '', openingBalance: '' })
+        setFormData({ name: '', description: '', currency: userCurrency, openingBalance: '' })
         fetchAccounts()
       }
     } catch {
@@ -161,6 +178,7 @@ export default function AccountsPage() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">계정 관리</h1>
+        <p className="text-sm text-gray-500 dark:text-gray-400">잔액은 기본 통화({userCurrency}) 기준으로 표시됩니다</p>
       </div>
 
       {error && (
@@ -185,6 +203,7 @@ export default function AccountsPage() {
                     <thead className="bg-gray-50 dark:bg-gray-700/50">
                       <tr>
                         <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400">계정명</th>
+                        <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400">통화</th>
                         <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400">설명</th>
                         <th className="text-right px-4 py-3 font-medium text-gray-600 dark:text-gray-400">잔액</th>
                         <th className="text-center px-4 py-3 font-medium text-gray-600 dark:text-gray-400">작업</th>
@@ -192,9 +211,9 @@ export default function AccountsPage() {
                     </thead>
                     <tbody className="divide-y dark:divide-gray-700">
                       {typeAccounts.map(account => (
-                        editingId === account.id ? (
+editingId === account.id ? (
                           <tr key={account.id} className="bg-blue-50 dark:bg-blue-900/20">
-                            <td colSpan={4} className="px-4 py-3">
+                            <td colSpan={5} className="px-4 py-3">
                               {editError && <div className="mb-2 text-red-600 text-sm">{editError}</div>}
                               <form onSubmit={handleEdit} className="flex items-center gap-2 flex-wrap">
                                 <input
@@ -221,10 +240,15 @@ export default function AccountsPage() {
                         ) : (
                           <tr key={account.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
                             <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{account.name}</td>
+                            <td className="px-4 py-3">
+                              <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
+                                {account.currency}
+                              </span>
+                            </td>
                             <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{account.description || '-'}</td>
                             <td className="px-4 py-3 text-right font-medium">
                               <span className={account.balance >= 0 ? 'text-gray-900 dark:text-gray-100' : 'text-red-500'}>
-                                {formatCurrency(account.balance)}
+                                {formatCurrency(account.balance, account.baseCurrency ?? userCurrency)}
                               </span>
                             </td>
                             <td className="px-4 py-3 text-center">
@@ -267,6 +291,20 @@ export default function AccountsPage() {
                       />
                     </div>
                     <div>
+                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">통화</label>
+                      <select
+                        value={formData.currency}
+                        onChange={e => setFormData({ ...formData, currency: e.target.value })}
+                        className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
+                      >
+                        {SUPPORTED_CURRENCIES.map(c => (
+                          <option key={c.code} value={c.code}>
+                            {c.code} - {c.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="col-span-2">
                       <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">설명 (선택)</label>
                       <input
                         type="text"
@@ -297,7 +335,7 @@ export default function AccountsPage() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => { setShowFormFor(null); setFormData({ name: '', description: '', openingBalance: '' }); setFormError('') }}
+                        onClick={() => { setShowFormFor(null); setFormData({ name: '', description: '', currency: userCurrency, openingBalance: '' }); setFormError('') }}
                         className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 text-sm font-medium"
                       >
                         취소
@@ -308,7 +346,7 @@ export default function AccountsPage() {
               ) : (
                 <div className="p-3">
                   <button
-                    onClick={() => { cancelEditing(); setShowFormFor(type); setFormData({ name: '', description: '', openingBalance: '' }); setFormError('') }}
+onClick={() => { cancelEditing(); setShowFormFor(type); setFormData({ name: '', description: '', currency: userCurrency, openingBalance: '' }); setFormError('') }}
                     className="w-full py-2 border-2 border-dashed border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-blue-400 hover:text-blue-500 rounded-lg text-sm"
                   >
                     + 계정 추가
@@ -322,3 +360,4 @@ export default function AccountsPage() {
     </div>
   )
 }
+

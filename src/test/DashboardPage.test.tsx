@@ -12,6 +12,7 @@ const mockDashboardData = {
   totalLiabilities: 1000000,
   totalEquity: 4000000,
   netWorth: 4000000,
+  baseCurrency: 'KRW',
   recentTransactions: [
     {
       id: 'tx-1',
@@ -20,6 +21,8 @@ const mockDashboardData = {
       entries: [
         {
           amount: '3000000',
+          currency: 'KRW',
+          exchangeRate: '1',
           debitAccount: { name: '현금', code: '101', type: 'ASSET' },
           creditAccount: { name: '급여', code: '401', type: 'REVENUE' },
         },

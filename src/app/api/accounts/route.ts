@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import type { Account } from '@prisma/client'
+import { CURRENCY_CODES } from '@/lib/currencies'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
@@ -10,55 +11,73 @@ export async function GET() {
     return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
   }
 
-  const accounts = await prisma.account.findMany({
-    where: { userId: session.user.id },
-    orderBy: { code: 'asc' },
-    select: {
-      id: true,
-      code: true,
-      name: true,
-      type: true,
-      description: true,
-    },
-  })
+  try {
+    const accounts = await prisma.account.findMany({
+      where: { userId: session.user.id },
+      orderBy: { code: 'asc' },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        type: true,
+        currency: true,
+        description: true,
+      },
+    })
 
-  const accountIds = accounts.map(a => a.id)
+    const accountIds = accounts.map(a => a.id)
 
-  const [debitSums, creditSums] = await Promise.all([
-    prisma.entry.groupBy({
-      by: ['debitAccountId'],
-      where: { debitAccountId: { in: accountIds } },
-      _sum: { amount: true },
-    }),
-    prisma.entry.groupBy({
-      by: ['creditAccountId'],
-      where: { creditAccountId: { in: accountIds } },
-      _sum: { amount: true },
-    }),
-  ])
+    // Fetch the user's base currency for balance conversion
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { currency: true },
+    })
+    const baseCurrency = user?.currency ?? 'KRW'
 
-  const debitByAccount = new Map(
-    debitSums.map(r => [r.debitAccountId, Number(r._sum.amount ?? 0)]),
-  )
-  const creditByAccount = new Map(
-    creditSums.map(r => [r.creditAccountId, Number(r._sum.amount ?? 0)]),
-  )
+    // Use raw SQL to compute balance in base currency: SUM(amount * exchangeRate)
+    const [debitSums, creditSums] = accountIds.length > 0
+      ? await Promise.all([
+          prisma.$queryRaw<Array<{ debitAccountId: string; total: string }>>`
+            SELECT "debitAccountId", SUM(amount * "exchangeRate")::text AS total
+            FROM "Entry"
+            WHERE "debitAccountId" = ANY(${accountIds}::text[])
+            GROUP BY "debitAccountId"
+          `,
+          prisma.$queryRaw<Array<{ creditAccountId: string; total: string }>>`
+            SELECT "creditAccountId", SUM(amount * "exchangeRate")::text AS total
+            FROM "Entry"
+            WHERE "creditAccountId" = ANY(${accountIds}::text[])
+            GROUP BY "creditAccountId"
+          `,
+        ])
+      : [[], []]
 
-  const accountsWithBalance = accounts.map(account => {
-    const totalDebits = debitByAccount.get(account.id) ?? 0
-    const totalCredits = creditByAccount.get(account.id) ?? 0
+    const debitByAccount = new Map(
+      debitSums.map(r => [r.debitAccountId, Number(r.total ?? 0)]),
+    )
+    const creditByAccount = new Map(
+      creditSums.map(r => [r.creditAccountId, Number(r.total ?? 0)]),
+    )
 
-    let balance = 0
-    if (account.type === 'ASSET' || account.type === 'EXPENSE') {
-      balance = totalDebits - totalCredits
-    } else {
-      balance = totalCredits - totalDebits
-    }
+    const accountsWithBalance = accounts.map(account => {
+      const totalDebits = debitByAccount.get(account.id) ?? 0
+      const totalCredits = creditByAccount.get(account.id) ?? 0
 
-    return { ...account, balance }
-  })
+      let balance = 0
+      if (account.type === 'ASSET' || account.type === 'EXPENSE') {
+        balance = totalDebits - totalCredits
+      } else {
+        balance = totalCredits - totalDebits
+      }
 
-  return NextResponse.json(accountsWithBalance)
+      return { ...account, balance, baseCurrency }
+    })
+
+    return NextResponse.json(accountsWithBalance)
+  } catch (error) {
+    console.error('[accounts] GET error:', error)
+    return NextResponse.json({ error: '계정 목록을 불러오지 못했습니다.' }, { status: 500 })
+  }
 }
 
 const TYPE_CODE_PREFIX: Record<string, number> = {
@@ -89,14 +108,14 @@ export async function POST(request: NextRequest) {
 
   const userId = session.user.id
 
-  let body: { name?: unknown; type?: unknown; description?: unknown }
+  let body: { name?: unknown; type?: unknown; description?: unknown; currency?: unknown }
   try {
     body = await request.json()
   } catch {
     return NextResponse.json({ error: '요청 본문을 파싱할 수 없습니다.' }, { status: 400 })
   }
 
-  const { name: nameRaw, type, description } = body
+  const { name: nameRaw, type, description, currency } = body
   const accountName = typeof nameRaw === 'string' ? nameRaw.trim() : ''
 
   try {
@@ -112,6 +131,22 @@ export async function POST(request: NextRequest) {
 
     if (accountName === OPENING_BALANCE_ACCOUNT_NAME) {
       return NextResponse.json({ error: `'${OPENING_BALANCE_ACCOUNT_NAME}'은 예약된 계정명입니다.` }, { status: 400 })
+    }
+
+    // Validate currency if provided
+    const accountCurrency = currency ? String(currency) : undefined
+    if (accountCurrency && !CURRENCY_CODES.includes(accountCurrency)) {
+      return NextResponse.json({ error: '지원하지 않는 통화 코드입니다.' }, { status: 400 })
+    }
+
+    // If no currency specified, use user's base currency
+    let finalCurrency = accountCurrency
+    if (!finalCurrency) {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { currency: true },
+      })
+      finalCurrency = user?.currency ?? 'KRW'
     }
 
     const openingBalanceRaw = (body as { openingBalance?: unknown }).openingBalance
@@ -299,6 +334,7 @@ export async function POST(request: NextRequest) {
         name: accountName,
         code,
         type: accountType,
+        currency: finalCurrency,
         description: description ? String(description) : undefined,
       },
     })

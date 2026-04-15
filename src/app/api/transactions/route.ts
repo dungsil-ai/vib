@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { serializeData } from '@/lib/serialize'
+import { CURRENCY_CODES } from '@/lib/currencies'
 
 const ENTRY_INCLUDE = {
   entries: {
@@ -235,6 +236,24 @@ export async function POST(request: NextRequest) {
     if (entry.debitAccountId === entry.creditAccountId) {
       return NextResponse.json({ error: '차변 계정과 대변 계정은 달라야 합니다.' }, { status: 400 })
     }
+    // Validate entry currency if provided
+    if (entry.currency !== undefined && entry.currency !== null) {
+      if (typeof entry.currency !== 'string') {
+        return NextResponse.json({ error: '통화 코드는 문자열이어야 합니다.' }, { status: 400 })
+      }
+      const normalizedCurrency = entry.currency.trim().toUpperCase()
+      if (!normalizedCurrency || !CURRENCY_CODES.includes(normalizedCurrency)) {
+        return NextResponse.json({ error: '지원하지 않는 통화 코드입니다.' }, { status: 400 })
+      }
+      entry.currency = normalizedCurrency
+    }
+    // Validate exchangeRate if provided; require it when currency differs from base
+    if (entry.exchangeRate !== undefined) {
+      const rate = Number(entry.exchangeRate)
+      if (!Number.isFinite(rate) || rate <= 0) {
+        return NextResponse.json({ error: '유효한 환율을 입력해주세요.' }, { status: 400 })
+      }
+    }
   }
 
   // Verify that all referenced accounts belong to the authenticated user
@@ -244,15 +263,35 @@ export async function POST(request: NextRequest) {
       ...entries.map((e: { creditAccountId: string }) => e.creditAccountId),
     ]),
   ]
-  const ownedAccounts = await prisma.account.findMany({
-    where: { id: { in: accountIds }, userId: session.user.id },
-    select: { id: true },
-  })
+  const [ownedAccounts, userRecord] = await Promise.all([
+    prisma.account.findMany({
+      where: { id: { in: accountIds }, userId: session.user.id },
+      select: { id: true },
+    }),
+    prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { currency: true },
+    }),
+  ])
   if (ownedAccounts.length !== accountIds.length) {
     return NextResponse.json({ error: '잘못된 계정이 포함되어 있습니다.' }, { status: 403 })
   }
 
+  const baseCurrency = userRecord?.currency ?? 'KRW'
+
+  // Validate currency and exchangeRate for each entry (requires baseCurrency)
+  for (const entry of entries) {
+    const entryCurrency: string = entry.currency ?? baseCurrency
+    if (entryCurrency !== baseCurrency && (entry.exchangeRate === undefined || entry.exchangeRate === null)) {
+      return NextResponse.json(
+        { error: `외화(${entryCurrency}) 분개에는 환율(exchangeRate)이 필요합니다.` },
+        { status: 400 },
+      )
+    }
+  }
+
   try {
+
     const transaction = await prisma.transaction.create({
       data: {
         userId: session.user.id,
@@ -263,11 +302,15 @@ export async function POST(request: NextRequest) {
             debitAccountId: string
             creditAccountId: string
             amount: string
+            currency?: string
+            exchangeRate?: string
             description?: string
           }) => ({
             debitAccountId: entry.debitAccountId,
             creditAccountId: entry.creditAccountId,
             amount: entry.amount,
+            currency: entry.currency ?? baseCurrency,
+            exchangeRate: entry.exchangeRate ?? '1',
             description: entry.description,
           })),
         },

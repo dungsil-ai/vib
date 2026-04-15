@@ -19,6 +19,7 @@ model User {
   email     String   @unique
   password  String
   name      String
+  currency  String   @default("KRW")
   createdAt DateTime @default(now())
   accounts  Account[]
   transactions Transaction[]
@@ -33,6 +34,7 @@ model Account {
   name      String
   code      String
   type      String
+  currency  String      @default("KRW")
   description String?
   createdAt DateTime    @default(now())
   debitEntries  Entry[] @relation("DebitAccount")
@@ -66,6 +68,8 @@ model Entry {
   creditAccountId String
   creditAccount   Account     @relation("CreditAccount", fields: [creditAccountId], references: [id])
   amount          Decimal
+  currency        String      @default("KRW")
+  exchangeRate    Decimal     @default(1)
   description     String?
   createdAt       DateTime    @default(now())
 

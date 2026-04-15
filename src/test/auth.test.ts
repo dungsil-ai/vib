@@ -68,6 +68,7 @@ describe('auth - authorize', () => {
     expect(result).toBeNull()
     expect(prisma.user.findUnique).toHaveBeenCalledWith({
       where: { email: 'unknown@example.com' },
+      select: { id: true, email: true, name: true, password: true },
     })
   })
 
@@ -77,8 +78,7 @@ describe('auth - authorize', () => {
       email: 'test@example.com',
       name: 'Test User',
       password: 'hashed_password',
-      createdAt: new Date(),
-    })
+    } as never)
     vi.mocked(bcrypt.compare).mockResolvedValue(false as never)
 
     const result = await credentialsAuthorize({
@@ -94,8 +94,7 @@ describe('auth - authorize', () => {
       email: 'test@example.com',
       name: '테스트',
       password: 'hashed_password',
-      createdAt: new Date(),
-    })
+    } as never)
     vi.mocked(bcrypt.compare).mockResolvedValue(true as never)
 
     const result = await credentialsAuthorize({
@@ -119,6 +118,7 @@ describe('auth - authorize', () => {
 
     expect(prisma.user.findUnique).toHaveBeenCalledWith({
       where: { email: 'test@example.com' },
+      select: { id: true, email: true, name: true, password: true },
     })
   })
 })

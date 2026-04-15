@@ -103,6 +103,7 @@ describe('ledger GET', () => {
     code: '1001',
     name: '현금',
     type: 'ASSET',
+    currency: 'KRW',
     userId: 'user-1',
     description: null,
     createdAt: new Date('2024-01-01T00:00:00.000Z'),
