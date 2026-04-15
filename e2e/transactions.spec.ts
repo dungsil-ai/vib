@@ -12,7 +12,7 @@ test.describe('거래 생성', () => {
     // 날짜 입력 (로컬 타임존 기준 YYYY-MM-DD)
     const d = new Date()
     const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-    await page.locator('input[type="date"]').fill(today)
+    await page.getByLabel('날짜').fill(today)
 
     // 고유 거래 설명 입력
     const description = `e2e 월급 수령 ${Date.now()}`

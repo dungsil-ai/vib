@@ -347,8 +347,9 @@ function TransactionsTab({ accounts, accountsLoading, accountsError }: Transacti
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">날짜</label>
+              <label htmlFor="tx-date" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">날짜</label>
               <input
+                id="tx-date"
                 type="date"
                 value={date}
                 onChange={e => setDate(e.target.value)}
@@ -357,8 +358,9 @@ function TransactionsTab({ accounts, accountsLoading, accountsError }: Transacti
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">거래 설명</label>
+              <label htmlFor="tx-description" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">거래 설명</label>
               <input
+                id="tx-description"
                 type="text"
                 value={txDescription}
                 onChange={e => setTxDescription(e.target.value)}
