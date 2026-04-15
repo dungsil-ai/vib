@@ -156,7 +156,7 @@ jobs:
         run: npx playwright install-deps chromium
 
       - name: Setup database
-        run: npx prisma migrate resolve --applied
+        run: npm run db:migrate
         env:
           DATABASE_URL: "postgresql://vib:vib@localhost:5432/vib_test"
 
