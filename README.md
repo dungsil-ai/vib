@@ -52,7 +52,8 @@ npm run dev
    | `DATABASE_URL` | Neon / Vercel Postgres 연결 문자열 |
    | `NEXTAUTH_SECRET` | `openssl rand -base64 32` 결과 |
    | `NEXTAUTH_URL` | 배포 후 생성된 Vercel URL (예: `https://vib.vercel.app`) |
-4. **Deploy** 버튼 클릭
+4. **Deploy** 버튼 클릭  
+   Vercel 빌드 과정에서 `prisma migrate deploy`가 자동 실행되어 프로덕션 DB 스키마가 최신 상태로 맞춰집니다.
 
 ### 방법 2 — GitHub Actions CI (자동 빌드·검증)
 
@@ -67,11 +68,11 @@ npm run dev
 | `NEXTAUTH_SECRET` | 프로덕션용 비밀 키 |
 | `NEXTAUTH_URL` | 배포된 앱 URL |
 
-### 첫 배포 후 DB 마이그레이션
+### DB 마이그레이션
 
 ```bash
-# 로컬에서 프로덕션 DB에 스키마 적용 (최초 1회)
-DATABASE_URL="<production-db-url>" npx prisma db push
+# 로컬에서 수동 적용이 필요할 때만 실행
+DATABASE_URL="<production-db-url>" npm run db:migrate
 ```
 
 ## 주요 기능
@@ -79,4 +80,3 @@ DATABASE_URL="<production-db-url>" npx prisma db push
 - **사용자 인증** — 이메일/비밀번호 회원가입·로그인
 - **복식부기 원장** — 계정 관리 (자산/부채/자본/수익/비용), 차변·대변 거래 입력
 - **예산 관리** — 월별 비용 예산 설정 및 실적 대비 현황
-
