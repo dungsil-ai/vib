@@ -53,7 +53,7 @@ npm run dev
    | `NEXTAUTH_SECRET` | `openssl rand -base64 32` 결과 |
    | `NEXTAUTH_URL` | 배포 후 생성된 Vercel URL (예: `https://vib.vercel.app`) |
 4. **Deploy** 버튼 클릭  
-   Vercel 빌드 과정에서 `prisma migrate deploy`가 자동 실행되어 프로덕션 DB 스키마가 최신 상태로 맞춰집니다.
+   Vercel 빌드 과정에서 `prisma migrate deploy`가 자동 실행되어 프로덕션 DB 스키마가 최신 상태로 맞춰집니다. 마이그레이션이 실패하면 빌드도 즉시 실패하므로, 잘못된 스키마 상태로 배포되지 않습니다.
 
 ### 방법 2 — GitHub Actions CI (자동 빌드·검증)
 
