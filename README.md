@@ -52,7 +52,14 @@ npm run dev
    | `DATABASE_URL` | Neon / Vercel Postgres 연결 문자열 |
    | `NEXTAUTH_SECRET` | `openssl rand -base64 32` 결과 |
    | `NEXTAUTH_URL` | 배포 후 생성된 Vercel URL (예: `https://vib.vercel.app`) |
+   - Vercel의 **Production** / **Preview** 환경 변수는 분리해서 관리하고, Preview에는 별도 개발용 DB의 `DATABASE_URL`을 연결하세요.
 4. **Deploy** 버튼 클릭
+   - Production 배포에서는 `prisma db push`가 자동 실행됩니다.
+   - 마이그레이션 이력이 없는 기존 프로덕션 DB도 현재 Prisma 스키마와 동기화됩니다.
+   - Preview 환경은 별도 DB를 사용해야 하며, 기본 빌드 명령에서는 `db push`를 실행하지 않습니다.
+   - 이 명령은 `--accept-data-loss` 없이 실행되므로 파괴적 변경이 감지되면 실패합니다.
+   - 이 경우 먼저 DB를 백업한 뒤, 마이그레이션 이력을 기준으로 정리해야 합니다.
+   - 스키마 반영에 실패하면 빌드도 즉시 실패하므로 잘못된 상태로 배포되지 않습니다.
 
 ### 방법 2 — GitHub Actions CI (자동 빌드·검증)
 
@@ -67,11 +74,17 @@ npm run dev
 | `NEXTAUTH_SECRET` | 프로덕션용 비밀 키 |
 | `NEXTAUTH_URL` | 배포된 앱 URL |
 
-### 첫 배포 후 DB 마이그레이션
+### DB 마이그레이션
 
 ```bash
-# 로컬에서 프로덕션 DB에 스키마 적용 (최초 1회)
-DATABASE_URL="<production-db-url>" npx prisma db push
+# 기존 운영 DB를 현재 Prisma 스키마와 맞출 때
+DATABASE_URL="<production-db-url>" npm run db:push
+
+# 주의: 컬럼 삭제/타입 변경 같은 파괴적 변경이 예정되어 있다면
+# 먼저 DB를 백업하고 마이그레이션 이력을 정리한 뒤 적용하세요.
+
+# 마이그레이션 이력이 준비된 DB(예: CI/E2E, 신규 환경)에는
+DATABASE_URL="<db-url>" npm run db:migrate
 ```
 
 ## 주요 기능
@@ -79,4 +92,3 @@ DATABASE_URL="<production-db-url>" npx prisma db push
 - **사용자 인증** — 이메일/비밀번호 회원가입·로그인
 - **복식부기 원장** — 계정 관리 (자산/부채/자본/수익/비용), 차변·대변 거래 입력
 - **예산 관리** — 월별 비용 예산 설정 및 실적 대비 현황
-
