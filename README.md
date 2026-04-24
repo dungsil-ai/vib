@@ -53,7 +53,7 @@ npm run dev
    | `NEXTAUTH_SECRET` | `openssl rand -base64 32` 결과 |
    | `NEXTAUTH_URL` | 배포 후 생성된 Vercel URL (예: `https://vib.vercel.app`) |
 4. **Deploy** 버튼 클릭  
-   Vercel 빌드 과정에서 `prisma db push`가 자동 실행되어, 마이그레이션 이력이 없는 기존 프로덕션 DB도 현재 Prisma 스키마와 동기화됩니다. 스키마 반영에 실패하면 빌드도 즉시 실패하므로, 잘못된 상태로 배포되지 않습니다.
+   Vercel 빌드 과정에서 `prisma db push`가 자동 실행되어, 마이그레이션 이력이 없는 기존 프로덕션 DB도 현재 Prisma 스키마와 동기화됩니다. 이 명령은 `--accept-data-loss` 없이 실행되므로 파괴적 변경이 감지되면 실패하고, 그 경우에는 먼저 DB를 백업한 뒤 마이그레이션 이력을 기준으로 정리해야 합니다. 스키마 반영에 실패하면 빌드도 즉시 실패하므로, 잘못된 상태로 배포되지 않습니다.
 
 ### 방법 2 — GitHub Actions CI (자동 빌드·검증)
 
@@ -73,6 +73,9 @@ npm run dev
 ```bash
 # 기존 운영 DB를 현재 Prisma 스키마와 맞출 때
 DATABASE_URL="<production-db-url>" npm run db:push
+
+# 주의: 컬럼 삭제/타입 변경 같은 파괴적 변경이 예정되어 있다면
+# 먼저 DB를 백업하고 마이그레이션 이력을 정리한 뒤 적용하세요.
 
 # 마이그레이션 이력이 준비된 DB(예: CI/E2E, 신규 환경)에는
 DATABASE_URL="<production-db-url>" npm run db:migrate
