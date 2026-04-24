@@ -52,6 +52,7 @@ npm run dev
    | `DATABASE_URL` | Neon / Vercel Postgres 연결 문자열 |
    | `NEXTAUTH_SECRET` | `openssl rand -base64 32` 결과 |
    | `NEXTAUTH_URL` | 배포 후 생성된 Vercel URL (예: `https://vib.vercel.app`) |
+   - Vercel의 **Production** / **Preview** 환경 변수는 분리해서 관리하고, Preview에는 별도 개발용 DB의 `DATABASE_URL`을 연결하세요.
 4. **Deploy** 버튼 클릭
    - Production 배포에서는 `prisma db push`가 자동 실행됩니다.
    - 마이그레이션 이력이 없는 기존 프로덕션 DB도 현재 Prisma 스키마와 동기화됩니다.
