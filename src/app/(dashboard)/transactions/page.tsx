@@ -113,6 +113,8 @@ const AccountBadgePicker = memo(function AccountBadgePicker({
 
 interface Entry {
   id: string
+  debitAccountId: string
+  creditAccountId: string
   amount: string
   currency: string
   exchangeRate: string
@@ -164,6 +166,7 @@ function TransactionsTab({ accounts, accountsLoading, accountsError }: Transacti
   const [txDescription, setTxDescription] = useState('')
   const [baseCurrency, setBaseCurrency] = useState('KRW')
   const [entries, setEntries] = useState<EntryForm[]>([defaultEntry('KRW')])
+  const [editingTransactionId, setEditingTransactionId] = useState<string | null>(null)
   const [formError, setFormError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -255,7 +258,28 @@ function TransactionsTab({ accounts, accountsLoading, accountsError }: Transacti
   }, [fetchTransactions])
 
 
+  const populateForm = (transaction: Transaction) => {
+    setEditingTransactionId(transaction.id)
+    setDate(new Date(transaction.date).toISOString().split('T')[0])
+    setTxDescription(transaction.description)
+    setEntries(
+      transaction.entries.length > 0
+        ? transaction.entries.map(entry => ({
+            id: entry.id,
+            debitAccountId: entry.debitAccountId,
+            creditAccountId: entry.creditAccountId,
+            amount: entry.amount,
+            currency: entry.currency ?? baseCurrency,
+            exchangeRate: entry.exchangeRate ?? '1',
+            description: entry.description ?? '',
+          }))
+        : [defaultEntry(baseCurrency)],
+    )
+    setFormError('')
+  }
+
   const resetForm = () => {
+    setEditingTransactionId(null)
     setFormError('')
     setDate(todayDate())
     setTxDescription('')
@@ -316,8 +340,9 @@ function TransactionsTab({ accounts, accountsLoading, accountsError }: Transacti
     }
 
     try {
-      const res = await fetch('/api/transactions', {
-        method: 'POST',
+      const isEditing = editingTransactionId !== null
+      const res = await fetch(isEditing ? `/api/transactions/${editingTransactionId}` : '/api/transactions', {
+        method: isEditing ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           date,
@@ -343,7 +368,7 @@ function TransactionsTab({ accounts, accountsLoading, accountsError }: Transacti
       setListLoading(true)
       fetchTransactions(listPage)
     } catch {
-      setFormError('거래 저장 중 오류가 발생했습니다.')
+      setFormError(editingTransactionId ? '거래 수정 중 오류가 발생했습니다.' : '거래 저장 중 오류가 발생했습니다.')
     } finally {
       setSubmitting(false)
     }
@@ -356,6 +381,9 @@ function TransactionsTab({ accounts, accountsLoading, accountsError }: Transacti
       setListError(null)
       const res = await fetch(`/api/transactions/${id}`, { method: 'DELETE' })
       if (!res.ok) throw new Error(`거래를 삭제하지 못했습니다. (${res.status})`)
+      if (editingTransactionId === id) {
+        resetForm()
+      }
       setListLoading(true)
       fetchTransactions(listPage)
     } catch (err) {
@@ -368,7 +396,16 @@ function TransactionsTab({ accounts, accountsLoading, accountsError }: Transacti
 
       {/* ── Add transaction form ── */}
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border dark:border-gray-700 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">거래 추가</h2>
+        <div className="flex flex-col gap-2 mb-4 md:flex-row md:items-center md:justify-between">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+            {editingTransactionId ? '거래 수정' : '거래 추가'}
+          </h2>
+          {editingTransactionId && (
+            <span className="text-sm text-blue-600 dark:text-blue-400">
+              기존 거래를 수정 중입니다.
+            </span>
+          )}
+        </div>
 
         {formError && (
           <div className="mb-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded text-sm">
@@ -571,14 +608,14 @@ function TransactionsTab({ accounts, accountsLoading, accountsError }: Transacti
               disabled={submitting}
               className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium disabled:opacity-50"
             >
-              {submitting ? '저장 중...' : '거래 저장'}
+              {submitting ? (editingTransactionId ? '수정 중...' : '저장 중...') : (editingTransactionId ? '거래 수정 저장' : '거래 저장')}
             </button>
             <button
               type="button"
               onClick={resetForm}
               className="px-6 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 text-sm font-medium"
             >
-              초기화
+              {editingTransactionId ? '수정 취소' : '초기화'}
             </button>
           </div>
         </form>
@@ -790,12 +827,20 @@ function TransactionsTab({ accounts, accountsLoading, accountsError }: Transacti
                             )}
                           </td>
                           <td className="px-4 py-3 text-center">
-                            <button
-                              onClick={(e) => { e.stopPropagation(); handleDelete(tx.id) }}
-                              className="text-xs text-red-600 hover:text-red-800"
-                            >
-                              삭제
-                            </button>
+                            <div className="flex items-center justify-center gap-2">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); populateForm(tx) }}
+                                className="text-xs text-blue-600 hover:text-blue-800"
+                              >
+                                수정
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleDelete(tx.id) }}
+                                className="text-xs text-red-600 hover:text-red-800"
+                              >
+                                삭제
+                              </button>
+                            </div>
                           </td>
                         </tr>
                         {isExpanded && tx.entries.length > 0 && (
