@@ -1,6 +1,6 @@
 'use client'
 
-import React, { memo, useCallback, useEffect, useMemo, useState } from 'react'
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { SUPPORTED_CURRENCIES, formatCurrency } from '@/lib/currencies'
 
 // ─── Shared types ──────────────────────────────────────────────────────────────
@@ -146,9 +146,10 @@ interface TransactionsTabProps {
   accounts: Account[]
   accountsLoading: boolean
   accountsError: string | null
+  baseCurrency: string
 }
 
-function TransactionsTab({ accounts, accountsLoading, accountsError }: TransactionsTabProps) {
+function TransactionsTab({ accounts, accountsLoading, accountsError, baseCurrency }: TransactionsTabProps) {
   // --- list state ---
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [listLoading, setListLoading] = useState(true)
@@ -175,7 +176,6 @@ function TransactionsTab({ accounts, accountsLoading, accountsError }: Transacti
   const [accountFilter, setAccountFilter] = useState('')
   const [date, setDate] = useState(todayDate())
   const [txDescription, setTxDescription] = useState('')
-  const [baseCurrency, setBaseCurrency] = useState('KRW')
   const [entries, setEntries] = useState<EntryForm[]>([defaultEntry('KRW')])
   const [formError, setFormError] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -192,6 +192,21 @@ function TransactionsTab({ accounts, accountsLoading, accountsError }: Transacti
       .catch(err => { console.error('템플릿 목록 로딩 오류:', err) })
     return () => { cancelled = true }
   }, [])
+
+  // baseCurrency prop이 변경될 때 기본 상태의 entries 통화 업데이트
+  const prevBaseCurrencyRef = useRef('KRW')
+  useEffect(() => {
+    if (baseCurrency !== prevBaseCurrencyRef.current) {
+      prevBaseCurrencyRef.current = baseCurrency
+      setEntries(prev => {
+        const isDefaultState = prev.length === 1
+          && !prev[0].debitAccountId
+          && !prev[0].creditAccountId
+          && !prev[0].amount
+        return isDefaultState ? [defaultEntry(baseCurrency)] : prev
+      })
+    }
+  }, [baseCurrency])
 
   const applyTemplate = (templateId: string) => {
     const tmpl = templates.find(t => t.id === templateId)
@@ -274,21 +289,6 @@ function TransactionsTab({ accounts, accountsLoading, accountsError }: Transacti
     }, 300)
     return () => clearTimeout(timer)
   }, [listKeyword])
-
-  // Fetch user's base currency on mount
-  useEffect(() => {
-    let cancelled = false
-    fetch('/api/settings')
-      .then(r => r.ok ? r.json() : { currency: 'KRW' })
-      .then(d => {
-        if (!cancelled && d.currency) {
-          setBaseCurrency(d.currency)
-          setEntries([defaultEntry(d.currency)])
-        }
-      })
-      .catch(() => {})
-    return () => { cancelled = true }
-  }, [])
 
   // Re-fetch when filters change (reset to page 1)
   useEffect(() => {
@@ -1882,7 +1882,16 @@ function TemplatesTab({ accounts, accountsLoading, accountsError, baseCurrency }
                       <React.Fragment key={t.id}>
                         <tr
                           className="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer"
+                          role="button"
+                          tabIndex={0}
+                          aria-expanded={isExpanded}
                           onClick={() => setExpandedId(isExpanded ? null : t.id)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault()
+                              setExpandedId(isExpanded ? null : t.id)
+                            }
+                          }}
                         >
                           <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">
                             {t.description}
@@ -2031,6 +2040,7 @@ export default function TransactionsPage() {
         accounts={accounts}
         accountsLoading={accountsLoading}
         accountsError={accountsError}
+        baseCurrency={baseCurrency}
       />
     </div>
   )

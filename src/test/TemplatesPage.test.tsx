@@ -79,7 +79,7 @@ function setupFetchMock(overrides: Partial<{
       } as Response
     }
     if (url === '/api/recurring-transactions' && method === 'GET') {
-      return { ok: true, json: () => Promise.resolve([]) } as Response
+      return overrides.recurring ?? { ok: true, json: () => Promise.resolve([]) } as Response
     }
     if (url === '/api/templates' && method === 'GET') {
       return overrides.templates ?? { ok: true, json: () => Promise.resolve(mockTemplates) } as Response
