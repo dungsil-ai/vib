@@ -4,13 +4,14 @@ import { useEffect, useState, useCallback } from 'react'
 
 // ─── 타입 정의 ─────────────────────────────────────────────────────────────────
 
-type Tab = 'trial-balance' | 'ledger' | 'income-statement' | 'balance-sheet'
+type Tab = 'trial-balance' | 'ledger' | 'income-statement' | 'balance-sheet' | 'monthly-report'
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'trial-balance', label: '시산표' },
   { id: 'ledger', label: '총계정원장' },
   { id: 'income-statement', label: '손익계산서' },
   { id: 'balance-sheet', label: '재무상태표' },
+  { id: 'monthly-report', label: '월별 리포트' },
 ]
 
 const ACCOUNT_TYPE_LABELS: Record<string, string> = {
@@ -619,6 +620,160 @@ function BalanceSheet() {
   )
 }
 
+// ─── 월별 리포트 ───────────────────────────────────────────────────────────────
+
+interface MonthSummary {
+  month: number
+  revenue: number
+  expense: number
+  netIncome: number
+  cashIn: number
+  cashOut: number
+  netCashFlow: number
+}
+
+interface MonthlySummaryData {
+  months: MonthSummary[]
+  totalRevenue: number
+  totalExpense: number
+  totalNetIncome: number
+  totalCashIn: number
+  totalCashOut: number
+  totalNetCashFlow: number
+}
+
+const MONTH_LABELS = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월']
+
+function MonthlyReport() {
+  const [data, setData] = useState<MonthlySummaryData | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [year, setYear] = useState(String(currentYear()))
+
+  const load = useCallback(async () => {
+    if (!year) {
+      setData(null)
+      setError('연도를 입력해주세요.')
+      setLoading(false)
+      return
+    }
+    setLoading(true)
+    setError(null)
+    try {
+      const params = new URLSearchParams({ year })
+      const res = await fetch(`/api/reports/monthly-summary?${params}`)
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? '월별 리포트를 불러오지 못했습니다.')
+      setData(json)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '월별 리포트를 불러오는 중 오류가 발생했습니다.')
+    } finally {
+      setLoading(false)
+    }
+  }, [year])
+
+  useEffect(() => { load() }, [load])
+
+  const numClass = (v: number) => v < 0 ? 'text-red-500' : v > 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-900 dark:text-gray-100'
+
+  return (
+    <div className="space-y-6">
+      {/* 연도 선택 */}
+      <div className="flex flex-wrap gap-3 items-end">
+        <div>
+          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">연도</label>
+          <input
+            type="number"
+            value={year}
+            onChange={e => setYear(e.target.value)}
+            min="2000"
+            max="2100"
+            className="w-24 px-3 py-2 border dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
+          />
+        </div>
+      </div>
+
+      {error && <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>}
+
+      {loading ? (
+        <div className="text-center py-8 text-gray-500 dark:text-gray-400">로딩 중...</div>
+      ) : data ? (
+        <div className="space-y-6">
+          {/* 월별 손익 */}
+          <div>
+            <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-3">월별 손익</h2>
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border dark:border-gray-700 overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 dark:bg-gray-700/50">
+                  <tr>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400">월</th>
+                    <th className="text-right px-4 py-3 font-medium text-gray-600 dark:text-gray-400">수익</th>
+                    <th className="text-right px-4 py-3 font-medium text-gray-600 dark:text-gray-400">비용</th>
+                    <th className="text-right px-4 py-3 font-medium text-gray-600 dark:text-gray-400">순손익</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y dark:divide-gray-700">
+                  {data.months.map(row => (
+                    <tr key={row.month} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                      <td className="px-4 py-3 text-gray-700 dark:text-gray-300 font-medium">{MONTH_LABELS[row.month - 1]}</td>
+                      <td className="px-4 py-3 text-right text-green-600 dark:text-green-400">{formatCurrency(row.revenue)}</td>
+                      <td className="px-4 py-3 text-right text-red-600 dark:text-red-400">{formatCurrency(row.expense)}</td>
+                      <td className={`px-4 py-3 text-right font-semibold ${numClass(row.netIncome)}`}>{formatCurrency(row.netIncome)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="bg-gray-50 dark:bg-gray-700/50 font-semibold border-t dark:border-gray-700">
+                  <tr>
+                    <td className="px-4 py-3 text-gray-900 dark:text-gray-100">연간 합계</td>
+                    <td className="px-4 py-3 text-right text-green-600 dark:text-green-400">{formatCurrency(data.totalRevenue)}</td>
+                    <td className="px-4 py-3 text-right text-red-600 dark:text-red-400">{formatCurrency(data.totalExpense)}</td>
+                    <td className={`px-4 py-3 text-right ${numClass(data.totalNetIncome)}`}>{formatCurrency(data.totalNetIncome)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+
+          {/* 월별 현금흐름 */}
+          <div>
+            <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-3">월별 현금흐름</h2>
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border dark:border-gray-700 overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 dark:bg-gray-700/50">
+                  <tr>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400">월</th>
+                    <th className="text-right px-4 py-3 font-medium text-gray-600 dark:text-gray-400">현금 유입</th>
+                    <th className="text-right px-4 py-3 font-medium text-gray-600 dark:text-gray-400">현금 유출</th>
+                    <th className="text-right px-4 py-3 font-medium text-gray-600 dark:text-gray-400">순현금흐름</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y dark:divide-gray-700">
+                  {data.months.map(row => (
+                    <tr key={row.month} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                      <td className="px-4 py-3 text-gray-700 dark:text-gray-300 font-medium">{MONTH_LABELS[row.month - 1]}</td>
+                      <td className="px-4 py-3 text-right text-green-600 dark:text-green-400">{formatCurrency(row.cashIn)}</td>
+                      <td className="px-4 py-3 text-right text-red-600 dark:text-red-400">{formatCurrency(row.cashOut)}</td>
+                      <td className={`px-4 py-3 text-right font-semibold ${numClass(row.netCashFlow)}`}>{formatCurrency(row.netCashFlow)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="bg-gray-50 dark:bg-gray-700/50 font-semibold border-t dark:border-gray-700">
+                  <tr>
+                    <td className="px-4 py-3 text-gray-900 dark:text-gray-100">연간 합계</td>
+                    <td className="px-4 py-3 text-right text-green-600 dark:text-green-400">{formatCurrency(data.totalCashIn)}</td>
+                    <td className="px-4 py-3 text-right text-red-600 dark:text-red-400">{formatCurrency(data.totalCashOut)}</td>
+                    <td className={`px-4 py-3 text-right ${numClass(data.totalNetCashFlow)}`}>{formatCurrency(data.totalNetCashFlow)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 // ─── 메인 페이지 ───────────────────────────────────────────────────────────────
 
 export default function ReportsPage() {
@@ -629,7 +784,7 @@ export default function ReportsPage() {
       <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">보고서</h1>
 
       {/* 탭 */}
-      <div className="flex border-b dark:border-gray-700">
+      <div className="flex flex-wrap border-b dark:border-gray-700">
         {TABS.map(tab => (
           <button
             key={tab.id}
@@ -650,6 +805,7 @@ export default function ReportsPage() {
       {activeTab === 'ledger' && <Ledger />}
       {activeTab === 'income-statement' && <IncomeStatement />}
       {activeTab === 'balance-sheet' && <BalanceSheet />}
+      {activeTab === 'monthly-report' && <MonthlyReport />}
     </div>
   )
 }
