@@ -1,6 +1,6 @@
 'use client'
 
-import React, { memo, useCallback, useEffect, useMemo, useState } from 'react'
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { SUPPORTED_CURRENCIES, formatCurrency } from '@/lib/currencies'
 
 // ─── Shared types ──────────────────────────────────────────────────────────────
@@ -190,6 +190,8 @@ function TransactionsTab({ accounts, accountsLoading, accountsError }: Transacti
   const [editingTransactionId, setEditingTransactionId] = useState<string | null>(null)
   const [formError, setFormError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const editingTransactionIdRef = useRef<string | null>(null)
+  const isFormPristineRef = useRef(true)
 
   const hasActiveFilter = accountFilter.trim().length > 0
   const filteredAccounts = useMemo(() => {
@@ -255,6 +257,26 @@ function TransactionsTab({ accounts, accountsLoading, accountsError }: Transacti
     return () => clearTimeout(timer)
   }, [listKeyword])
 
+  useEffect(() => {
+    editingTransactionIdRef.current = editingTransactionId
+  }, [editingTransactionId])
+
+  useEffect(() => {
+    const initialEntry = entries[0]
+    const hasInitialSingleEntry = entries.length === 1 && Boolean(initialEntry)
+    const isInitialEntryEmpty = hasInitialSingleEntry &&
+      !initialEntry.debitAccountId &&
+      !initialEntry.creditAccountId &&
+      !initialEntry.amount &&
+      !initialEntry.description &&
+      initialEntry.exchangeRate === '1'
+
+    isFormPristineRef.current = editingTransactionId === null &&
+      txDescription === '' &&
+      date === todayDate() &&
+      isInitialEntryEmpty
+  }, [date, editingTransactionId, entries, txDescription])
+
   // Fetch user's base currency on mount
   useEffect(() => {
     let cancelled = false
@@ -263,7 +285,9 @@ function TransactionsTab({ accounts, accountsLoading, accountsError }: Transacti
       .then(d => {
         if (!cancelled && d.currency) {
           setBaseCurrency(d.currency)
-          setEntries([defaultEntry(d.currency)])
+          if (!editingTransactionIdRef.current && isFormPristineRef.current) {
+            setEntries([defaultEntry(d.currency)])
+          }
         }
       })
       .catch(() => {})
@@ -280,6 +304,7 @@ function TransactionsTab({ accounts, accountsLoading, accountsError }: Transacti
 
 
   const populateForm = (transaction: Transaction) => {
+    editingTransactionIdRef.current = transaction.id
     setEditingTransactionId(transaction.id)
     setDate(new Date(transaction.date).toISOString().split('T')[0])
     setTxDescription(transaction.description)
@@ -300,6 +325,7 @@ function TransactionsTab({ accounts, accountsLoading, accountsError }: Transacti
   }
 
   const resetForm = () => {
+    editingTransactionIdRef.current = null
     setEditingTransactionId(null)
     setFormError('')
     setDate(todayDate())

@@ -65,6 +65,16 @@ const mockTransactions = [
   },
 ]
 
+function createDeferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
 function setupFetchMock(overrides: Partial<{
   accounts: Response
   transactions: Response
@@ -339,6 +349,50 @@ describe('TransactionsPage', () => {
     expect(screen.getByRole('button', { name: '수정 취소' })).toBeInTheDocument()
     expect(screen.getByPlaceholderText('거래 내용을 입력하세요')).not.toHaveValue('월급')
     expect(screen.getByPlaceholderText('0')).not.toHaveDisplayValue('3000000')
+  })
+
+  it('설정 응답이 늦어도 편집 중인 수정 폼 값은 유지된다', async () => {
+    const settingsDeferred = createDeferred<{ currency: string }>()
+    vi.mocked(global.fetch).mockImplementation(async (input, init) => {
+      const url = typeof input === 'string' ? input : (input as Request).url
+      const method = init?.method || 'GET'
+
+      if (url === '/api/settings' && method === 'GET') {
+        return {
+          ok: true,
+          json: () => settingsDeferred.promise,
+        } as Response
+      }
+      if (url === '/api/accounts' && method === 'GET') {
+        return { ok: true, json: () => Promise.resolve(mockAccounts) } as Response
+      }
+      if (url.startsWith('/api/transactions') && !url.includes('/api/transactions/') && method === 'GET') {
+        return {
+          ok: true,
+          json: () => Promise.resolve({ data: mockTransactions, total: mockTransactions.length, page: 1, pageSize: 20 }),
+        } as Response
+      }
+      return { ok: true, json: () => Promise.resolve({}) } as Response
+    })
+
+    const user = userEvent.setup()
+    render(<TransactionsPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('점심 식사')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByText('점심 식사').closest('tr')!)
+
+    expect(screen.getByPlaceholderText('거래 내용을 입력하세요')).toHaveValue('점심 식사')
+    expect(screen.getByPlaceholderText('0')).toHaveDisplayValue('15000')
+
+    settingsDeferred.resolve({ currency: 'USD' })
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('거래 내용을 입력하세요')).toHaveValue('점심 식사')
+      expect(screen.getByPlaceholderText('0')).toHaveDisplayValue('15000')
+    })
   })
 
   it('거래 행 확장 후 수정 저장 시 PUT API를 호출한다', async () => {

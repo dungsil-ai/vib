@@ -32,6 +32,7 @@ vi.mock('@/lib/serialize', () => ({
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { PUT } from '@/app/api/transactions/[id]/route'
+import { TRANSACTION_ENTRY_INCLUDE } from '@/app/api/transactions/shared'
 
 const mockSession = { user: { id: 'user-1', email: 'test@example.com', name: 'Test' } }
 
@@ -129,6 +130,7 @@ describe('transactions/[id] PUT', () => {
             ],
           }),
         }),
+        include: TRANSACTION_ENTRY_INCLUDE,
       }),
     )
   })
