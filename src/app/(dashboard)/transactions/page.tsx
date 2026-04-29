@@ -176,7 +176,7 @@ function TransactionsTab({ accounts, accountsLoading, accountsError, baseCurrenc
   const [accountFilter, setAccountFilter] = useState('')
   const [date, setDate] = useState(todayDate())
   const [txDescription, setTxDescription] = useState('')
-  const [entries, setEntries] = useState<EntryForm[]>([defaultEntry('KRW')])
+  const [entries, setEntries] = useState<EntryForm[]>(() => [defaultEntry(baseCurrency)])
   const [formError, setFormError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -194,7 +194,7 @@ function TransactionsTab({ accounts, accountsLoading, accountsError, baseCurrenc
   }, [])
 
   // baseCurrency prop이 변경될 때 기본 상태의 entries 통화 업데이트
-  const prevBaseCurrencyRef = useRef('KRW')
+  const prevBaseCurrencyRef = useRef(baseCurrency)
   useEffect(() => {
     if (baseCurrency !== prevBaseCurrencyRef.current) {
       prevBaseCurrencyRef.current = baseCurrency
