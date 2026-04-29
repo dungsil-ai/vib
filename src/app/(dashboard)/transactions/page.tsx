@@ -45,14 +45,15 @@ const todayDate = () => {
   return localDate.toISOString().split('T')[0]
 }
 
-const isEntryEmpty = (entry?: EntryForm) => {
+const isEntryEmpty = (entry?: EntryForm, baseCurrency = 'KRW') => {
   if (!entry) return true
 
   return !entry.debitAccountId &&
     !entry.creditAccountId &&
     !entry.amount &&
     !entry.description &&
-    entry.exchangeRate === '1'
+    entry.exchangeRate === '1' &&
+    entry.currency === baseCurrency
 }
 
 const isTransactionFormPristine = ({
