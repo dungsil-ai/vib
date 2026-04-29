@@ -775,6 +775,6 @@ describe('TransactionsPage', () => {
     await user.click(screen.getByRole('button', { name: '필터 초기화' }))
 
     expect(screen.getByLabelText('시작일')).toHaveValue('')
-    expect(screen.getByLabelText('최소 금액')).toHaveValue(null)
+    expect(screen.getByLabelText('최소 금액')).toHaveDisplayValue('')
   })
 })
