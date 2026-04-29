@@ -25,6 +25,7 @@ model User {
   transactions Transaction[]
   budgets   Budget[]
   recurringTransactions RecurringTransaction[]
+  transactionTemplates  TransactionTemplate[]
 }
 
 model Account {
@@ -42,6 +43,8 @@ model Account {
   budgets   Budget[]
   recurringDebitEntries  RecurringEntry[] @relation("RecurringDebitAccount")
   recurringCreditEntries RecurringEntry[] @relation("RecurringCreditAccount")
+  templateDebitEntries   TemplateEntry[]  @relation("TemplateDebitAccount")
+  templateCreditEntries  TemplateEntry[]  @relation("TemplateCreditAccount")
 
   @@unique([userId, code])
   @@index([userId, name, type])
@@ -125,4 +128,30 @@ model RecurringEntry {
   createdAt              DateTime             @default(now())
 
   @@index([recurringTransactionId])
+}
+
+model TransactionTemplate {
+  id          String          @id @default(cuid())
+  userId      String
+  user        User            @relation(fields: [userId], references: [id])
+  description String
+  entries     TemplateEntry[]
+  createdAt   DateTime        @default(now())
+
+  @@index([userId])
+}
+
+model TemplateEntry {
+  id              String              @id @default(cuid())
+  templateId      String
+  template        TransactionTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  debitAccountId  String
+  debitAccount    Account             @relation("TemplateDebitAccount", fields: [debitAccountId], references: [id])
+  creditAccountId String
+  creditAccount   Account             @relation("TemplateCreditAccount", fields: [creditAccountId], references: [id])
+  amount          Decimal
+  description     String?
+  createdAt       DateTime            @default(now())
+
+  @@index([templateId])
 }
