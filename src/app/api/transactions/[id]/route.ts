@@ -101,12 +101,12 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     })
   }
 
-  const accountIds = [
-      ...new Set([
+  const accountIds = Array.from(
+    new Set([
       ...normalizedEntries.map(entry => entry.debitAccountId),
       ...normalizedEntries.map(entry => entry.creditAccountId),
     ]),
-  ]
+  )
 
   const [ownedAccounts, userRecord] = await Promise.all([
     prisma.account.findMany({

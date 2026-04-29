@@ -424,7 +424,7 @@ function TransactionsTab({ accounts, accountsLoading, accountsError }: Transacti
             {editingTransactionId ? '거래 수정' : '거래 추가'}
           </h2>
           {editingTransactionId && (
-            <span className="text-sm text-blue-600 dark:text-blue-400">
+            <span role="status" aria-live="polite" className="text-sm text-blue-600 dark:text-blue-400">
               기존 거래를 수정 중입니다.
             </span>
           )}
