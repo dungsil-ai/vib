@@ -111,6 +111,19 @@ const AccountBadgePicker = memo(function AccountBadgePicker({
 
 // ─── Transactions tab ─────────────────────────────────────────────────────────
 
+interface TemplateSummaryEntry {
+  debitAccountId: string
+  creditAccountId: string
+  amount: string
+  description: string | null
+}
+
+interface TemplateSummary {
+  id: string
+  description: string
+  entries: TemplateSummaryEntry[]
+}
+
 interface Entry {
   id: string
   amount: string
@@ -168,7 +181,7 @@ function TransactionsTab({ accounts, accountsLoading, accountsError }: Transacti
   const [submitting, setSubmitting] = useState(false)
 
   // --- template state ---
-  const [templates, setTemplates] = useState<{ id: string; description: string; entries: { debitAccountId: string; creditAccountId: string; amount: string; description: string | null }[] }[]>([])
+  const [templates, setTemplates] = useState<TemplateSummary[]>([])
   const [showTemplates, setShowTemplates] = useState(false)
 
   useEffect(() => {
@@ -176,7 +189,7 @@ function TransactionsTab({ accounts, accountsLoading, accountsError }: Transacti
     fetch('/api/templates')
       .then(r => r.ok ? r.json() : [])
       .then(data => { if (!cancelled) setTemplates(data) })
-      .catch(() => {})
+      .catch(err => { console.error('템플릿 목록 로딩 오류:', err) })
     return () => { cancelled = true }
   }, [])
 

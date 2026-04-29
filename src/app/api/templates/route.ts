@@ -4,6 +4,13 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { serializeData } from '@/lib/serialize'
 
+interface TemplateEntryInput {
+  debitAccountId: string
+  creditAccountId: string
+  amount: string | number
+  description?: string
+}
+
 export async function GET(_request: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) {
@@ -53,8 +60,8 @@ export async function POST(request: NextRequest) {
 
   const accountIds = [
     ...new Set([
-      ...entries.map((e: { debitAccountId: string }) => e.debitAccountId),
-      ...entries.map((e: { creditAccountId: string }) => e.creditAccountId),
+      ...entries.map((e: TemplateEntryInput) => e.debitAccountId),
+      ...entries.map((e: TemplateEntryInput) => e.creditAccountId),
     ]),
   ]
   const ownedAccounts = await prisma.account.findMany({
@@ -71,12 +78,7 @@ export async function POST(request: NextRequest) {
         userId: session.user.id,
         description,
         entries: {
-          create: entries.map((entry: {
-            debitAccountId: string
-            creditAccountId: string
-            amount: string
-            description?: string
-          }) => ({
+          create: entries.map((entry: TemplateEntryInput) => ({
             debitAccountId: entry.debitAccountId,
             creditAccountId: entry.creditAccountId,
             amount: entry.amount,
