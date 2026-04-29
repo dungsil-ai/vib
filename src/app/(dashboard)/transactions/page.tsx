@@ -45,6 +45,32 @@ const todayDate = () => {
   return localDate.toISOString().split('T')[0]
 }
 
+const isEntryEmpty = (entry?: EntryForm) => {
+  if (!entry) return false
+
+  return !entry.debitAccountId &&
+    !entry.creditAccountId &&
+    !entry.amount &&
+    !entry.description &&
+    entry.exchangeRate === '1'
+}
+
+const isTransactionFormPristine = ({
+  date,
+  txDescription,
+  entries,
+  editingTransactionId,
+}: {
+  date: string
+  txDescription: string
+  entries: EntryForm[]
+  editingTransactionId: string | null
+}) => editingTransactionId === null &&
+  txDescription === '' &&
+  date === todayDate() &&
+  entries.length === 1 &&
+  isEntryEmpty(entries[0])
+
 const getAccountPickerEmptyStateMessage = ({
   accountsLoading,
   accountsError,
@@ -262,19 +288,12 @@ function TransactionsTab({ accounts, accountsLoading, accountsError }: Transacti
   }, [editingTransactionId])
 
   useEffect(() => {
-    const initialEntry = entries[0]
-    const hasInitialSingleEntry = entries.length === 1 && Boolean(initialEntry)
-    const isInitialEntryEmpty = hasInitialSingleEntry &&
-      !initialEntry.debitAccountId &&
-      !initialEntry.creditAccountId &&
-      !initialEntry.amount &&
-      !initialEntry.description &&
-      initialEntry.exchangeRate === '1'
-
-    isFormPristineRef.current = editingTransactionId === null &&
-      txDescription === '' &&
-      date === todayDate() &&
-      isInitialEntryEmpty
+    isFormPristineRef.current = isTransactionFormPristine({
+      date,
+      txDescription,
+      entries,
+      editingTransactionId,
+    })
   }, [date, editingTransactionId, entries, txDescription])
 
   // Fetch user's base currency on mount
