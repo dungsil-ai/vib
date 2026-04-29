@@ -331,6 +331,12 @@ describe('TransactionsPage', () => {
     expect(screen.getByText('거래 수정')).toBeInTheDocument()
     expect(screen.getByPlaceholderText('거래 내용을 입력하세요')).toHaveValue('점심 식사')
     expect(screen.getByPlaceholderText('0')).toHaveDisplayValue('15000')
+    expect(
+      within(screen.getByText('차변 (Debit)').closest('div') as HTMLElement).getByRole('button', { name: '501 식비' })
+    ).toHaveAttribute('aria-pressed', 'true')
+    expect(
+      within(screen.getByText('대변 (Credit)').closest('div') as HTMLElement).getByRole('button', { name: '101 현금' })
+    ).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('button', { name: '수정 취소' })).toBeInTheDocument()
   })
 
