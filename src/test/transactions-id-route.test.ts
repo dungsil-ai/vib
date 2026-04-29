@@ -50,14 +50,48 @@ describe('transactions/[id] PUT', () => {
     vi.mocked(prisma.transaction.findFirst).mockResolvedValue({
       id: 'tx-1',
       userId: 'user-1',
-    })
-    vi.mocked(prisma.account.findMany).mockResolvedValue([{ id: 'acc-1' }, { id: 'acc-2' }])
-    vi.mocked(prisma.user.findUnique).mockResolvedValue({ currency: 'KRW' })
+      description: '기존 거래',
+      date: new Date('2024-01-10T00:00:00.000Z'),
+      createdAt: new Date('2024-01-10T00:00:00.000Z'),
+    } as NonNullable<Awaited<ReturnType<typeof prisma.transaction.findFirst>>>)
+    vi.mocked(prisma.account.findMany).mockResolvedValue([
+      {
+        id: 'acc-1',
+        userId: 'user-1',
+        name: '현금',
+        code: '1001',
+        type: 'ASSET',
+        currency: 'KRW',
+        description: null,
+        createdAt: new Date('2024-01-01T00:00:00.000Z'),
+      },
+      {
+        id: 'acc-2',
+        userId: 'user-1',
+        name: '식비',
+        code: '5001',
+        type: 'EXPENSE',
+        currency: 'KRW',
+        description: null,
+        createdAt: new Date('2024-01-01T00:00:00.000Z'),
+      },
+    ] as Awaited<ReturnType<typeof prisma.account.findMany>>)
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      id: 'user-1',
+      email: 'test@example.com',
+      password: 'hashed',
+      name: 'Test',
+      currency: 'KRW',
+      createdAt: new Date('2024-01-01T00:00:00.000Z'),
+    } as NonNullable<Awaited<ReturnType<typeof prisma.user.findUnique>>>)
     vi.mocked(prisma.transaction.update).mockResolvedValue({
       id: 'tx-1',
+      userId: 'user-1',
       description: '수정된 거래',
+      date: new Date('2024-01-15T00:00:00.000Z'),
+      createdAt: new Date('2024-01-10T00:00:00.000Z'),
       entries: [],
-    })
+    } as Awaited<ReturnType<typeof prisma.transaction.update>>)
   })
 
   it('기존 거래를 수정하면서 분개 항목을 교체한다', async () => {
