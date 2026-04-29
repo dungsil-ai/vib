@@ -1946,13 +1946,12 @@ function TemplatesTab({ accounts, accountsLoading, accountsError }: TemplatesTab
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-type Tab = 'transactions' | 'recurring' | 'templates'
-
 export default function TransactionsPage() {
-  const [activeTab, setActiveTab] = useState<Tab>('transactions')
   const [accounts, setAccounts] = useState<Account[]>([])
   const [accountsLoading, setAccountsLoading] = useState(true)
   const [accountsError, setAccountsError] = useState<string | null>(null)
+  const [showRecurring, setShowRecurring] = useState(false)
+  const [showTemplates, setShowTemplates] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -1971,50 +1970,56 @@ export default function TransactionsPage() {
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">거래 내역</h1>
 
-      {/* ── Tab navigation ── */}
-      <div className="border-b dark:border-gray-700">
-        <nav className="-mb-px flex gap-6" aria-label="거래 탭">
-          {([
-            { id: 'transactions', label: '거래 내역' },
-            { id: 'recurring', label: '반복 거래' },
-            { id: 'templates', label: '템플릿' },
-          ] as { id: Tab; label: string }[]).map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={[
-                'pb-3 text-sm font-medium border-b-2 transition-colors',
-                activeTab === tab.id
-                  ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200',
-              ].join(' ')}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </nav>
+      {/* ── 반복 거래 섹션 ── */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border dark:border-gray-700">
+        <button
+          type="button"
+          onClick={() => setShowRecurring(prev => !prev)}
+          className="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded-xl transition-colors"
+          aria-expanded={showRecurring}
+        >
+          <span className="text-base font-semibold text-gray-900 dark:text-gray-100">반복 거래</span>
+          <span aria-hidden="true" className="text-gray-400 text-sm">{showRecurring ? '▲' : '▼'}</span>
+        </button>
+        {showRecurring && (
+          <div className="border-t dark:border-gray-700 p-6">
+            <RecurringTransactionsTab
+              accounts={accounts}
+              accountsLoading={accountsLoading}
+              accountsError={accountsError}
+            />
+          </div>
+        )}
       </div>
 
-      {/* ── Tab content ── */}
-      {activeTab === 'transactions' ? (
-        <TransactionsTab
-          accounts={accounts}
-          accountsLoading={accountsLoading}
-          accountsError={accountsError}
-        />
-      ) : activeTab === 'recurring' ? (
-        <RecurringTransactionsTab
-          accounts={accounts}
-          accountsLoading={accountsLoading}
-          accountsError={accountsError}
-        />
-      ) : (
-        <TemplatesTab
-          accounts={accounts}
-          accountsLoading={accountsLoading}
-          accountsError={accountsError}
-        />
-      )}
+      {/* ── 템플릿 섹션 ── */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border dark:border-gray-700">
+        <button
+          type="button"
+          onClick={() => setShowTemplates(prev => !prev)}
+          className="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded-xl transition-colors"
+          aria-expanded={showTemplates}
+        >
+          <span className="text-base font-semibold text-gray-900 dark:text-gray-100">템플릿</span>
+          <span aria-hidden="true" className="text-gray-400 text-sm">{showTemplates ? '▲' : '▼'}</span>
+        </button>
+        {showTemplates && (
+          <div className="border-t dark:border-gray-700 p-6">
+            <TemplatesTab
+              accounts={accounts}
+              accountsLoading={accountsLoading}
+              accountsError={accountsError}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* ── 거래 추가 + 거래 목록 ── */}
+      <TransactionsTab
+        accounts={accounts}
+        accountsLoading={accountsLoading}
+        accountsError={accountsError}
+      />
     </div>
   )
 }

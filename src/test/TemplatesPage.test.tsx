@@ -213,10 +213,11 @@ describe('TemplatesTab (템플릿 탭)', () => {
       expect(screen.getByText('템플릿 추가')).toBeInTheDocument()
     })
 
-    const debitSection = screen.getByText('차변 (Debit)').closest('div')!
+    const templateForm = screen.getByRole('button', { name: '템플릿 저장' }).closest('form') as HTMLElement
+    const debitSection = within(templateForm).getByText('차변 (Debit)').closest('div')!
     await user.click(await within(debitSection).findByRole('button', { name: '101 현금' }))
-    await user.type(screen.getByPlaceholderText('예: 월세, 통신비, 식비 지출'), '테스트')
-    await user.type(screen.getByPlaceholderText('0'), '100000')
+    await user.type(within(templateForm).getByPlaceholderText('예: 월세, 통신비, 식비 지출'), '테스트')
+    await user.type(within(templateForm).getByPlaceholderText('0'), '100000')
 
     await user.click(screen.getByRole('button', { name: '템플릿 저장' }))
 
@@ -236,14 +237,15 @@ describe('TemplatesTab (템플릿 탭)', () => {
       expect(screen.getByText('템플릿 추가')).toBeInTheDocument()
     })
 
-    const debitSection = screen.getByText('차변 (Debit)').closest('div')!
+    const templateForm = screen.getByRole('button', { name: '템플릿 저장' }).closest('form') as HTMLElement
+    const debitSection = within(templateForm).getByText('차변 (Debit)').closest('div')!
     await user.click(await within(debitSection).findByRole('button', { name: '101 현금' }))
 
-    const creditSection = screen.getByText('대변 (Credit)').closest('div')!
+    const creditSection = within(templateForm).getByText('대변 (Credit)').closest('div')!
     await user.click(await within(creditSection).findByRole('button', { name: '101 현금' }))
 
-    await user.type(screen.getByPlaceholderText('0'), '10000')
-    await user.type(screen.getByPlaceholderText('예: 월세, 통신비, 식비 지출'), '테스트')
+    await user.type(within(templateForm).getByPlaceholderText('0'), '10000')
+    await user.type(within(templateForm).getByPlaceholderText('예: 월세, 통신비, 식비 지출'), '테스트')
 
     await user.click(screen.getByRole('button', { name: '템플릿 저장' }))
 
@@ -263,8 +265,9 @@ describe('TemplatesTab (템플릿 탭)', () => {
       expect(screen.getByText('템플릿 추가')).toBeInTheDocument()
     })
 
-    const debitSection = screen.getByText('차변 (Debit)').closest('div')!
-    const creditSection = screen.getByText('대변 (Credit)').closest('div')!
+    const templateForm = screen.getByRole('button', { name: '템플릿 저장' }).closest('form') as HTMLElement
+    const debitSection = within(templateForm).getByText('차변 (Debit)').closest('div')!
+    const creditSection = within(templateForm).getByText('대변 (Credit)').closest('div')!
 
     await waitFor(() => {
       expect(within(debitSection).getByRole('button', { name: '501 식비' })).toBeInTheDocument()
@@ -273,8 +276,8 @@ describe('TemplatesTab (템플릿 탭)', () => {
 
     await user.click(within(debitSection).getByRole('button', { name: '501 식비' }))
     await user.click(within(creditSection).getByRole('button', { name: '101 현금' }))
-    await user.type(screen.getByPlaceholderText('0'), '100000')
-    await user.type(screen.getByPlaceholderText('예: 월세, 통신비, 식비 지출'), '식비')
+    await user.type(within(templateForm).getByPlaceholderText('0'), '100000')
+    await user.type(within(templateForm).getByPlaceholderText('예: 월세, 통신비, 식비 지출'), '식비')
 
     await user.click(screen.getByRole('button', { name: '템플릿 저장' }))
 
@@ -286,7 +289,7 @@ describe('TemplatesTab (템플릿 탭)', () => {
     })
 
     await waitFor(() => {
-      expect(screen.getByPlaceholderText('예: 월세, 통신비, 식비 지출')).toHaveValue('')
+      expect(within(templateForm).getByPlaceholderText('예: 월세, 통신비, 식비 지출')).toHaveValue('')
     })
   })
 
@@ -303,14 +306,15 @@ describe('TemplatesTab (템플릿 탭)', () => {
       expect(screen.getByText('템플릿 추가')).toBeInTheDocument()
     })
 
-    const debitSection = screen.getByText('차변 (Debit)').closest('div')!
+    const templateForm = screen.getByRole('button', { name: '템플릿 저장' }).closest('form') as HTMLElement
+    const debitSection = within(templateForm).getByText('차변 (Debit)').closest('div')!
     await user.click(await within(debitSection).findByRole('button', { name: '501 식비' }))
 
-    const creditSection = screen.getByText('대변 (Credit)').closest('div')!
+    const creditSection = within(templateForm).getByText('대변 (Credit)').closest('div')!
     await user.click(await within(creditSection).findByRole('button', { name: '101 현금' }))
 
-    await user.type(screen.getByPlaceholderText('0'), '100000')
-    await user.type(screen.getByPlaceholderText('예: 월세, 통신비, 식비 지출'), '식비')
+    await user.type(within(templateForm).getByPlaceholderText('0'), '100000')
+    await user.type(within(templateForm).getByPlaceholderText('예: 월세, 통신비, 식비 지출'), '식비')
 
     await user.click(screen.getByRole('button', { name: '템플릿 저장' }))
 
@@ -330,12 +334,13 @@ describe('TemplatesTab (템플릿 탭)', () => {
       expect(screen.getByText('템플릿 추가')).toBeInTheDocument()
     })
 
-    const descInput = screen.getByPlaceholderText('예: 월세, 통신비, 식비 지출')
+    const templateForm = screen.getByRole('button', { name: '템플릿 저장' }).closest('form') as HTMLElement
+    const descInput = within(templateForm).getByPlaceholderText('예: 월세, 통신비, 식비 지출')
     await user.type(descInput, '테스트')
 
-    await user.click(screen.getByRole('button', { name: '초기화' }))
+    await user.click(within(templateForm).getByRole('button', { name: '초기화' }))
 
-    expect(screen.getByPlaceholderText('예: 월세, 통신비, 식비 지출')).toHaveValue('')
+    expect(within(templateForm).getByPlaceholderText('예: 월세, 통신비, 식비 지출')).toHaveValue('')
   })
 
   it('템플릿 삭제가 동작한다', async () => {
