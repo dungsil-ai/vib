@@ -63,6 +63,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ error: '유효한 날짜를 입력해주세요.' }, { status: 400 })
   }
 
+  const normalizedEntries: TransactionEntryInput[] = []
+
   for (const entry of entries) {
     if (!entry.debitAccountId || !entry.creditAccountId || entry.amount == null) {
       return NextResponse.json({ error: '각 항목의 차변·대변 계정과 금액을 입력해주세요.' }, { status: 400 })
@@ -82,21 +84,27 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (!normalizedCurrency.ok) {
       return normalizedCurrency.response
     }
-    if (normalizedCurrency.currency) {
-      entry.currency = normalizedCurrency.currency
-    }
     if (entry.exchangeRate !== undefined) {
       const rate = Number(entry.exchangeRate)
       if (!Number.isFinite(rate) || rate <= 0) {
         return NextResponse.json({ error: '유효한 환율을 입력해주세요.' }, { status: 400 })
       }
     }
+
+    normalizedEntries.push({
+      debitAccountId: entry.debitAccountId,
+      creditAccountId: entry.creditAccountId,
+      amount: entry.amount,
+      currency: normalizedCurrency.currency,
+      exchangeRate: entry.exchangeRate,
+      description: entry.description,
+    })
   }
 
   const accountIds = [
-    ...new Set([
-      ...entries.map((entry: { debitAccountId: string }) => entry.debitAccountId),
-      ...entries.map((entry: { creditAccountId: string }) => entry.creditAccountId),
+      ...new Set([
+      ...normalizedEntries.map(entry => entry.debitAccountId),
+      ...normalizedEntries.map(entry => entry.creditAccountId),
     ]),
   ]
 
@@ -117,7 +125,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
   const baseCurrency = userRecord?.currency ?? 'KRW'
 
-  for (const entry of entries) {
+  for (const entry of normalizedEntries) {
     const entryCurrency: string = entry.currency ?? baseCurrency
     if (entryCurrency !== baseCurrency && (entry.exchangeRate === undefined || entry.exchangeRate === null)) {
       return NextResponse.json(
@@ -135,7 +143,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         description,
         entries: {
           deleteMany: {},
-          create: entries.map((entry: TransactionEntryInput) => ({
+          create: normalizedEntries.map(entry => ({
             debitAccountId: entry.debitAccountId,
             creditAccountId: entry.creditAccountId,
             amount: entry.amount,

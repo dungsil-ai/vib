@@ -56,6 +56,20 @@ const getAccountPickerEmptyStateMessage = ({
   return '등록된 계정이 없습니다.'
 }
 
+const getTransactionSubmitButtonLabel = ({
+  submitting,
+  editingTransactionId,
+}: {
+  submitting: boolean
+  editingTransactionId: string | null
+}) => {
+  if (submitting) {
+    return editingTransactionId ? '수정 중...' : '저장 중...'
+  }
+
+  return editingTransactionId ? '거래 수정 저장' : '거래 저장'
+}
+
 // ─── Shared component ─────────────────────────────────────────────────────────
 
 interface AccountBadgePickerProps {
@@ -327,9 +341,7 @@ function TransactionsTab({ accounts, accountsLoading, accountsError }: Transacti
     ? formTotalBase
     : (totalsByCurrency[firstEntryCurrency] || 0)
   const formTotalCurrency = hasMixedCurrencies ? baseCurrency : firstEntryCurrency
-  const submitButtonLabel = submitting
-    ? (editingTransactionId ? '수정 중...' : '저장 중...')
-    : (editingTransactionId ? '거래 수정 저장' : '거래 저장')
+  const submitButtonLabel = getTransactionSubmitButtonLabel({ submitting, editingTransactionId })
   const resetButtonLabel = editingTransactionId ? '수정 취소' : '초기화'
 
   const handleSubmit = async (e: React.FormEvent) => {
