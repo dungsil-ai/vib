@@ -651,4 +651,130 @@ describe('TransactionsPage', () => {
       expect(screen.getByText('2 / 3')).toBeInTheDocument()
     })
   })
+
+  it('시작일 필터 변경 시 쿼리 파라미터에 반영된다', async () => {
+    setupFetchMock()
+    const user = userEvent.setup()
+
+    render(<TransactionsPage />)
+
+    const startDateInput = await screen.findByLabelText('시작일')
+    await user.type(startDateInput, '2024-01-01')
+
+    await waitFor(() => {
+      const getCalls = vi.mocked(global.fetch).mock.calls.filter(([url, opts]) => {
+        const urlStr = typeof url === 'string' ? url : (url as Request).url
+        return urlStr.includes('startDate=2024-01-01') && (!opts || (opts as RequestInit).method === undefined)
+      })
+      expect(getCalls.length).toBeGreaterThanOrEqual(1)
+    })
+  })
+
+  it('종료일 필터 변경 시 쿼리 파라미터에 반영된다', async () => {
+    setupFetchMock()
+    const user = userEvent.setup()
+
+    render(<TransactionsPage />)
+
+    const endDateInput = await screen.findByLabelText('종료일')
+    await user.type(endDateInput, '2024-01-31')
+
+    await waitFor(() => {
+      const getCalls = vi.mocked(global.fetch).mock.calls.filter(([url, opts]) => {
+        const urlStr = typeof url === 'string' ? url : (url as Request).url
+        return urlStr.includes('endDate=2024-01-31') && (!opts || (opts as RequestInit).method === undefined)
+      })
+      expect(getCalls.length).toBeGreaterThanOrEqual(1)
+    })
+  })
+
+  it('최소 금액 필터 변경 시 쿼리 파라미터에 반영된다', async () => {
+    setupFetchMock()
+    const user = userEvent.setup()
+
+    render(<TransactionsPage />)
+
+    const minAmountInput = await screen.findByLabelText('최소 금액')
+    await user.type(minAmountInput, '1000')
+
+    await waitFor(() => {
+      const getCalls = vi.mocked(global.fetch).mock.calls.filter(([url, opts]) => {
+        const urlStr = typeof url === 'string' ? url : (url as Request).url
+        return urlStr.includes('minAmount=1000') && (!opts || (opts as RequestInit).method === undefined)
+      })
+      expect(getCalls.length).toBeGreaterThanOrEqual(1)
+    })
+  })
+
+  it('최대 금액 필터 변경 시 쿼리 파라미터에 반영된다', async () => {
+    setupFetchMock()
+    const user = userEvent.setup()
+
+    render(<TransactionsPage />)
+
+    const maxAmountInput = await screen.findByLabelText('최대 금액')
+    await user.type(maxAmountInput, '50000')
+
+    await waitFor(() => {
+      const getCalls = vi.mocked(global.fetch).mock.calls.filter(([url, opts]) => {
+        const urlStr = typeof url === 'string' ? url : (url as Request).url
+        return urlStr.includes('maxAmount=50000') && (!opts || (opts as RequestInit).method === undefined)
+      })
+      expect(getCalls.length).toBeGreaterThanOrEqual(1)
+    })
+  })
+
+  it('정렬 기준 변경 시 쿼리 파라미터에 반영된다', async () => {
+    setupFetchMock()
+    const user = userEvent.setup()
+
+    render(<TransactionsPage />)
+
+    const sortBySelect = await screen.findByLabelText('정렬 기준')
+    await user.selectOptions(sortBySelect, 'createdAt')
+
+    await waitFor(() => {
+      const getCalls = vi.mocked(global.fetch).mock.calls.filter(([url, opts]) => {
+        const urlStr = typeof url === 'string' ? url : (url as Request).url
+        return urlStr.includes('sortBy=createdAt') && (!opts || (opts as RequestInit).method === undefined)
+      })
+      expect(getCalls.length).toBeGreaterThanOrEqual(1)
+    })
+  })
+
+  it('정렬 방향 변경 시 쿼리 파라미터에 반영된다', async () => {
+    setupFetchMock()
+    const user = userEvent.setup()
+
+    render(<TransactionsPage />)
+
+    const sortOrderSelect = await screen.findByLabelText('정렬 방향')
+    await user.selectOptions(sortOrderSelect, 'asc')
+
+    await waitFor(() => {
+      const getCalls = vi.mocked(global.fetch).mock.calls.filter(([url, opts]) => {
+        const urlStr = typeof url === 'string' ? url : (url as Request).url
+        return urlStr.includes('sortOrder=asc') && (!opts || (opts as RequestInit).method === undefined)
+      })
+      expect(getCalls.length).toBeGreaterThanOrEqual(1)
+    })
+  })
+
+  it('필터 초기화 버튼이 날짜/금액 필터도 초기화한다', async () => {
+    setupFetchMock()
+    const user = userEvent.setup()
+
+    render(<TransactionsPage />)
+
+    const startDateInput = await screen.findByLabelText('시작일')
+    await user.type(startDateInput, '2024-01-01')
+
+    const minAmountInput = screen.getByLabelText('최소 금액')
+    await user.type(minAmountInput, '1000')
+
+    await user.click(screen.getByRole('button', { name: '필터 초기화' }))
+
+    expect(screen.getByLabelText('시작일')).toHaveValue('')
+    expect(screen.getByLabelText('최소 금액')).toHaveDisplayValue('')
+  })
 })
