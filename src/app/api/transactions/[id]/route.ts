@@ -5,6 +5,15 @@ import { prisma } from '@/lib/prisma'
 import { serializeData } from '@/lib/serialize'
 import { CURRENCY_CODES } from '@/lib/currencies'
 
+type TransactionEntryInput = {
+  debitAccountId: string
+  creditAccountId: string
+  amount: string
+  currency?: string
+  exchangeRate?: string
+  description?: string
+}
+
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) {
@@ -106,14 +115,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         description,
         entries: {
           deleteMany: {},
-          create: entries.map((entry: {
-            debitAccountId: string
-            creditAccountId: string
-            amount: string
-            currency?: string
-            exchangeRate?: string
-            description?: string
-          }) => ({
+          create: entries.map((entry: TransactionEntryInput) => ({
             debitAccountId: entry.debitAccountId,
             creditAccountId: entry.creditAccountId,
             amount: entry.amount,
