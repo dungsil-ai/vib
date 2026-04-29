@@ -46,7 +46,7 @@ const todayDate = () => {
 }
 
 const isEntryEmpty = (entry?: EntryForm) => {
-  if (!entry) return false
+  if (!entry) return true
 
   return !entry.debitAccountId &&
     !entry.creditAccountId &&
@@ -58,18 +58,20 @@ const isEntryEmpty = (entry?: EntryForm) => {
 const isTransactionFormPristine = ({
   date,
   txDescription,
-  entries,
+  entryCount,
+  isFirstEntryEmpty,
   editingTransactionId,
 }: {
   date: string
   txDescription: string
-  entries: EntryForm[]
+  entryCount: number
+  isFirstEntryEmpty: boolean
   editingTransactionId: string | null
 }) => editingTransactionId === null &&
   txDescription === '' &&
   date === todayDate() &&
-  entries.length === 1 &&
-  isEntryEmpty(entries[0])
+  entryCount === 1 &&
+  isFirstEntryEmpty
 
 const getAccountPickerEmptyStateMessage = ({
   accountsLoading,
@@ -287,14 +289,37 @@ function TransactionsTab({ accounts, accountsLoading, accountsError }: Transacti
     editingTransactionIdRef.current = editingTransactionId
   }, [editingTransactionId])
 
-  useEffect(() => {
-    isFormPristineRef.current = isTransactionFormPristine({
+  const firstEntry = entries[0]
+  const firstEntryDebitAccountId = firstEntry?.debitAccountId
+  const firstEntryCreditAccountId = firstEntry?.creditAccountId
+  const firstEntryAmount = firstEntry?.amount
+  const firstEntryDescription = firstEntry?.description
+  const firstEntryExchangeRate = firstEntry?.exchangeRate
+  const isFirstEntryEmpty = isEntryEmpty(firstEntry)
+  const isFormPristine = useMemo(() => (
+    isTransactionFormPristine({
       date,
       txDescription,
-      entries,
+      entryCount: entries.length,
+      isFirstEntryEmpty,
       editingTransactionId,
     })
-  }, [date, editingTransactionId, entries, txDescription])
+  ), [
+    date,
+    txDescription,
+    entries.length,
+    editingTransactionId,
+    isFirstEntryEmpty,
+    firstEntryDebitAccountId,
+    firstEntryCreditAccountId,
+    firstEntryAmount,
+    firstEntryDescription,
+    firstEntryExchangeRate,
+  ])
+
+  useEffect(() => {
+    isFormPristineRef.current = isFormPristine
+  }, [isFormPristine])
 
   // Fetch user's base currency on mount
   useEffect(() => {

@@ -24,7 +24,7 @@ function errorResponse(message: string, status = 400) {
   return NextResponse.json({ error: message }, { status })
 }
 
-function validateAndNormalizeCurrency(currency: unknown) {
+function normalizeCurrencyInternal(currency: unknown) {
   if (currency === undefined || currency === null) {
     return { ok: true as const }
   }
@@ -114,7 +114,7 @@ export async function validateTransactionPayload(userId: string, body: unknown) 
       }
     }
 
-    const normalizedCurrency = validateAndNormalizeCurrency(candidate.currency)
+    const normalizedCurrency = normalizeCurrencyInternal(candidate.currency)
     if (!normalizedCurrency.ok) {
       return normalizedCurrency
     }
