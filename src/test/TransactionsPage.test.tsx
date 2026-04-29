@@ -65,10 +65,21 @@ const mockTransactions = [
   },
 ]
 
+function createDeferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
 function setupFetchMock(overrides: Partial<{
   accounts: Response
   transactions: Response
   post: Response
+  put: Response
   delete: Response
 }> = {}) {
   vi.mocked(global.fetch).mockImplementation(async (input, init) => {
@@ -89,6 +100,9 @@ function setupFetchMock(overrides: Partial<{
     }
     if (url === '/api/transactions' && method === 'POST') {
       return overrides.post ?? { ok: true, json: () => Promise.resolve({ id: 'new-tx' }) } as Response
+    }
+    if (url.startsWith('/api/transactions/') && method === 'PUT') {
+      return overrides.put ?? { ok: true, json: () => Promise.resolve({ id: 'updated-tx' }) } as Response
     }
     if (url.startsWith('/api/transactions/') && method === 'DELETE') {
       return overrides.delete ?? { ok: true, json: () => Promise.resolve({}) } as Response
@@ -310,6 +324,143 @@ describe('TransactionsPage', () => {
     })
   })
 
+  it('거래 행 클릭 시 확장 영역에 수정 폼이 나타난다', async () => {
+    setupFetchMock()
+    const user = userEvent.setup()
+
+    render(<TransactionsPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('점심 식사')).toBeInTheDocument()
+    })
+
+    const row = screen.getByText('점심 식사').closest('tr')!
+    await user.click(row)
+
+    expect(screen.getByText('거래 수정')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('거래 내용을 입력하세요')).toHaveValue('점심 식사')
+    expect(screen.getByPlaceholderText('0')).toHaveDisplayValue('15000')
+    expect(
+      within(screen.getByText('차변 (Debit)').closest('div') as HTMLElement).getByRole('button', { name: '501 식비' })
+    ).toHaveAttribute('aria-pressed', 'true')
+    expect(
+      within(screen.getByText('대변 (Credit)').closest('div') as HTMLElement).getByRole('button', { name: '101 현금' })
+    ).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: '수정 취소' })).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('거래 내용을 입력하세요')).not.toHaveValue('월급')
+    expect(screen.getByPlaceholderText('0')).not.toHaveDisplayValue('3000000')
+  })
+
+  it('설정 응답이 늦어도 편집 중인 수정 폼 값은 유지된다', async () => {
+    const settingsDeferred = createDeferred<{ currency: string }>()
+    vi.mocked(global.fetch).mockImplementation(async (input, init) => {
+      const url = typeof input === 'string' ? input : (input as Request).url
+      const method = init?.method || 'GET'
+
+      if (url === '/api/settings' && method === 'GET') {
+        return {
+          ok: true,
+          json: () => settingsDeferred.promise,
+        } as Response
+      }
+      if (url === '/api/accounts' && method === 'GET') {
+        return { ok: true, json: () => Promise.resolve(mockAccounts) } as Response
+      }
+      if (url.startsWith('/api/transactions') && !url.includes('/api/transactions/') && method === 'GET') {
+        return {
+          ok: true,
+          json: () => Promise.resolve({ data: mockTransactions, total: mockTransactions.length, page: 1, pageSize: 20 }),
+        } as Response
+      }
+      return { ok: true, json: () => Promise.resolve({}) } as Response
+    })
+
+    const user = userEvent.setup()
+    render(<TransactionsPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('점심 식사')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByText('점심 식사').closest('tr')!)
+
+    expect(screen.getByPlaceholderText('거래 내용을 입력하세요')).toHaveValue('점심 식사')
+    expect(screen.getByPlaceholderText('0')).toHaveDisplayValue('15000')
+
+    settingsDeferred.resolve({ currency: 'USD' })
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('거래 내용을 입력하세요')).toHaveValue('점심 식사')
+      expect(screen.getByPlaceholderText('0')).toHaveDisplayValue('15000')
+    })
+  })
+
+  it('거래 행 확장 후 수정 저장 시 PUT API를 호출한다', async () => {
+    setupFetchMock()
+    const user = userEvent.setup()
+
+    render(<TransactionsPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('점심 식사')).toBeInTheDocument()
+    })
+
+    const row = screen.getByText('점심 식사').closest('tr')!
+    await user.click(row)
+
+    const descriptionInput = screen.getByPlaceholderText('거래 내용을 입력하세요')
+    await user.clear(descriptionInput)
+    await user.type(descriptionInput, '점심 식사 수정')
+
+    const amountInput = screen.getByPlaceholderText('0')
+    await user.clear(amountInput)
+    await user.type(amountInput, '20000')
+
+    await user.click(screen.getByRole('button', { name: '거래 수정 저장' }))
+
+    await waitFor(() => {
+      expect(vi.mocked(global.fetch)).toHaveBeenCalledWith(
+        '/api/transactions/tx-1',
+        expect.objectContaining({ method: 'PUT' }),
+      )
+    })
+
+    const putCall = vi.mocked(global.fetch).mock.calls.find(
+      ([url, opts]) => url === '/api/transactions/tx-1' && (opts as RequestInit | undefined)?.method === 'PUT',
+    )
+    expect(putCall).toBeDefined()
+    const body = JSON.parse(((putCall?.[1] as RequestInit).body as string))
+    expect(body).toMatchObject({
+      description: '점심 식사 수정',
+      entries: [
+        expect.objectContaining({
+          debitAccountId: 'acc-2',
+          creditAccountId: 'acc-1',
+          amount: '20000',
+        }),
+      ],
+    })
+  })
+
+  it('거래 수정 취소 시 상단 추가 폼으로 돌아간다', async () => {
+    setupFetchMock()
+    const user = userEvent.setup()
+
+    render(<TransactionsPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('점심 식사')).toBeInTheDocument()
+    })
+
+    const row = screen.getByText('점심 식사').closest('tr')!
+    await user.click(row)
+
+    await user.click(screen.getByRole('button', { name: '수정 취소' }))
+
+    expect(screen.getByText('거래 추가')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('거래 내용을 입력하세요')).toHaveValue('')
+  })
+
   it('거래 삭제를 실행한다', async () => {
     setupFetchMock()
     window.confirm = vi.fn(() => true)
@@ -352,7 +503,7 @@ describe('TransactionsPage', () => {
     expect(deleteCalls.length).toBe(0)
   })
 
-  it('거래 행 클릭 시 상세 항목을 펼친다', async () => {
+  it('거래 행 클릭 시 수정 폼을 펼치고 다시 클릭하면 닫는다', async () => {
     setupFetchMock()
     const user = userEvent.setup()
 
@@ -366,16 +517,16 @@ describe('TransactionsPage', () => {
     const row = screen.getByText('월급').closest('tr')!
     await user.click(row)
 
-    // 상세 항목이 표시됨
+    // 수정 폼이 표시됨
     await waitFor(() => {
-      expect(screen.getByText('1월 급여')).toBeInTheDocument()
-      expect(screen.getByText('보너스')).toBeInTheDocument()
+      expect(screen.getByText('거래 수정')).toBeInTheDocument()
     })
 
     // 다시 클릭하면 닫힘
     await user.click(row)
     await waitFor(() => {
-      expect(screen.queryByText('1월 급여')).not.toBeInTheDocument()
+      expect(screen.queryByText('거래 수정')).not.toBeInTheDocument()
+      expect(screen.getByText('거래 추가')).toBeInTheDocument()
     })
   })
 
