@@ -1557,9 +1557,10 @@ interface TemplatesTabProps {
   accounts: Account[]
   accountsLoading: boolean
   accountsError: string | null
+  baseCurrency: string
 }
 
-function TemplatesTab({ accounts, accountsLoading, accountsError }: TemplatesTabProps) {
+function TemplatesTab({ accounts, accountsLoading, accountsError, baseCurrency }: TemplatesTabProps) {
   const [templateList, setTemplateList] = useState<TransactionTemplate[]>([])
   const [listLoading, setListLoading] = useState(true)
   const [listError, setListError] = useState<string | null>(null)
@@ -1738,7 +1739,7 @@ function TemplatesTab({ accounts, accountsLoading, accountsError }: TemplatesTab
                   placeholder="코드나 이름으로 검색"
                 />
                 <span className="text-sm text-gray-700 dark:text-gray-200">
-                  총액: <span className="font-semibold text-blue-600 dark:text-blue-400">{formatCurrency(formTotal)}</span>
+                  총액: <span className="font-semibold text-blue-600 dark:text-blue-400">{formatCurrency(formTotal, baseCurrency)}</span>
                 </span>
               </div>
             </div>
@@ -1787,7 +1788,7 @@ function TemplatesTab({ accounts, accountsLoading, accountsError }: TemplatesTab
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">금액 (원)</label>
+                        <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">금액</label>
                         <input
                           type="number"
                           value={entry.amount}
@@ -1898,7 +1899,7 @@ function TemplatesTab({ accounts, accountsLoading, accountsError }: TemplatesTab
                             {t.entries.map(e => e.creditAccount.name).join(', ')}
                           </td>
                           <td className="px-4 py-3 text-right font-medium text-gray-900 dark:text-gray-100">
-                            {formatCurrency(total)}
+                            {formatCurrency(total, baseCurrency)}
                           </td>
                           <td className="px-4 py-3 text-center">
                             <button
@@ -1921,7 +1922,7 @@ function TemplatesTab({ accounts, accountsLoading, accountsError }: TemplatesTab
                                     <span className="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-2 py-0.5 rounded">
                                       대변: {entry.creditAccount.name}
                                     </span>
-                                    <span className="font-medium dark:text-gray-300">{formatCurrency(Number(entry.amount))}</span>
+                                    <span className="font-medium dark:text-gray-300">{formatCurrency(Number(entry.amount), baseCurrency)}</span>
                                     {entry.description && (
                                       <span className="text-gray-500 dark:text-gray-400">{entry.description}</span>
                                     )}
@@ -1950,6 +1951,7 @@ export default function TransactionsPage() {
   const [accounts, setAccounts] = useState<Account[]>([])
   const [accountsLoading, setAccountsLoading] = useState(true)
   const [accountsError, setAccountsError] = useState<string | null>(null)
+  const [baseCurrency, setBaseCurrency] = useState('KRW')
   const [showRecurring, setShowRecurring] = useState(false)
   const [showTemplates, setShowTemplates] = useState(false)
 
@@ -1963,6 +1965,15 @@ export default function TransactionsPage() {
       .then(data => { if (!cancelled) setAccounts(data) })
       .catch(err => { if (!cancelled) setAccountsError(err instanceof Error ? err.message : '계정 목록을 불러오는 중 오류가 발생했습니다.') })
       .finally(() => { if (!cancelled) setAccountsLoading(false) })
+    return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/settings')
+      .then(r => r.ok ? r.json() : { currency: 'KRW' })
+      .then(d => { if (!cancelled && d.currency) setBaseCurrency(d.currency) })
+      .catch(() => {})
     return () => { cancelled = true }
   }, [])
 
@@ -2009,6 +2020,7 @@ export default function TransactionsPage() {
               accounts={accounts}
               accountsLoading={accountsLoading}
               accountsError={accountsError}
+              baseCurrency={baseCurrency}
             />
           </div>
         )}
