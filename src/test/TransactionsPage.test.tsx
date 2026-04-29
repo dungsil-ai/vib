@@ -314,7 +314,7 @@ describe('TransactionsPage', () => {
     })
   })
 
-  it('거래 수정 버튼 클릭 시 기존 값이 폼에 채워진다', async () => {
+  it('거래 행 클릭 시 확장 영역에 수정 폼이 나타난다', async () => {
     setupFetchMock()
     const user = userEvent.setup()
 
@@ -324,9 +324,8 @@ describe('TransactionsPage', () => {
       expect(screen.getByText('점심 식사')).toBeInTheDocument()
     })
 
-    const table = screen.getByRole('table')
-    const editButtons = within(table).getAllByRole('button', { name: '수정' })
-    await user.click(editButtons[0])
+    const row = screen.getByText('점심 식사').closest('tr')!
+    await user.click(row)
 
     expect(screen.getByText('거래 수정')).toBeInTheDocument()
     expect(screen.getByPlaceholderText('거래 내용을 입력하세요')).toHaveValue('점심 식사')
@@ -338,9 +337,11 @@ describe('TransactionsPage', () => {
       within(screen.getByText('대변 (Credit)').closest('div') as HTMLElement).getByRole('button', { name: '101 현금' })
     ).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('button', { name: '수정 취소' })).toBeInTheDocument()
+    expect(screen.queryByText('1월 급여')).not.toBeInTheDocument()
+    expect(screen.queryByText('보너스')).not.toBeInTheDocument()
   })
 
-  it('거래 수정 후 PUT API를 호출한다', async () => {
+  it('거래 행 확장 후 수정 저장 시 PUT API를 호출한다', async () => {
     setupFetchMock()
     const user = userEvent.setup()
 
@@ -350,9 +351,8 @@ describe('TransactionsPage', () => {
       expect(screen.getByText('점심 식사')).toBeInTheDocument()
     })
 
-    const table = screen.getByRole('table')
-    const editButtons = within(table).getAllByRole('button', { name: '수정' })
-    await user.click(editButtons[0])
+    const row = screen.getByText('점심 식사').closest('tr')!
+    await user.click(row)
 
     const descriptionInput = screen.getByPlaceholderText('거래 내용을 입력하세요')
     await user.clear(descriptionInput)
@@ -388,7 +388,7 @@ describe('TransactionsPage', () => {
     })
   })
 
-  it('거래 수정 취소 시 추가 모드로 돌아간다', async () => {
+  it('거래 수정 취소 시 상단 추가 폼으로 돌아간다', async () => {
     setupFetchMock()
     const user = userEvent.setup()
 
@@ -398,9 +398,8 @@ describe('TransactionsPage', () => {
       expect(screen.getByText('점심 식사')).toBeInTheDocument()
     })
 
-    const table = screen.getByRole('table')
-    const editButtons = within(table).getAllByRole('button', { name: '수정' })
-    await user.click(editButtons[0])
+    const row = screen.getByText('점심 식사').closest('tr')!
+    await user.click(row)
 
     await user.click(screen.getByRole('button', { name: '수정 취소' }))
 
@@ -450,7 +449,7 @@ describe('TransactionsPage', () => {
     expect(deleteCalls.length).toBe(0)
   })
 
-  it('거래 행 클릭 시 상세 항목을 펼친다', async () => {
+  it('거래 행 클릭 시 수정 폼을 펼치고 다시 클릭하면 닫는다', async () => {
     setupFetchMock()
     const user = userEvent.setup()
 
@@ -464,16 +463,16 @@ describe('TransactionsPage', () => {
     const row = screen.getByText('월급').closest('tr')!
     await user.click(row)
 
-    // 상세 항목이 표시됨
+    // 수정 폼이 표시됨
     await waitFor(() => {
-      expect(screen.getByText('1월 급여')).toBeInTheDocument()
-      expect(screen.getByText('보너스')).toBeInTheDocument()
+      expect(screen.getByText('거래 수정')).toBeInTheDocument()
     })
 
     // 다시 클릭하면 닫힘
     await user.click(row)
     await waitFor(() => {
-      expect(screen.queryByText('1월 급여')).not.toBeInTheDocument()
+      expect(screen.queryByText('거래 수정')).not.toBeInTheDocument()
+      expect(screen.getByText('거래 추가')).toBeInTheDocument()
     })
   })
 
