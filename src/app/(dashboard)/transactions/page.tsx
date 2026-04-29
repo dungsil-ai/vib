@@ -45,6 +45,17 @@ const todayDate = () => {
   return localDate.toISOString().split('T')[0]
 }
 
+const getAccountPickerEmptyStateMessage = ({
+  accountsLoading,
+  accountsError,
+  hasActiveFilter,
+}: Pick<AccountBadgePickerProps, 'accountsLoading' | 'accountsError' | 'hasActiveFilter'>) => {
+  if (accountsLoading) return '계정 목록 로딩 중...'
+  if (accountsError) return '계정 목록을 불러오지 못했습니다.'
+  if (hasActiveFilter) return '검색 결과가 없습니다.'
+  return '등록된 계정이 없습니다.'
+}
+
 // ─── Shared component ─────────────────────────────────────────────────────────
 
 interface AccountBadgePickerProps {
@@ -72,14 +83,7 @@ const AccountBadgePicker = memo(function AccountBadgePicker({
   activeClassName,
   inactiveClassName,
 }: AccountBadgePickerProps) {
-  let emptyStateMessage = '등록된 계정이 없습니다.'
-  if (accountsLoading) {
-    emptyStateMessage = '계정 목록 로딩 중...'
-  } else if (accountsError) {
-    emptyStateMessage = '계정 목록을 불러오지 못했습니다.'
-  } else if (hasActiveFilter) {
-    emptyStateMessage = '검색 결과가 없습니다.'
-  }
+  const emptyStateMessage = getAccountPickerEmptyStateMessage({ accountsLoading, accountsError, hasActiveFilter })
 
   return (
     <div>
@@ -323,6 +327,10 @@ function TransactionsTab({ accounts, accountsLoading, accountsError }: Transacti
     ? formTotalBase
     : (totalsByCurrency[firstEntryCurrency] || 0)
   const formTotalCurrency = hasMixedCurrencies ? baseCurrency : firstEntryCurrency
+  const submitButtonLabel = submitting
+    ? (editingTransactionId ? '수정 중...' : '저장 중...')
+    : (editingTransactionId ? '거래 수정 저장' : '거래 저장')
+  const resetButtonLabel = editingTransactionId ? '수정 취소' : '초기화'
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -611,14 +619,14 @@ function TransactionsTab({ accounts, accountsLoading, accountsError }: Transacti
               disabled={submitting}
               className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium disabled:opacity-50"
             >
-              {submitting ? (editingTransactionId ? '수정 중...' : '저장 중...') : (editingTransactionId ? '거래 수정 저장' : '거래 저장')}
+              {submitButtonLabel}
             </button>
             <button
               type="button"
               onClick={resetForm}
               className="px-6 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 text-sm font-medium"
             >
-              {editingTransactionId ? '수정 취소' : '초기화'}
+              {resetButtonLabel}
             </button>
           </div>
         </form>

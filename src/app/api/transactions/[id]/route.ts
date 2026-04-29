@@ -14,6 +14,29 @@ type TransactionEntryInput = {
   description?: string
 }
 
+function validateAndNormalizeCurrency(currency: unknown) {
+  if (currency === undefined || currency === null) {
+    return { ok: true as const }
+  }
+
+  if (typeof currency !== 'string') {
+    return {
+      ok: false as const,
+      response: NextResponse.json({ error: '통화 코드는 문자열이어야 합니다.' }, { status: 400 }),
+    }
+  }
+
+  const normalizedCurrency = currency.trim().toUpperCase()
+  if (!normalizedCurrency || !CURRENCY_CODES.includes(normalizedCurrency)) {
+    return {
+      ok: false as const,
+      response: NextResponse.json({ error: '지원하지 않는 통화 코드입니다.' }, { status: 400 }),
+    }
+  }
+
+  return { ok: true as const, currency: normalizedCurrency }
+}
+
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) {
@@ -55,15 +78,12 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (entry.debitAccountId === entry.creditAccountId) {
       return NextResponse.json({ error: '차변 계정과 대변 계정은 달라야 합니다.' }, { status: 400 })
     }
-    if (entry.currency !== undefined && entry.currency !== null) {
-      if (typeof entry.currency !== 'string') {
-        return NextResponse.json({ error: '통화 코드는 문자열이어야 합니다.' }, { status: 400 })
-      }
-      const normalizedCurrency = entry.currency.trim().toUpperCase()
-      if (!normalizedCurrency || !CURRENCY_CODES.includes(normalizedCurrency)) {
-        return NextResponse.json({ error: '지원하지 않는 통화 코드입니다.' }, { status: 400 })
-      }
-      entry.currency = normalizedCurrency
+    const normalizedCurrency = validateAndNormalizeCurrency(entry.currency)
+    if (!normalizedCurrency.ok) {
+      return normalizedCurrency.response
+    }
+    if (normalizedCurrency.currency) {
+      entry.currency = normalizedCurrency.currency
     }
     if (entry.exchangeRate !== undefined) {
       const rate = Number(entry.exchangeRate)
@@ -137,7 +157,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     return NextResponse.json(serializeData(transaction))
   } catch (error) {
-    console.error(error)
+    console.error('Failed to update transaction', { transactionId: id, userId: session.user.id, error })
     return NextResponse.json({ error: '거래 수정에 실패했습니다.' }, { status: 400 })
   }
 }
