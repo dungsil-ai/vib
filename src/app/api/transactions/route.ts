@@ -3,16 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { serializeData } from '@/lib/serialize'
-import { CURRENCY_CODES } from '@/lib/currencies'
-
-const ENTRY_INCLUDE = {
-  entries: {
-    include: {
-      debitAccount: { select: { name: true, code: true, type: true } },
-      creditAccount: { select: { name: true, code: true, type: true } },
-    },
-  },
-} as const
+import { TRANSACTION_ENTRY_INCLUDE, validateTransactionPayload } from './shared'
 
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -154,11 +145,11 @@ export async function GET(request: NextRequest) {
   // ── Legacy mode: year+month returns flat array for backward compatibility ──
   const hasLegacyYearMonth = Boolean(yearParam?.trim()) && Boolean(monthParam?.trim())
   if (hasLegacyYearMonth) {
-    const transactions = await prisma.transaction.findMany({
-      where,
-      orderBy,
-      include: ENTRY_INCLUDE,
-    })
+      const transactions = await prisma.transaction.findMany({
+        where,
+        orderBy,
+        include: TRANSACTION_ENTRY_INCLUDE,
+      })
     return NextResponse.json(serializeData(transactions))
   }
 
@@ -191,7 +182,7 @@ export async function GET(request: NextRequest) {
       orderBy,
       skip,
       take: pageSize,
-      include: ENTRY_INCLUDE,
+      include: TRANSACTION_ENTRY_INCLUDE,
     }),
   ])
 
@@ -209,103 +200,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
   }
 
-  const { date, description, entries } = await request.json()
-
-  if (!date || !description || !entries || !Array.isArray(entries) || entries.length === 0) {
-    return NextResponse.json({ error: '필수 필드를 입력해주세요.' }, { status: 400 })
+  const validatedPayload = await validateTransactionPayload(session.user.id, await request.json())
+  if (!validatedPayload.ok) {
+    return validatedPayload.response
   }
 
-  // Validate date
-  const parsedDate = new Date(date)
-  if (Number.isNaN(parsedDate.getTime())) {
-    return NextResponse.json({ error: '유효한 날짜를 입력해주세요.' }, { status: 400 })
-  }
-
-  // Per-entry validations
-  for (const entry of entries) {
-    if (!entry.debitAccountId || !entry.creditAccountId || entry.amount == null) {
-      return NextResponse.json({ error: '각 항목의 차변·대변 계정과 금액을 입력해주세요.' }, { status: 400 })
-    }
-    const amount = Number(entry.amount)
-    if (!Number.isFinite(amount)) {
-      return NextResponse.json({ error: '유효한 거래 금액을 입력해주세요.' }, { status: 400 })
-    }
-    if (amount <= 0) {
-      return NextResponse.json({ error: '거래 금액은 0보다 커야 합니다.' }, { status: 400 })
-    }
-    if (entry.debitAccountId === entry.creditAccountId) {
-      return NextResponse.json({ error: '차변 계정과 대변 계정은 달라야 합니다.' }, { status: 400 })
-    }
-    // Validate entry currency if provided
-    if (entry.currency !== undefined && entry.currency !== null) {
-      if (typeof entry.currency !== 'string') {
-        return NextResponse.json({ error: '통화 코드는 문자열이어야 합니다.' }, { status: 400 })
-      }
-      const normalizedCurrency = entry.currency.trim().toUpperCase()
-      if (!normalizedCurrency || !CURRENCY_CODES.includes(normalizedCurrency)) {
-        return NextResponse.json({ error: '지원하지 않는 통화 코드입니다.' }, { status: 400 })
-      }
-      entry.currency = normalizedCurrency
-    }
-    // Validate exchangeRate if provided; require it when currency differs from base
-    if (entry.exchangeRate !== undefined) {
-      const rate = Number(entry.exchangeRate)
-      if (!Number.isFinite(rate) || rate <= 0) {
-        return NextResponse.json({ error: '유효한 환율을 입력해주세요.' }, { status: 400 })
-      }
-    }
-  }
-
-  // Verify that all referenced accounts belong to the authenticated user
-  const accountIds = [
-    ...new Set([
-      ...entries.map((e: { debitAccountId: string }) => e.debitAccountId),
-      ...entries.map((e: { creditAccountId: string }) => e.creditAccountId),
-    ]),
-  ]
-  const [ownedAccounts, userRecord] = await Promise.all([
-    prisma.account.findMany({
-      where: { id: { in: accountIds }, userId: session.user.id },
-      select: { id: true },
-    }),
-    prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { currency: true },
-    }),
-  ])
-  if (ownedAccounts.length !== accountIds.length) {
-    return NextResponse.json({ error: '잘못된 계정이 포함되어 있습니다.' }, { status: 403 })
-  }
-
-  const baseCurrency = userRecord?.currency ?? 'KRW'
-
-  // Validate currency and exchangeRate for each entry (requires baseCurrency)
-  for (const entry of entries) {
-    const entryCurrency: string = entry.currency ?? baseCurrency
-    if (entryCurrency !== baseCurrency && (entry.exchangeRate === undefined || entry.exchangeRate === null)) {
-      return NextResponse.json(
-        { error: `외화(${entryCurrency}) 분개에는 환율(exchangeRate)이 필요합니다.` },
-        { status: 400 },
-      )
-    }
-  }
+  const { parsedDate, description, normalizedEntries, baseCurrency } = validatedPayload.value
 
   try {
-
     const transaction = await prisma.transaction.create({
       data: {
         userId: session.user.id,
         date: parsedDate,
         description,
         entries: {
-          create: entries.map((entry: {
-            debitAccountId: string
-            creditAccountId: string
-            amount: string
-            currency?: string
-            exchangeRate?: string
-            description?: string
-          }) => ({
+          create: normalizedEntries.map(entry => ({
             debitAccountId: entry.debitAccountId,
             creditAccountId: entry.creditAccountId,
             amount: entry.amount,
@@ -315,14 +224,7 @@ export async function POST(request: NextRequest) {
           })),
         },
       },
-      include: {
-        entries: {
-          include: {
-            debitAccount: { select: { name: true, code: true } },
-            creditAccount: { select: { name: true, code: true } },
-          },
-        },
-      },
+      include: TRANSACTION_ENTRY_INCLUDE,
     })
     return NextResponse.json(serializeData(transaction), { status: 201 })
   } catch (error) {
@@ -330,4 +232,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: '거래 생성에 실패했습니다.' }, { status: 400 })
   }
 }
-
