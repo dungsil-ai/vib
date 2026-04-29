@@ -154,4 +154,26 @@ describe('transactions/[id] PUT', () => {
     expect(body.error).toContain('환율')
     expect(prisma.transaction.update).not.toHaveBeenCalled()
   })
+
+  it('유효하지 않은 통화 코드면 400을 반환한다', async () => {
+    const req = makePutRequest({
+      date: '2024-01-15',
+      description: '잘못된 통화 거래',
+      entries: [
+        {
+          debitAccountId: 'acc-1',
+          creditAccountId: 'acc-2',
+          amount: '10',
+          currency: '   ',
+        },
+      ],
+    })
+
+    const res = await PUT(req, { params: Promise.resolve({ id: 'tx-1' }) })
+    const body = await res.json()
+
+    expect(res.status).toBe(400)
+    expect(body.error).toContain('통화')
+    expect(prisma.transaction.update).not.toHaveBeenCalled()
+  })
 })
