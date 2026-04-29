@@ -1973,7 +1973,7 @@ export default function TransactionsPage() {
     fetch('/api/settings')
       .then(r => r.ok ? r.json() : { currency: 'KRW' })
       .then(d => { if (!cancelled && d.currency) setBaseCurrency(d.currency) })
-      .catch(() => {})
+      .catch(err => { console.error('기본 통화 설정 로딩 오류:', err) })
     return () => { cancelled = true }
   }, [])
 
