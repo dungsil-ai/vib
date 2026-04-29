@@ -337,8 +337,8 @@ describe('TransactionsPage', () => {
       within(screen.getByText('대변 (Credit)').closest('div') as HTMLElement).getByRole('button', { name: '101 현금' })
     ).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('button', { name: '수정 취소' })).toBeInTheDocument()
-    expect(screen.queryByText('1월 급여')).not.toBeInTheDocument()
-    expect(screen.queryByText('보너스')).not.toBeInTheDocument()
+    expect(screen.getByPlaceholderText('거래 내용을 입력하세요')).not.toHaveValue('월급')
+    expect(screen.getByPlaceholderText('0')).not.toHaveDisplayValue('3000000')
   })
 
   it('거래 행 확장 후 수정 저장 시 PUT API를 호출한다', async () => {
