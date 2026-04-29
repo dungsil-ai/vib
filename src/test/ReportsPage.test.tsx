@@ -57,6 +57,24 @@ const mockLedgerData = {
   ],
 }
 
+const mockMonthlySummary = {
+  months: Array.from({ length: 12 }, (_, i) => ({
+    month: i + 1,
+    revenue: i === 0 ? 500000 : 0,
+    expense: i === 0 ? 100000 : 0,
+    netIncome: i === 0 ? 400000 : 0,
+    cashIn: i === 0 ? 600000 : 0,
+    cashOut: i === 0 ? 200000 : 0,
+    netCashFlow: i === 0 ? 400000 : 0,
+  })),
+  totalRevenue: 500000,
+  totalExpense: 100000,
+  totalNetIncome: 400000,
+  totalCashIn: 600000,
+  totalCashOut: 200000,
+  totalNetCashFlow: 400000,
+}
+
 // ─── fetch 모킹 헬퍼 ─────────────────────────────────────────────────────────
 
 function mockFetch(handler: (url: string) => unknown) {
@@ -80,6 +98,7 @@ describe('ReportsPage', () => {
       if (url.includes('/api/reports/balance-sheet')) return mockBalanceSheet
       if (url.includes('/api/accounts')) return mockAccounts
       if (url.includes('/api/reports/ledger')) return mockLedgerData
+      if (url.includes('/api/reports/monthly-summary')) return mockMonthlySummary
       return {}
     })
   })
@@ -89,12 +108,13 @@ describe('ReportsPage', () => {
     expect(screen.getByText('보고서')).toBeInTheDocument()
   })
 
-  it('4개의 탭을 렌더링한다', () => {
+  it('5개의 탭을 렌더링한다', () => {
     render(<ReportsPage />)
     expect(screen.getByRole('button', { name: '시산표' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '총계정원장' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '손익계산서' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '재무상태표' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '월별 리포트' })).toBeInTheDocument()
   })
 
   it('기본 탭은 시산표이다', () => {
@@ -284,6 +304,81 @@ describe('ReportsPage', () => {
         expect(screen.getByText('상대계정')).toBeInTheDocument()
         expect(screen.getByText('차변')).toBeInTheDocument()
         expect(screen.getByText('대변')).toBeInTheDocument()
+      })
+    })
+  })
+
+  describe('월별 리포트 탭', () => {
+    it('탭 전환 후 월별 손익 및 현금흐름 섹션을 표시한다', async () => {
+      const userEvent_ = userEvent.setup()
+      render(<ReportsPage />)
+      await userEvent_.click(screen.getByRole('button', { name: '월별 리포트' }))
+
+      await waitFor(() => {
+        expect(screen.getByText('월별 손익')).toBeInTheDocument()
+        expect(screen.getByText('월별 현금흐름')).toBeInTheDocument()
+      })
+    })
+
+    it('월별 손익 테이블에 수익/비용/순손익 헤더를 표시한다', async () => {
+      const userEvent_ = userEvent.setup()
+      render(<ReportsPage />)
+      await userEvent_.click(screen.getByRole('button', { name: '월별 리포트' }))
+
+      await waitFor(() => {
+        expect(screen.getByText('수익')).toBeInTheDocument()
+        expect(screen.getByText('비용')).toBeInTheDocument()
+        expect(screen.getByText('순손익')).toBeInTheDocument()
+      })
+    })
+
+    it('월별 현금흐름 테이블에 현금 유입/유출/순현금흐름 헤더를 표시한다', async () => {
+      const userEvent_ = userEvent.setup()
+      render(<ReportsPage />)
+      await userEvent_.click(screen.getByRole('button', { name: '월별 리포트' }))
+
+      await waitFor(() => {
+        expect(screen.getByText('현금 유입')).toBeInTheDocument()
+        expect(screen.getByText('현금 유출')).toBeInTheDocument()
+        expect(screen.getByText('순현금흐름')).toBeInTheDocument()
+      })
+    })
+
+    it('12개월 행을 표시한다', async () => {
+      const userEvent_ = userEvent.setup()
+      render(<ReportsPage />)
+      await userEvent_.click(screen.getByRole('button', { name: '월별 리포트' }))
+
+      await waitFor(() => {
+        expect(screen.getAllByText('1월').length).toBeGreaterThan(0)
+        expect(screen.getAllByText('12월').length).toBeGreaterThan(0)
+      })
+    })
+
+    it('연간 합계 행을 표시한다', async () => {
+      const userEvent_ = userEvent.setup()
+      render(<ReportsPage />)
+      await userEvent_.click(screen.getByRole('button', { name: '월별 리포트' }))
+
+      await waitFor(() => {
+        expect(screen.getAllByText('연간 합계').length).toBeGreaterThan(0)
+      })
+    })
+
+    it('API 오류 시 에러 메시지를 표시한다', async () => {
+      mockFetch(url => {
+        if (url.includes('/api/reports/monthly-summary')) throw new Error('monthly-summary 오류')
+        if (url.includes('/api/reports/trial-balance')) return mockTrialBalance
+        if (url.includes('/api/accounts')) return mockAccounts
+        return {}
+      })
+
+      const userEvent_ = userEvent.setup()
+      render(<ReportsPage />)
+      await userEvent_.click(screen.getByRole('button', { name: '월별 리포트' }))
+
+      await waitFor(() => {
+        expect(screen.getByText('monthly-summary 오류')).toBeInTheDocument()
       })
     })
   })

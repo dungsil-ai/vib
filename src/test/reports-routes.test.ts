@@ -21,6 +21,7 @@ vi.mock('@/lib/prisma', () => ({
       aggregate: vi.fn(),
       findMany: vi.fn(),
     },
+    $queryRaw: vi.fn(),
   },
 }))
 
@@ -32,6 +33,7 @@ import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { GET as trialBalanceGET } from '@/app/api/reports/trial-balance/route'
 import { GET as ledgerGET } from '@/app/api/reports/ledger/route'
+import { GET as monthlySummaryGET } from '@/app/api/reports/monthly-summary/route'
 import { NextRequest } from 'next/server'
 
 const mockSession = { user: { id: 'user-1', email: 'test@example.com', name: 'Test' } }
@@ -170,5 +172,116 @@ describe('ledger GET', () => {
     const req = makeRequest('/api/reports/ledger', { accountId: 'acc-1' })
     const res = await ledgerGET(req)
     expect(res.status).toBe(401)
+  })
+})
+
+// ─── monthly-summary 테스트 ────────────────────────────────────────────────
+
+describe('monthly-summary GET', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(getServerSession).mockResolvedValue(mockSession)
+    vi.mocked(prisma.account.findMany).mockResolvedValue([])
+    vi.mocked(prisma.$queryRaw).mockResolvedValue([])
+  })
+
+  it('year 없으면 400을 반환한다', async () => {
+    const req = makeRequest('/api/reports/monthly-summary')
+    const res = await monthlySummaryGET(req)
+    expect(res.status).toBe(400)
+    const body = await res.json()
+    expect(body.error).toMatch(/year/)
+  })
+
+  it('유효하지 않은 year에 400을 반환한다', async () => {
+    const req = makeRequest('/api/reports/monthly-summary', { year: 'abc' })
+    const res = await monthlySummaryGET(req)
+    expect(res.status).toBe(400)
+    const body = await res.json()
+    expect(body.error).toMatch(/year/)
+  })
+
+  it('범위를 벗어난 year에 400을 반환한다', async () => {
+    const req = makeRequest('/api/reports/monthly-summary', { year: '99' })
+    const res = await monthlySummaryGET(req)
+    expect(res.status).toBe(400)
+  })
+
+  it('미인증 요청에 401을 반환한다', async () => {
+    vi.mocked(getServerSession).mockResolvedValue(null)
+    const req = makeRequest('/api/reports/monthly-summary', { year: '2024' })
+    const res = await monthlySummaryGET(req)
+    expect(res.status).toBe(401)
+  })
+
+  it('계정이 없으면 12개월 모두 0으로 반환한다', async () => {
+    const req = makeRequest('/api/reports/monthly-summary', { year: '2024' })
+    const res = await monthlySummaryGET(req)
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.months).toHaveLength(12)
+    expect(body.totalRevenue).toBe(0)
+    expect(body.totalExpense).toBe(0)
+    expect(body.totalNetIncome).toBe(0)
+    expect(body.totalCashIn).toBe(0)
+    expect(body.totalCashOut).toBe(0)
+    expect(body.totalNetCashFlow).toBe(0)
+  })
+
+  it('수익/비용 데이터가 있으면 월별 손익을 집계한다', async () => {
+    vi.mocked(prisma.account.findMany).mockResolvedValue([
+      { id: 'rev-1', type: 'REVENUE', userId: 'user-1', name: '매출', code: '4001', currency: 'KRW', description: null, createdAt: new Date() },
+      { id: 'exp-1', type: 'EXPENSE', userId: 'user-1', name: '식비', code: '5001', currency: 'KRW', description: null, createdAt: new Date() },
+    ])
+    vi.mocked(prisma.$queryRaw)
+      // revCredits: 1월에 500000 수익
+      .mockResolvedValueOnce([{ month: 1, total: '500000' }])
+      // revDebits: 없음
+      .mockResolvedValueOnce([])
+      // expDebits: 1월에 100000 비용
+      .mockResolvedValueOnce([{ month: 1, total: '100000' }])
+      // expCredits: 없음
+      .mockResolvedValueOnce([])
+
+    const req = makeRequest('/api/reports/monthly-summary', { year: '2024' })
+    const res = await monthlySummaryGET(req)
+    expect(res.status).toBe(200)
+    const body = await res.json()
+
+    const jan = body.months[0]
+    expect(jan.month).toBe(1)
+    expect(jan.revenue).toBe(500000)
+    expect(jan.expense).toBe(100000)
+    expect(jan.netIncome).toBe(400000)
+    expect(body.totalRevenue).toBe(500000)
+    expect(body.totalExpense).toBe(100000)
+    expect(body.totalNetIncome).toBe(400000)
+  })
+
+  it('자산 데이터가 있으면 월별 현금흐름을 집계한다', async () => {
+    vi.mocked(prisma.account.findMany).mockResolvedValue([
+      { id: 'asset-1', type: 'ASSET', userId: 'user-1', name: '현금', code: '1001', currency: 'KRW', description: null, createdAt: new Date() },
+    ])
+    vi.mocked(prisma.$queryRaw)
+      // revenueIds empty -> revCredits, revDebits skipped
+      // expenseIds empty -> expDebits, expCredits skipped
+      // assetDebits: 3월에 1000000
+      .mockResolvedValueOnce([{ month: 3, total: '1000000' }])
+      // assetCredits: 3월에 300000
+      .mockResolvedValueOnce([{ month: 3, total: '300000' }])
+
+    const req = makeRequest('/api/reports/monthly-summary', { year: '2024' })
+    const res = await monthlySummaryGET(req)
+    expect(res.status).toBe(200)
+    const body = await res.json()
+
+    const mar = body.months[2]
+    expect(mar.month).toBe(3)
+    expect(mar.cashIn).toBe(1000000)
+    expect(mar.cashOut).toBe(300000)
+    expect(mar.netCashFlow).toBe(700000)
+    expect(body.totalCashIn).toBe(1000000)
+    expect(body.totalCashOut).toBe(300000)
+    expect(body.totalNetCashFlow).toBe(700000)
   })
 })
