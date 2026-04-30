@@ -367,12 +367,13 @@ describe('RecurringTransactionsPage (반복 거래 탭)', () => {
     })
 
     // 차변만 선택하고 대변 없이 제출
-    const debitSection = screen.getByText('차변 (Debit)').closest('div')!
+    const recurringForm = screen.getByRole('button', { name: '반복 거래 저장' }).closest('form') as HTMLElement
+    const debitSection = within(recurringForm).getByText('차변 (Debit)').closest('div')!
     const debitAccountButton = await within(debitSection).findByRole('button', { name: '101 현금' })
     await user.click(debitAccountButton)
 
-    await user.type(screen.getByPlaceholderText('예: 월세, 통신비, 월급'), '월세')
-    await user.type(screen.getByPlaceholderText('0'), '500000')
+    await user.type(within(recurringForm).getByPlaceholderText('예: 월세, 통신비, 월급'), '월세')
+    await user.type(within(recurringForm).getByPlaceholderText('0'), '500000')
 
     await user.click(screen.getByRole('button', { name: '반복 거래 저장' }))
 
@@ -393,14 +394,15 @@ describe('RecurringTransactionsPage (반복 거래 탭)', () => {
       expect(screen.getByText('반복 거래 추가')).toBeInTheDocument()
     })
 
-    const debitSection = screen.getByText('차변 (Debit)').closest('div')!
+    const recurringForm = screen.getByRole('button', { name: '반복 거래 저장' }).closest('form') as HTMLElement
+    const debitSection = within(recurringForm).getByText('차변 (Debit)').closest('div')!
     await user.click(await within(debitSection).findByRole('button', { name: '101 현금' }))
 
-    const creditSection = screen.getByText('대변 (Credit)').closest('div')!
+    const creditSection = within(recurringForm).getByText('대변 (Credit)').closest('div')!
     await user.click(await within(creditSection).findByRole('button', { name: '101 현금' }))
 
-    await user.type(screen.getByPlaceholderText('0'), '10000')
-    await user.type(screen.getByPlaceholderText('예: 월세, 통신비, 월급'), '테스트')
+    await user.type(within(recurringForm).getByPlaceholderText('0'), '10000')
+    await user.type(within(recurringForm).getByPlaceholderText('예: 월세, 통신비, 월급'), '테스트')
 
     await user.click(screen.getByRole('button', { name: '반복 거래 저장' }))
 
@@ -421,12 +423,13 @@ describe('RecurringTransactionsPage (반복 거래 탭)', () => {
       expect(screen.getByText('반복 거래 추가')).toBeInTheDocument()
     })
 
-    const descInput = screen.getByPlaceholderText('예: 월세, 통신비, 월급')
+    const recurringForm = screen.getByRole('button', { name: '반복 거래 저장' }).closest('form') as HTMLElement
+    const descInput = within(recurringForm).getByPlaceholderText('예: 월세, 통신비, 월급')
     await user.type(descInput, '테스트')
 
-    await user.click(screen.getByRole('button', { name: '초기화' }))
+    await user.click(within(recurringForm).getByRole('button', { name: '초기화' }))
 
-    expect(screen.getByPlaceholderText('예: 월세, 통신비, 월급')).toHaveValue('')
+    expect(within(recurringForm).getByPlaceholderText('예: 월세, 통신비, 월급')).toHaveValue('')
   })
 
   it('반복 거래 저장 성공 시 폼을 초기화하고 목록을 새로고침한다', async () => {
@@ -441,8 +444,9 @@ describe('RecurringTransactionsPage (반복 거래 탭)', () => {
       expect(screen.getByText('반복 거래 추가')).toBeInTheDocument()
     })
 
-    const debitSection = screen.getByText('차변 (Debit)').closest('div')!
-    const creditSection = screen.getByText('대변 (Credit)').closest('div')!
+    const recurringForm = screen.getByRole('button', { name: '반복 거래 저장' }).closest('form') as HTMLElement
+    const debitSection = within(recurringForm).getByText('차변 (Debit)').closest('div')!
+    const creditSection = within(recurringForm).getByText('대변 (Credit)').closest('div')!
 
     await waitFor(() => {
       expect(within(debitSection).getByRole('button', { name: '501 식비' })).toBeInTheDocument()
@@ -451,8 +455,8 @@ describe('RecurringTransactionsPage (반복 거래 탭)', () => {
 
     await user.click(within(debitSection).getByRole('button', { name: '501 식비' }))
     await user.click(within(creditSection).getByRole('button', { name: '101 현금' }))
-    await user.type(screen.getByPlaceholderText('0'), '500000')
-    await user.type(screen.getByPlaceholderText('예: 월세, 통신비, 월급'), '월세')
+    await user.type(within(recurringForm).getByPlaceholderText('0'), '500000')
+    await user.type(within(recurringForm).getByPlaceholderText('예: 월세, 통신비, 월급'), '월세')
 
     await user.click(screen.getByRole('button', { name: '반복 거래 저장' }))
 
@@ -464,7 +468,7 @@ describe('RecurringTransactionsPage (반복 거래 탭)', () => {
     })
 
     await waitFor(() => {
-      expect(screen.getByPlaceholderText('예: 월세, 통신비, 월급')).toHaveValue('')
+      expect(within(recurringForm).getByPlaceholderText('예: 월세, 통신비, 월급')).toHaveValue('')
     })
   })
 
@@ -482,14 +486,15 @@ describe('RecurringTransactionsPage (반복 거래 탭)', () => {
       expect(screen.getByText('반복 거래 추가')).toBeInTheDocument()
     })
 
-    const debitSection = screen.getByText('차변 (Debit)').closest('div')!
+    const recurringForm = screen.getByRole('button', { name: '반복 거래 저장' }).closest('form') as HTMLElement
+    const debitSection = within(recurringForm).getByText('차변 (Debit)').closest('div')!
     await user.click(await within(debitSection).findByRole('button', { name: '501 식비' }))
 
-    const creditSection = screen.getByText('대변 (Credit)').closest('div')!
+    const creditSection = within(recurringForm).getByText('대변 (Credit)').closest('div')!
     await user.click(await within(creditSection).findByRole('button', { name: '101 현금' }))
 
-    await user.type(screen.getByPlaceholderText('0'), '500000')
-    await user.type(screen.getByPlaceholderText('예: 월세, 통신비, 월급'), '월세')
+    await user.type(within(recurringForm).getByPlaceholderText('0'), '500000')
+    await user.type(within(recurringForm).getByPlaceholderText('예: 월세, 통신비, 월급'), '월세')
 
     await user.click(screen.getByRole('button', { name: '반복 거래 저장' }))
 
