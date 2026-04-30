@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { formatCurrency } from '@/lib/currencies'
 
 // ─── 타입 정의 ─────────────────────────────────────────────────────────────────
 
@@ -20,10 +21,6 @@ const ACCOUNT_TYPE_LABELS: Record<string, string> = {
   EQUITY: '자본',
   REVENUE: '수익',
   EXPENSE: '비용',
-}
-
-function formatCurrency(amount: number) {
-  return new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW' }).format(amount)
 }
 
 const BALANCE_TOLERANCE = 0.01
@@ -54,7 +51,7 @@ interface TrialBalanceData {
   totalCredits: number
 }
 
-function TrialBalance() {
+function TrialBalance({ baseCurrency }: { baseCurrency: string }) {
   const [data, setData] = useState<TrialBalanceData | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -127,10 +124,10 @@ function TrialBalance() {
                   <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{row.code}</td>
                   <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{row.name}</td>
                   <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{ACCOUNT_TYPE_LABELS[row.type] ?? row.type}</td>
-                  <td className="px-4 py-3 text-right text-gray-900 dark:text-gray-100">{formatCurrency(row.debitTotal)}</td>
-                  <td className="px-4 py-3 text-right text-gray-900 dark:text-gray-100">{formatCurrency(row.creditTotal)}</td>
+                  <td className="px-4 py-3 text-right text-gray-900 dark:text-gray-100">{formatCurrency(row.debitTotal, baseCurrency)}</td>
+                  <td className="px-4 py-3 text-right text-gray-900 dark:text-gray-100">{formatCurrency(row.creditTotal, baseCurrency)}</td>
                   <td className={`px-4 py-3 text-right font-medium ${row.balance < 0 ? 'text-red-500' : 'text-gray-900 dark:text-gray-100'}`}>
-                    {formatCurrency(row.balance)}
+                    {formatCurrency(row.balance, baseCurrency)}
                   </td>
                 </tr>
               ))}
@@ -138,8 +135,8 @@ function TrialBalance() {
             <tfoot className="bg-gray-50 dark:bg-gray-700/50 font-semibold">
               <tr>
                 <td colSpan={3} className="px-4 py-3 text-gray-900 dark:text-gray-100">합계</td>
-                <td className="px-4 py-3 text-right text-gray-900 dark:text-gray-100">{formatCurrency(data.totalDebits)}</td>
-                <td className="px-4 py-3 text-right text-gray-900 dark:text-gray-100">{formatCurrency(data.totalCredits)}</td>
+                <td className="px-4 py-3 text-right text-gray-900 dark:text-gray-100">{formatCurrency(data.totalDebits, baseCurrency)}</td>
+                <td className="px-4 py-3 text-right text-gray-900 dark:text-gray-100">{formatCurrency(data.totalCredits, baseCurrency)}</td>
                 <td className="px-4 py-3" />
               </tr>
             </tfoot>
@@ -180,7 +177,7 @@ interface LedgerData {
   entries: LedgerEntry[]
 }
 
-function Ledger() {
+function Ledger({ baseCurrency }: { baseCurrency: string }) {
   const [accounts, setAccounts] = useState<SimpleAccount[]>([])
   const [selectedAccountId, setSelectedAccountId] = useState('')
   const [data, setData] = useState<LedgerData | null>(null)
@@ -291,7 +288,7 @@ function Ledger() {
               {startDate && (
                 <tr className="bg-gray-50 dark:bg-gray-700/30 text-gray-500 dark:text-gray-400 italic">
                   <td className="px-4 py-2" colSpan={5}>전기이월</td>
-                  <td className="px-4 py-2 text-right">{formatCurrency(data.openingBalance)}</td>
+                  <td className="px-4 py-2 text-right">{formatCurrency(data.openingBalance, baseCurrency)}</td>
                 </tr>
               )}
               {data.entries.map(e => (
@@ -302,10 +299,10 @@ function Ledger() {
                     {e.entryDescription && <span className="ml-1 text-gray-400 text-xs">({e.entryDescription})</span>}
                   </td>
                   <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{e.counterpart}</td>
-                  <td className="px-4 py-3 text-right text-gray-900 dark:text-gray-100">{e.debit > 0 ? formatCurrency(e.debit) : '-'}</td>
-                  <td className="px-4 py-3 text-right text-gray-900 dark:text-gray-100">{e.credit > 0 ? formatCurrency(e.credit) : '-'}</td>
+                  <td className="px-4 py-3 text-right text-gray-900 dark:text-gray-100">{e.debit > 0 ? formatCurrency(e.debit, baseCurrency) : '-'}</td>
+                  <td className="px-4 py-3 text-right text-gray-900 dark:text-gray-100">{e.credit > 0 ? formatCurrency(e.credit, baseCurrency) : '-'}</td>
                   <td className={`px-4 py-3 text-right font-medium ${e.balance < 0 ? 'text-red-500' : 'text-gray-900 dark:text-gray-100'}`}>
-                    {formatCurrency(e.balance)}
+                    {formatCurrency(e.balance, baseCurrency)}
                   </td>
                 </tr>
               ))}
@@ -337,7 +334,7 @@ interface IncomeStatementData {
   netIncome: number
 }
 
-function IncomeStatement() {
+function IncomeStatement({ baseCurrency }: { baseCurrency: string }) {
   const [data, setData] = useState<IncomeStatementData | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -415,14 +412,14 @@ function IncomeStatement() {
                   <tr key={r.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
                     <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{r.code}</td>
                     <td className="px-4 py-3 text-gray-900 dark:text-gray-100">{r.name}</td>
-                    <td className="px-4 py-3 text-right font-medium text-green-700 dark:text-green-400">{formatCurrency(r.balance)}</td>
+                    <td className="px-4 py-3 text-right font-medium text-green-700 dark:text-green-400">{formatCurrency(r.balance, baseCurrency)}</td>
                   </tr>
                 ))}
               </tbody>
               <tfoot className="bg-gray-50 dark:bg-gray-700/50">
                 <tr>
                   <td colSpan={2} className="px-4 py-3 font-semibold text-gray-900 dark:text-gray-100">총 수익</td>
-                  <td className="px-4 py-3 text-right font-semibold text-green-700 dark:text-green-400">{formatCurrency(data.totalRevenue)}</td>
+                  <td className="px-4 py-3 text-right font-semibold text-green-700 dark:text-green-400">{formatCurrency(data.totalRevenue, baseCurrency)}</td>
                 </tr>
               </tfoot>
             </table>
@@ -442,14 +439,14 @@ function IncomeStatement() {
                   <tr key={r.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
                     <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{r.code}</td>
                     <td className="px-4 py-3 text-gray-900 dark:text-gray-100">{r.name}</td>
-                    <td className="px-4 py-3 text-right font-medium text-red-700 dark:text-red-400">{formatCurrency(r.balance)}</td>
+                    <td className="px-4 py-3 text-right font-medium text-red-700 dark:text-red-400">{formatCurrency(r.balance, baseCurrency)}</td>
                   </tr>
                 ))}
               </tbody>
               <tfoot className="bg-gray-50 dark:bg-gray-700/50">
                 <tr>
                   <td colSpan={2} className="px-4 py-3 font-semibold text-gray-900 dark:text-gray-100">총 비용</td>
-                  <td className="px-4 py-3 text-right font-semibold text-red-700 dark:text-red-400">{formatCurrency(data.totalExpense)}</td>
+                  <td className="px-4 py-3 text-right font-semibold text-red-700 dark:text-red-400">{formatCurrency(data.totalExpense, baseCurrency)}</td>
                 </tr>
               </tfoot>
             </table>
@@ -462,7 +459,7 @@ function IncomeStatement() {
           <div className="md:col-span-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm border dark:border-gray-700 p-4 flex justify-between items-center">
             <span className="font-bold text-lg text-gray-900 dark:text-gray-100">당기순이익</span>
             <span className={`text-2xl font-bold ${data.netIncome >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-              {formatCurrency(data.netIncome)}
+              {formatCurrency(data.netIncome, baseCurrency)}
             </span>
           </div>
         </div>
@@ -489,11 +486,12 @@ interface BalanceSheetData {
   totalEquity: number
 }
 
-function SectionTable({ title, rows, total, colorClass }: {
+function SectionTable({ title, rows, total, colorClass, baseCurrency }: {
   title: string
   rows: BalanceSheetRow[]
   total: number
   colorClass: string
+  baseCurrency: string
 }) {
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border dark:border-gray-700">
@@ -506,14 +504,14 @@ function SectionTable({ title, rows, total, colorClass }: {
             <tr key={r.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
               <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{r.code}</td>
               <td className="px-4 py-3 text-gray-900 dark:text-gray-100">{r.name}</td>
-              <td className="px-4 py-3 text-right font-medium text-gray-900 dark:text-gray-100">{formatCurrency(r.balance)}</td>
+              <td className="px-4 py-3 text-right font-medium text-gray-900 dark:text-gray-100">{formatCurrency(r.balance, baseCurrency)}</td>
             </tr>
           ))}
         </tbody>
         <tfoot className="bg-gray-50 dark:bg-gray-700/50">
           <tr>
             <td colSpan={2} className="px-4 py-3 font-semibold text-gray-900 dark:text-gray-100">소계</td>
-            <td className="px-4 py-3 text-right font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(total)}</td>
+            <td className="px-4 py-3 text-right font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(total, baseCurrency)}</td>
           </tr>
         </tfoot>
       </table>
@@ -537,7 +535,7 @@ function isBalanceSheetData(value: unknown): value is BalanceSheetData {
   )
 }
 
-function BalanceSheet() {
+function BalanceSheet({ baseCurrency }: { baseCurrency: string }) {
   const [data, setData] = useState<BalanceSheetData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -588,6 +586,7 @@ function BalanceSheet() {
           rows={data.assets}
           total={data.totalAssets}
           colorClass="bg-blue-50 dark:bg-blue-900/20 text-blue-800 dark:text-blue-400"
+          baseCurrency={baseCurrency}
         />
         <div className="space-y-4">
           <SectionTable
@@ -595,12 +594,14 @@ function BalanceSheet() {
             rows={data.liabilities}
             total={data.totalLiabilities}
             colorClass="bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-400"
+            baseCurrency={baseCurrency}
           />
           <SectionTable
             title="자본"
             rows={data.equity}
             total={data.totalEquity}
             colorClass="bg-purple-50 dark:bg-purple-900/20 text-purple-800 dark:text-purple-400"
+            baseCurrency={baseCurrency}
           />
         </div>
       </div>
@@ -612,7 +613,7 @@ function BalanceSheet() {
             {balanced ? '✓ 대차 균형' : '⚠ 대차 불균형'}
           </p>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            자산 {formatCurrency(data.totalAssets)} = 부채 {formatCurrency(data.totalLiabilities)} + 자본 {formatCurrency(data.totalEquity)}
+            자산 {formatCurrency(data.totalAssets, baseCurrency)} = 부채 {formatCurrency(data.totalLiabilities, baseCurrency)} + 자본 {formatCurrency(data.totalEquity, baseCurrency)}
           </p>
         </div>
       </div>
@@ -644,7 +645,7 @@ interface MonthlySummaryData {
 
 const MONTH_LABELS = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월']
 
-function MonthlyReport() {
+function MonthlyReport({ baseCurrency }: { baseCurrency: string }) {
   const [data, setData] = useState<MonthlySummaryData | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -716,18 +717,18 @@ function MonthlyReport() {
                   {data.months.map(row => (
                     <tr key={row.month} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
                       <td className="px-4 py-3 text-gray-700 dark:text-gray-300 font-medium">{MONTH_LABELS[row.month - 1]}</td>
-                      <td className="px-4 py-3 text-right text-green-600 dark:text-green-400">{formatCurrency(row.revenue)}</td>
-                      <td className="px-4 py-3 text-right text-red-600 dark:text-red-400">{formatCurrency(row.expense)}</td>
-                      <td className={`px-4 py-3 text-right font-semibold ${numClass(row.netIncome)}`}>{formatCurrency(row.netIncome)}</td>
+                      <td className="px-4 py-3 text-right text-green-600 dark:text-green-400">{formatCurrency(row.revenue, baseCurrency)}</td>
+                      <td className="px-4 py-3 text-right text-red-600 dark:text-red-400">{formatCurrency(row.expense, baseCurrency)}</td>
+                      <td className={`px-4 py-3 text-right font-semibold ${numClass(row.netIncome)}`}>{formatCurrency(row.netIncome, baseCurrency)}</td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot className="bg-gray-50 dark:bg-gray-700/50 font-semibold border-t dark:border-gray-700">
                   <tr>
                     <td className="px-4 py-3 text-gray-900 dark:text-gray-100">연간 합계</td>
-                    <td className="px-4 py-3 text-right text-green-600 dark:text-green-400">{formatCurrency(data.totalRevenue)}</td>
-                    <td className="px-4 py-3 text-right text-red-600 dark:text-red-400">{formatCurrency(data.totalExpense)}</td>
-                    <td className={`px-4 py-3 text-right ${numClass(data.totalNetIncome)}`}>{formatCurrency(data.totalNetIncome)}</td>
+                    <td className="px-4 py-3 text-right text-green-600 dark:text-green-400">{formatCurrency(data.totalRevenue, baseCurrency)}</td>
+                    <td className="px-4 py-3 text-right text-red-600 dark:text-red-400">{formatCurrency(data.totalExpense, baseCurrency)}</td>
+                    <td className={`px-4 py-3 text-right ${numClass(data.totalNetIncome)}`}>{formatCurrency(data.totalNetIncome, baseCurrency)}</td>
                   </tr>
                 </tfoot>
               </table>
@@ -751,18 +752,18 @@ function MonthlyReport() {
                   {data.months.map(row => (
                     <tr key={row.month} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
                       <td className="px-4 py-3 text-gray-700 dark:text-gray-300 font-medium">{MONTH_LABELS[row.month - 1]}</td>
-                      <td className="px-4 py-3 text-right text-green-600 dark:text-green-400">{formatCurrency(row.cashIn)}</td>
-                      <td className="px-4 py-3 text-right text-red-600 dark:text-red-400">{formatCurrency(row.cashOut)}</td>
-                      <td className={`px-4 py-3 text-right font-semibold ${numClass(row.netCashFlow)}`}>{formatCurrency(row.netCashFlow)}</td>
+                      <td className="px-4 py-3 text-right text-green-600 dark:text-green-400">{formatCurrency(row.cashIn, baseCurrency)}</td>
+                      <td className="px-4 py-3 text-right text-red-600 dark:text-red-400">{formatCurrency(row.cashOut, baseCurrency)}</td>
+                      <td className={`px-4 py-3 text-right font-semibold ${numClass(row.netCashFlow)}`}>{formatCurrency(row.netCashFlow, baseCurrency)}</td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot className="bg-gray-50 dark:bg-gray-700/50 font-semibold border-t dark:border-gray-700">
                   <tr>
                     <td className="px-4 py-3 text-gray-900 dark:text-gray-100">연간 합계</td>
-                    <td className="px-4 py-3 text-right text-green-600 dark:text-green-400">{formatCurrency(data.totalCashIn)}</td>
-                    <td className="px-4 py-3 text-right text-red-600 dark:text-red-400">{formatCurrency(data.totalCashOut)}</td>
-                    <td className={`px-4 py-3 text-right ${numClass(data.totalNetCashFlow)}`}>{formatCurrency(data.totalNetCashFlow)}</td>
+                    <td className="px-4 py-3 text-right text-green-600 dark:text-green-400">{formatCurrency(data.totalCashIn, baseCurrency)}</td>
+                    <td className="px-4 py-3 text-right text-red-600 dark:text-red-400">{formatCurrency(data.totalCashOut, baseCurrency)}</td>
+                    <td className={`px-4 py-3 text-right ${numClass(data.totalNetCashFlow)}`}>{formatCurrency(data.totalNetCashFlow, baseCurrency)}</td>
                   </tr>
                 </tfoot>
               </table>
@@ -778,6 +779,16 @@ function MonthlyReport() {
 
 export default function ReportsPage() {
   const [activeTab, setActiveTab] = useState<Tab>('trial-balance')
+  const [baseCurrency, setBaseCurrency] = useState('KRW')
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/settings')
+      .then(r => r.ok ? r.json() : { currency: 'KRW' })
+      .then(d => { if (!cancelled && d.currency) setBaseCurrency(d.currency) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
 
   return (
     <div className="space-y-6">
@@ -801,11 +812,11 @@ export default function ReportsPage() {
       </div>
 
       {/* 탭 콘텐츠 */}
-      {activeTab === 'trial-balance' && <TrialBalance />}
-      {activeTab === 'ledger' && <Ledger />}
-      {activeTab === 'income-statement' && <IncomeStatement />}
-      {activeTab === 'balance-sheet' && <BalanceSheet />}
-      {activeTab === 'monthly-report' && <MonthlyReport />}
+      {activeTab === 'trial-balance' && <TrialBalance baseCurrency={baseCurrency} />}
+      {activeTab === 'ledger' && <Ledger baseCurrency={baseCurrency} />}
+      {activeTab === 'income-statement' && <IncomeStatement baseCurrency={baseCurrency} />}
+      {activeTab === 'balance-sheet' && <BalanceSheet baseCurrency={baseCurrency} />}
+      {activeTab === 'monthly-report' && <MonthlyReport baseCurrency={baseCurrency} />}
     </div>
   )
 }

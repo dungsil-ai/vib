@@ -47,6 +47,24 @@ function normalizeCurrencyInternal(currency: unknown) {
   return { ok: true as const, currency: normalizedCurrency }
 }
 
+function parseExchangeRateInternal(exchangeRate: unknown) {
+  if (exchangeRate === undefined || exchangeRate === null) {
+    return { ok: true as const }
+  }
+  if (typeof exchangeRate !== 'string') {
+    return { ok: false as const, response: errorResponse('환율(exchangeRate)은 문자열이어야 합니다.') }
+  }
+  const raw = exchangeRate.trim()
+  if (!/^\d+(\.\d+)?$/.test(raw)) {
+    return { ok: false as const, response: errorResponse('환율은 양의 숫자 형식이어야 합니다.') }
+  }
+  const rate = Number(raw)
+  if (!Number.isFinite(rate) || rate <= 0) {
+    return { ok: false as const, response: errorResponse('유효한 환율을 입력해주세요.') }
+  }
+  return { ok: true as const, exchangeRate: raw }
+}
+
 export async function validateTransactionPayload(userId: string, body: unknown) {
   const payload = body as {
     date?: unknown
@@ -119,22 +137,15 @@ export async function validateTransactionPayload(userId: string, body: unknown) 
       return normalizedCurrency
     }
 
-    if (candidate.exchangeRate !== undefined) {
-      const rate = Number(candidate.exchangeRate)
-      if (!Number.isFinite(rate) || rate <= 0) {
-        return {
-          ok: false as const,
-          response: errorResponse('유효한 환율을 입력해주세요.'),
-        }
-      }
-    }
+    const normalizedExchangeRate = parseExchangeRateInternal(candidate.exchangeRate)
+    if (!normalizedExchangeRate.ok) return normalizedExchangeRate
 
     normalizedEntries.push({
       debitAccountId: String(candidate.debitAccountId),
       creditAccountId: String(candidate.creditAccountId),
       amount: String(candidate.amount),
       currency: normalizedCurrency.currency,
-      exchangeRate: candidate.exchangeRate === undefined ? undefined : String(candidate.exchangeRate),
+      exchangeRate: normalizedExchangeRate.exchangeRate,
       description: typeof candidate.description === 'string' ? candidate.description : undefined,
     })
   }
