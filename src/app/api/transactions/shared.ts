@@ -51,10 +51,10 @@ function parseExchangeRateInternal(exchangeRate: unknown) {
   if (exchangeRate === undefined || exchangeRate === null) {
     return { ok: true as const }
   }
-  if (typeof exchangeRate !== 'string' && typeof exchangeRate !== 'number') {
-    return { ok: false as const, response: errorResponse('유효한 환율을 입력해주세요.') }
+  if (typeof exchangeRate !== 'string') {
+    return { ok: false as const, response: errorResponse('환율(exchangeRate)은 문자열이어야 합니다.') }
   }
-  const raw = String(exchangeRate).trim()
+  const raw = exchangeRate.trim()
   if (!/^\d+(\.\d+)?$/.test(raw)) {
     return { ok: false as const, response: errorResponse('환율은 양의 숫자 형식이어야 합니다.') }
   }
