@@ -641,7 +641,7 @@ function TransactionsTab({ accounts, accountsLoading, accountsError, baseCurrenc
               />
               <span className="text-sm text-gray-700 dark:text-gray-200">
                 총액: <span className="font-semibold text-blue-600 dark:text-blue-400">
-                  {formatCurrency(formTotal, formTotalCurrency)}
+                  {formatCurrency(formTotal)}
                   {hasMixedCurrencies && (
                     <span className="ml-1 text-xs text-gray-400">
                       ({baseCurrency} 환산 기준)
@@ -1645,7 +1645,9 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError }: 
                                     <span className="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-2 py-0.5 rounded">
                                       대변: {entry.creditAccount.name}
                                     </span>
-                                    <span className="font-medium dark:text-gray-300">{formatCurrency(Number(entry.amount))}</span>
+                                    <span className="font-medium dark:text-gray-300">
+                                      {formatCurrency(Number(entry.amount))}
+                                    </span>
                                     {entry.description && (
                                       <span className="text-gray-500 dark:text-gray-400">{entry.description}</span>
                                     )}
@@ -1871,7 +1873,7 @@ function TemplatesTab({ accounts, accountsLoading, accountsError, baseCurrency }
                   placeholder="코드나 이름으로 검색"
                 />
                 <span className="text-sm text-gray-700 dark:text-gray-200">
-                  총액: <span className="font-semibold text-blue-600 dark:text-blue-400">{formatCurrency(formTotal, baseCurrency)}</span>
+                  총액: <span className="font-semibold text-blue-600 dark:text-blue-400">{formatCurrency(formTotal)}</span>
                 </span>
               </div>
             </div>
@@ -2040,7 +2042,7 @@ function TemplatesTab({ accounts, accountsLoading, accountsError, baseCurrency }
                             {t.entries.map(e => e.creditAccount.name).join(', ')}
                           </td>
                           <td className="px-4 py-3 text-right font-medium text-gray-900 dark:text-gray-100">
-                            {formatCurrency(total, baseCurrency)}
+                            {formatCurrency(total)}
                           </td>
                           <td className="px-4 py-3 text-center">
                             <button
@@ -2063,7 +2065,9 @@ function TemplatesTab({ accounts, accountsLoading, accountsError, baseCurrency }
                                     <span className="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-2 py-0.5 rounded">
                                       대변: {entry.creditAccount.name}
                                     </span>
-                                    <span className="font-medium dark:text-gray-300">{formatCurrency(Number(entry.amount), baseCurrency)}</span>
+                                    <span className="font-medium dark:text-gray-300">
+                                      {formatCurrency(Number(entry.amount))}
+                                    </span>
                                     {entry.description && (
                                       <span className="text-gray-500 dark:text-gray-400">{entry.description}</span>
                                     )}

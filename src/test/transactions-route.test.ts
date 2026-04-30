@@ -430,4 +430,19 @@ describe('POST /api/transactions', () => {
     const body = await res.json()
     expect(body.error).toMatch(/환율/)
   })
+
+  it('외화 항목에 지수 표기 환율 입력 시 400을 반환한다', async () => {
+    const req = new NextRequest('http://localhost/api/transactions', {
+      method: 'POST',
+      body: JSON.stringify({
+        date: '2024-01-15',
+        description: '테스트',
+        entries: [{ debitAccountId: 'acc-1', creditAccountId: 'acc-2', amount: '100', currency: 'USD', exchangeRate: '1e3' }],
+      }),
+    })
+    const res = await POST(req)
+    expect(res.status).toBe(400)
+    const body = await res.json()
+    expect(body.error).toMatch(/환율/)
+  })
 })
