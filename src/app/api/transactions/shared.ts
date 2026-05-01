@@ -55,7 +55,7 @@ function parseExchangeRateInternal(exchangeRate: unknown) {
     return { ok: false as const, response: errorResponse('환율(exchangeRate)은 문자열이어야 합니다.') }
   }
   const raw = exchangeRate.trim()
-  if (!/^\d+(\.\d+)?$/.test(raw)) {
+  if (!/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(raw)) {
     return { ok: false as const, response: errorResponse('환율은 양의 숫자 형식이어야 합니다.') }
   }
   const rate = Number(raw)
