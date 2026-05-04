@@ -21,15 +21,21 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
+          cache: pnpm
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.13.1
+
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
         env:
           DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci"
 
       - name: Lint
-        run: npm run lint
+        run: pnpm lint
 
   unit-test:
     name: Unit Tests
@@ -44,10 +50,16 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
+          cache: pnpm
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.13.1
+
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
         env:
           DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci"
 
@@ -55,7 +67,7 @@ jobs:
         run: sudo apt-get update -y && sudo apt-get install -y lcov
 
       - name: Run unit tests
-        run: npm run test:coverage
+        run: pnpm test:coverage
         env:
           DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci"
 
@@ -91,15 +103,21 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
+          cache: pnpm
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.13.1
+
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
         env:
           DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci"
 
       - name: Build
-        run: npm run build
+        run: pnpm build
         env:
           # Prisma generate and Next.js build do not connect to the database;
           # a placeholder URL is sufficient for type-checking and bundling.
@@ -133,10 +151,16 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
+          cache: pnpm
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.13.1
+
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
         env:
           DATABASE_URL: "postgresql://vib:vib@localhost:5432/vib_test"
 
@@ -145,7 +169,7 @@ jobs:
         id: playwright-cache
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
 
       - name: Install Playwright browsers
         if: steps.playwright-cache.outputs.cache-hit != 'true'
@@ -156,19 +180,19 @@ jobs:
         run: npx playwright install-deps chromium
 
       - name: Setup database
-        run: npm run db:migrate
+        run: pnpm db:migrate
         env:
           DATABASE_URL: "postgresql://vib:vib@localhost:5432/vib_test"
 
       - name: Build application
-        run: npm run build
+        run: pnpm build
         env:
           DATABASE_URL: "postgresql://vib:vib@localhost:5432/vib_test"
           NEXTAUTH_SECRET: "ci-e2e-secret"
           NEXTAUTH_URL: "http://localhost:3000"
 
       - name: Run E2E tests
-        run: npm run test:e2e
+        run: pnpm test:e2e
         env:
           DATABASE_URL: "postgresql://vib:vib@localhost:5432/vib_test"
           NEXTAUTH_SECRET: "ci-e2e-secret"
