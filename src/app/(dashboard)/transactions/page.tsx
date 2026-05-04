@@ -1128,9 +1128,10 @@ interface RecurringTabProps {
   accounts: Account[]
   accountsLoading: boolean
   accountsError: string | null
+  baseCurrency: string
 }
 
-function RecurringTransactionsTab({ accounts, accountsLoading, accountsError }: RecurringTabProps) {
+function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, baseCurrency }: RecurringTabProps) {
   const [recurringList, setRecurringList] = useState<RecurringTransaction[]>([])
   const [listLoading, setListLoading] = useState(true)
   const [listError, setListError] = useState<string | null>(null)
@@ -1440,7 +1441,7 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError }: 
                   placeholder="코드나 이름으로 검색"
                 />
                 <span className="text-sm text-gray-700 dark:text-gray-200">
-                  총액: <span className="font-semibold text-blue-600 dark:text-blue-400">{formatCurrency(formTotal)}</span>
+                  총액: <span className="font-semibold text-blue-600 dark:text-blue-400">{formatCurrency(formTotal, baseCurrency)}</span>
                 </span>
               </div>
             </div>
@@ -1613,7 +1614,7 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError }: 
                             {r.lastRunAt ? new Date(r.lastRunAt).toLocaleDateString('ko-KR') : '-'}
                           </td>
                           <td className="px-4 py-3 text-right font-medium text-gray-900 dark:text-gray-100">
-                            {formatCurrency(total)}
+                            {formatCurrency(total, baseCurrency)}
                           </td>
                           <td className="px-4 py-3 text-center">
                             <button
@@ -1645,7 +1646,9 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError }: 
                                     <span className="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-2 py-0.5 rounded">
                                       대변: {entry.creditAccount.name}
                                     </span>
-                                    <span className="font-medium dark:text-gray-300">{formatCurrency(Number(entry.amount))}</span>
+                                    <span className="font-medium dark:text-gray-300">
+                                      {formatCurrency(Number(entry.amount), baseCurrency)}
+                                    </span>
                                     {entry.description && (
                                       <span className="text-gray-500 dark:text-gray-400">{entry.description}</span>
                                     )}
@@ -2063,7 +2066,9 @@ function TemplatesTab({ accounts, accountsLoading, accountsError, baseCurrency }
                                     <span className="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-2 py-0.5 rounded">
                                       대변: {entry.creditAccount.name}
                                     </span>
-                                    <span className="font-medium dark:text-gray-300">{formatCurrency(Number(entry.amount), baseCurrency)}</span>
+                                    <span className="font-medium dark:text-gray-300">
+                                      {formatCurrency(Number(entry.amount), baseCurrency)}
+                                    </span>
                                     {entry.description && (
                                       <span className="text-gray-500 dark:text-gray-400">{entry.description}</span>
                                     )}
@@ -2139,6 +2144,7 @@ export default function TransactionsPage() {
               accounts={accounts}
               accountsLoading={accountsLoading}
               accountsError={accountsError}
+              baseCurrency={baseCurrency}
             />
           </div>
         )}

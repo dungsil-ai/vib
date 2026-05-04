@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { formatCurrency } from '@/lib/currencies'
 
 interface Account {
   id: string
@@ -24,10 +25,6 @@ interface BudgetRow {
   budget: Budget | null
   editAmount: string
   editing: boolean
-}
-
-function formatCurrency(amount: number) {
-  return new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW' }).format(amount)
 }
 
 async function loadBudgetData(year: number, month: number) {
@@ -74,6 +71,16 @@ export default function BudgetPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [actualExpenses, setActualExpenses] = useState<Record<string, number>>({})
+  const [baseCurrency, setBaseCurrency] = useState('KRW')
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/settings')
+      .then(r => r.ok ? r.json() : { currency: 'KRW' })
+      .then(d => { if (!cancelled && d.currency) setBaseCurrency(d.currency) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -200,16 +207,16 @@ export default function BudgetPage() {
       <div className="grid grid-cols-3 gap-4">
         <div className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border dark:border-gray-700">
           <p className="text-sm text-gray-500 dark:text-gray-400">총 예산</p>
-          <p className="text-xl font-bold text-blue-600 mt-1">{formatCurrency(totalBudget)}</p>
+          <p className="text-xl font-bold text-blue-600 mt-1">{formatCurrency(totalBudget, baseCurrency)}</p>
         </div>
         <div className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border dark:border-gray-700">
           <p className="text-sm text-gray-500 dark:text-gray-400">실제 지출</p>
-          <p className="text-xl font-bold text-orange-500 mt-1">{formatCurrency(totalActual)}</p>
+          <p className="text-xl font-bold text-orange-500 mt-1">{formatCurrency(totalActual, baseCurrency)}</p>
         </div>
         <div className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border dark:border-gray-700">
           <p className="text-sm text-gray-500 dark:text-gray-400">남은 예산</p>
           <p className={`text-xl font-bold mt-1 ${totalBudget - totalActual >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-            {formatCurrency(totalBudget - totalActual)}
+            {formatCurrency(totalBudget - totalActual, baseCurrency)}
           </p>
         </div>
       </div>
@@ -240,7 +247,7 @@ export default function BudgetPage() {
                     </div>
                     <div className="flex items-center gap-4">
                       <span className={`text-sm ${isOver ? 'text-red-500 font-medium' : 'text-gray-600 dark:text-gray-400'}`}>
-                        실제: {formatCurrency(actual)}
+                        실제: {formatCurrency(actual, baseCurrency)}
                       </span>
                       {row.editing ? (
                         <div className="flex items-center gap-2">
@@ -275,7 +282,7 @@ export default function BudgetPage() {
                             onClick={() => startEditing(index)}
                             className="text-sm font-medium text-blue-600 hover:text-blue-800 min-w-[120px] text-right"
                           >
-                            예산: {hasBudget ? formatCurrency(budget) : '설정 없음'}
+                            예산: {hasBudget ? formatCurrency(budget, baseCurrency) : '설정 없음'}
                           </button>
                           {rowBudget && (
                             <button
@@ -299,7 +306,7 @@ export default function BudgetPage() {
                       </div>
                       <div className="flex justify-between text-xs text-gray-400 dark:text-gray-500 mt-1">
                         <span>{pct.toFixed(1)}% 사용</span>
-                        <span>남은 예산: {formatCurrency(Math.max(0, budget - actual))}</span>
+                        <span>남은 예산: {formatCurrency(Math.max(0, budget - actual), baseCurrency)}</span>
                       </div>
                     </div>
                   )}
