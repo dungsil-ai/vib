@@ -431,8 +431,6 @@ describe('POST /api/transactions', () => {
     expect(body.error).toMatch(/환율/)
   })
 
-
-
   it('외화 항목에 선행 0 없는 소수 환율(.5) 입력 시 201을 반환한다', async () => {
     const createdTx = {
       id: 'tx-1',
