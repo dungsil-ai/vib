@@ -386,8 +386,10 @@ function TransactionsTab({ accounts, accountsLoading, accountsError, baseCurrenc
   // Re-fetch when filters change (reset to page 1)
   useEffect(() => {
     let cancelled = false
-    setListLoading(true)
-    fetchTransactions(1, () => cancelled)
+    queueMicrotask(() => {
+      setListLoading(true)
+      fetchTransactions(1, () => cancelled)
+    })
     return () => { cancelled = true }
   }, [fetchTransactions])
 
@@ -1178,7 +1180,7 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError }: 
 
   useEffect(() => {
     let cancelled = false
-    fetchRecurring(() => cancelled)
+    queueMicrotask(() => { fetchRecurring(() => cancelled) })
     return () => { cancelled = true }
   }, [])
 
@@ -1733,7 +1735,7 @@ function TemplatesTab({ accounts, accountsLoading, accountsError, baseCurrency }
 
   useEffect(() => {
     let cancelled = false
-    fetchTemplates(() => cancelled)
+    queueMicrotask(() => { fetchTemplates(() => cancelled) })
     return () => { cancelled = true }
   }, [fetchTemplates])
 
