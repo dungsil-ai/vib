@@ -1,5 +1,5 @@
 {
-  "buildCommand": "if [ \"$VERCEL_ENV\" = \"production\" ]; then prisma db push && prisma generate && next build; else prisma generate && next build; fi",
-  "installCommand": "npm ci",
-  "framework": "nextjs"
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "pnpm install --frozen-lockfile",
+  "buildCommand": "pnpm build"
 }
