@@ -489,6 +489,35 @@ describe('POST /api/transactions', () => {
     expect(res.status).toBe(201)
   })
 
+
+  it('외화 항목에 숫자 타입 환율 입력 시 201을 반환한다', async () => {
+    const createdTx = {
+      id: 'tx-1',
+      date: new Date('2024-01-15'),
+      description: '테스트',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      entries: [],
+    }
+    vi.mocked(prisma.account.findMany).mockResolvedValue([
+      { id: 'acc-1' },
+      { id: 'acc-2' },
+    ] as never)
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ currency: 'KRW' } as never)
+    vi.mocked(prisma.transaction.create).mockResolvedValue(createdTx as never)
+
+    const req = new NextRequest('http://localhost/api/transactions', {
+      method: 'POST',
+      body: JSON.stringify({
+        date: '2024-01-15',
+        description: '테스트',
+        entries: [{ debitAccountId: 'acc-1', creditAccountId: 'acc-2', amount: '100', currency: 'USD', exchangeRate: 1300.25 }],
+      }),
+    })
+    const res = await POST(req)
+    expect(res.status).toBe(201)
+  })
+
   it('외화 항목에 지수 표기 환율 입력 시 400을 반환한다', async () => {
     const req = new NextRequest('http://localhost/api/transactions', {
       method: 'POST',
