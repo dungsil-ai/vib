@@ -76,7 +76,7 @@ function TrialBalance({ baseCurrency }: { baseCurrency: string }) {
     }
   }, [startDate, endDate])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { queueMicrotask(() => { load() }) }, [load])
 
   return (
     <div className="space-y-4">
@@ -219,7 +219,7 @@ function Ledger({ baseCurrency }: { baseCurrency: string }) {
     }
   }, [selectedAccountId, startDate, endDate])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { queueMicrotask(() => { load() }) }, [load])
 
   return (
     <div className="space-y-4">
@@ -364,7 +364,7 @@ function IncomeStatement({ baseCurrency }: { baseCurrency: string }) {
     }
   }, [year, month])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { queueMicrotask(() => { load() }) }, [load])
 
   return (
     <div className="space-y-4">
@@ -673,7 +673,7 @@ function MonthlyReport({ baseCurrency }: { baseCurrency: string }) {
     }
   }, [year])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { queueMicrotask(() => { load() }) }, [load])
 
   const numClass = (v: number) => v < 0 ? 'text-red-500' : v > 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-900 dark:text-gray-100'
 

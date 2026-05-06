@@ -73,7 +73,7 @@ export default function AccountsPage() {
         }
       })
       .catch(() => {})
-    fetchAccounts()
+    queueMicrotask(() => { fetchAccounts() })
     return () => { cancelled = true }
   }, [])
 
@@ -101,7 +101,7 @@ export default function AccountsPage() {
       } else {
         setShowFormFor(null)
         setFormData({ name: '', description: '', currency: userCurrency, openingBalance: '' })
-        fetchAccounts()
+        queueMicrotask(() => { fetchAccounts() })
       }
     } catch {
       setFormError('네트워크 오류가 발생했습니다.')
@@ -141,7 +141,7 @@ export default function AccountsPage() {
         setEditError(data?.error || '수정에 실패했습니다.')
       } else {
         cancelEditing()
-        fetchAccounts()
+        queueMicrotask(() => { fetchAccounts() })
       }
     } catch {
       setEditError('네트워크 오류가 발생했습니다.')
@@ -162,7 +162,7 @@ export default function AccountsPage() {
       setError(data?.error || '계정을 삭제하지 못했습니다.')
       return
     }
-    fetchAccounts()
+    queueMicrotask(() => { fetchAccounts() })
   }
 
   const groupedAccounts = Object.entries(ACCOUNT_TYPE_LABELS).reduce((acc, [type]) => {
