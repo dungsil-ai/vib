@@ -54,20 +54,15 @@ describe('trial-balance GET', () => {
     vi.mocked(prisma.entry.groupBy).mockResolvedValue([])
   })
 
-  it('endDate를 23:59:59.999로 보정해 당일 거래를 포함한다', async () => {
+  it('endDate를 UTC 23:59:59.999로 보정해 당일 거래를 포함한다', async () => {
     const req = makeRequest('/api/reports/trial-balance', { endDate: '2024-01-15' })
     const res = await trialBalanceGET(req)
     expect(res.status).toBe(200)
 
-    // entry.groupBy 호출 시 lte가 당일 끝(23:59:59.999)으로 설정되었는지 검증
     const calls = vi.mocked(prisma.entry.groupBy).mock.calls
     expect(calls.length).toBeGreaterThan(0)
     const whereDate = (calls[0][0] as { where: { transaction: { date: { lte: Date } } } }).where.transaction.date.lte as Date
-    expect(whereDate.getHours()).toBe(23)
-    expect(whereDate.getMinutes()).toBe(59)
-    expect(whereDate.getSeconds()).toBe(59)
-    expect(whereDate.getMilliseconds()).toBe(999)
-    expect(whereDate.getDate()).toBe(15)
+    expect(whereDate.toISOString()).toBe('2024-01-15T23:59:59.999Z')
   })
 
   it('유효하지 않은 endDate에 400을 반환한다', async () => {
@@ -119,7 +114,7 @@ describe('ledger GET', () => {
     vi.mocked(prisma.entry.findMany).mockResolvedValue([])
   })
 
-  it('endDate를 23:59:59.999로 보정해 당일 거래를 포함한다', async () => {
+  it('endDate를 UTC 23:59:59.999로 보정해 당일 거래를 포함한다', async () => {
     const req = makeRequest('/api/reports/ledger', {
       accountId: 'acc-1',
       endDate: '2024-01-15',
@@ -127,15 +122,10 @@ describe('ledger GET', () => {
     const res = await ledgerGET(req)
     expect(res.status).toBe(200)
 
-    // entry.findMany 호출 시 lte가 당일 끝으로 설정되었는지 검증
     const calls = vi.mocked(prisma.entry.findMany).mock.calls
     expect(calls.length).toBeGreaterThan(0)
     const txDate = (calls[0][0] as { where: { transaction: { date: { lte: Date } } } }).where.transaction.date.lte as Date
-    expect(txDate.getHours()).toBe(23)
-    expect(txDate.getMinutes()).toBe(59)
-    expect(txDate.getSeconds()).toBe(59)
-    expect(txDate.getMilliseconds()).toBe(999)
-    expect(txDate.getDate()).toBe(15)
+    expect(txDate.toISOString()).toBe('2024-01-15T23:59:59.999Z')
   })
 
   it('유효하지 않은 endDate에 400을 반환한다', async () => {
