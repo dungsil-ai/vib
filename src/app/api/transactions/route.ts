@@ -29,19 +29,19 @@ export async function GET(request: NextRequest) {
   const pageParam = searchParams.get('page')
   const pageSizeParam = searchParams.get('pageSize')
 
-  // Validate keyword length
+  // 키워드 길이를 검증합니다.
   if (keywordParam !== null && keywordParam.length > 100) {
     return NextResponse.json({ error: '키워드는 100자 이하로 입력해주세요.' }, { status: 400 })
   }
 
-  // year/month must be supplied together (ignore empty strings)
+  // year/month는 빈 문자열을 제외하고 함께 입력되어야 합니다.
   const hasYearParam = Boolean(yearParam?.trim())
   const hasMonthParam = Boolean(monthParam?.trim())
   if ((hasYearParam && !hasMonthParam) || (!hasYearParam && hasMonthParam)) {
     return NextResponse.json({ error: 'year와 month를 함께 입력해주세요.' }, { status: 400 })
   }
 
-  // Build date filter
+  // 날짜 필터를 구성합니다.
   let dateWhere: { gte?: Date; lte?: Date } | undefined
 
   if (hasYearParam && hasMonthParam) {
@@ -82,7 +82,7 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // Validate minAmount / maxAmount
+  // minAmount/maxAmount를 검증합니다.
   let minAmount: number | undefined
   if (minAmountParam !== null) {
     minAmount = parseFloat(minAmountParam)
@@ -101,59 +101,54 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // Sort
+  // 정렬 조건을 구성합니다.
   const sortBy = sortByParam === 'createdAt' ? 'createdAt' : 'date'
   const sortOrder: 'asc' | 'desc' = sortOrderParam === 'asc' ? 'asc' : 'desc'
   const orderBy = sortBy === 'createdAt'
     ? { createdAt: sortOrder }
     : { date: sortOrder }
 
-  // Build entries filters separately so account and amount conditions
-  // can match different entries within the same transaction.
-  const accountEntriesWhere = accountIdParam
-    ? {
-        entries: {
-          some: {
-            OR: [
-              { debitAccountId: accountIdParam },
-              { creditAccountId: accountIdParam },
-            ],
-          },
-        },
-      }
+  const entrySome: {
+    OR?: Array<{ debitAccountId: string } | { creditAccountId: string }>
+    amount?: { gte?: number; lte?: number }
+  } = {}
+
+  if (accountIdParam) {
+    entrySome.OR = [
+      { debitAccountId: accountIdParam },
+      { creditAccountId: accountIdParam },
+    ]
+  }
+  if (minAmount !== undefined || maxAmount !== undefined) {
+    entrySome.amount = {}
+    if (minAmount !== undefined) entrySome.amount.gte = minAmount
+    if (maxAmount !== undefined) entrySome.amount.lte = maxAmount
+  }
+
+  const entriesWhere = Object.keys(entrySome).length > 0
+    ? { entries: { some: entrySome } }
     : undefined
 
-  const amountSome: { gte?: number; lte?: number } = {}
-  if (minAmount !== undefined) amountSome.gte = minAmount
-  if (maxAmount !== undefined) amountSome.lte = maxAmount
-  const amountEntriesWhere = Object.keys(amountSome).length > 0
-    ? { entries: { some: { amount: amountSome } } }
-    : undefined
-
-  const andConditions = [accountEntriesWhere, amountEntriesWhere].filter(
-    (condition): condition is NonNullable<typeof condition> => condition !== undefined,
-  )
-
-  // Build where clause
+  // where 절을 구성합니다.
   const where = {
     userId: session.user.id,
     ...(dateWhere ? { date: dateWhere } : {}),
     ...(keywordParam ? { description: { contains: keywordParam, mode: 'insensitive' as const } } : {}),
-    ...(andConditions.length > 0 ? { AND: andConditions } : {}),
+    ...(entriesWhere ? entriesWhere : {}),
   }
 
-  // ── Legacy mode: year+month returns flat array for backward compatibility ──
+  // ── 레거시 모드: year+month는 하위 호환성을 위해 배열을 직접 반환합니다. ──
   const hasLegacyYearMonth = Boolean(yearParam?.trim()) && Boolean(monthParam?.trim())
   if (hasLegacyYearMonth) {
-      const transactions = await prisma.transaction.findMany({
-        where,
-        orderBy,
-        include: TRANSACTION_ENTRY_INCLUDE,
-      })
+    const transactions = await prisma.transaction.findMany({
+      where,
+      orderBy,
+      include: TRANSACTION_ENTRY_INCLUDE,
+    })
     return NextResponse.json(serializeData(transactions))
   }
 
-  // ── Paginated mode ──
+  // ── 페이지네이션 모드 ──
   const DEFAULT_PAGE_SIZE = 20
   const MAX_PAGE_SIZE = 100
   let page = 1
