@@ -133,6 +133,79 @@ describe('recurring-transactions/[id] PUT', () => {
     )
   })
 
+  it('수정 시 원래 시작일 기준 계산값이 기존 다음 실행일보다 과거이면 진행된 다음 실행일을 보존한다', async () => {
+    vi.mocked(prisma.recurringTransaction.findFirst).mockResolvedValue({
+      id: 'rec-1',
+      userId: 'user-1',
+      description: '기존 반복 거래',
+      frequency: 'MONTHLY',
+      dayOfMonth: 25,
+      monthOfYear: null,
+      startDate: new Date('2024-01-01T00:00:00.000Z'),
+      endDate: null,
+      nextRunAt: new Date('2024-05-25T00:00:00.000Z'),
+      lastRunAt: new Date('2024-04-25T00:00:00.000Z'),
+      isActive: true,
+      createdAt: new Date('2024-01-01T00:00:00.000Z'),
+    } as NonNullable<Awaited<ReturnType<typeof prisma.recurringTransaction.findFirst>>>)
+
+    const res = await PUT(makePutRequest({
+      description: '금액만 수정된 반복 거래',
+      frequency: 'MONTHLY',
+      dayOfMonth: 25,
+      startDate: '2024-01-01',
+      entries: [
+        { debitAccountId: 'acc-1', creditAccountId: 'acc-2', amount: '120000' },
+      ],
+    }), { params: Promise.resolve({ id: 'rec-1' }) })
+
+    expect(res.status).toBe(200)
+    expect(prisma.recurringTransaction.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          nextRunAt: new Date('2024-05-25T00:00:00.000Z'),
+        }),
+      }),
+    )
+  })
+
+  it('스케줄 수정 시 기존 진행 상태 이후의 새 반복일로 nextRunAt을 재계산한다', async () => {
+    vi.mocked(prisma.recurringTransaction.findFirst).mockResolvedValue({
+      id: 'rec-1',
+      userId: 'user-1',
+      description: '기존 반복 거래',
+      frequency: 'MONTHLY',
+      dayOfMonth: 25,
+      monthOfYear: null,
+      startDate: new Date('2024-01-01T00:00:00.000Z'),
+      endDate: null,
+      nextRunAt: new Date('2024-05-25T00:00:00.000Z'),
+      lastRunAt: new Date('2024-04-25T00:00:00.000Z'),
+      isActive: true,
+      createdAt: new Date('2024-01-01T00:00:00.000Z'),
+    } as NonNullable<Awaited<ReturnType<typeof prisma.recurringTransaction.findFirst>>>)
+
+    const res = await PUT(makePutRequest({
+      description: '일자가 수정된 반복 거래',
+      frequency: 'MONTHLY',
+      dayOfMonth: 10,
+      startDate: '2024-01-01',
+      entries: [
+        { debitAccountId: 'acc-1', creditAccountId: 'acc-2', amount: '120000' },
+      ],
+    }), { params: Promise.resolve({ id: 'rec-1' }) })
+
+    expect(res.status).toBe(200)
+    expect(prisma.recurringTransaction.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          dayOfMonth: 10,
+          nextRunAt: new Date('2024-06-10T00:00:00.000Z'),
+        }),
+      }),
+    )
+  })
+
   it('소유하지 않은 계정이 포함되면 403을 반환한다', async () => {
     vi.mocked(prisma.account.findMany).mockResolvedValue([{ id: 'acc-1' }] as Awaited<ReturnType<typeof prisma.account.findMany>>)
 

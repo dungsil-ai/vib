@@ -150,6 +150,26 @@ export function unwrapRecurringValidation(
   return isValidationFailure(result) ? result.response : result
 }
 
+
+export function calculateNextRunAtAfterProgress(
+  validated: ValidatedRecurringTransactionInput,
+  currentNextRunAt: Date,
+) {
+  let nextRunAt = new Date(validated.nextRunAt)
+  const progressBoundary = new Date(currentNextRunAt)
+
+  while (nextRunAt < progressBoundary) {
+    nextRunAt = computeNextRunAt(
+      validated.frequency as (typeof VALID_RECURRING_FREQUENCIES)[number],
+      validated.dayOfMonth,
+      validated.monthOfYear,
+      nextRunAt,
+    )
+  }
+
+  return nextRunAt
+}
+
 export function buildRecurringTransactionData(validated: ValidatedRecurringTransactionInput) {
   return {
     description: validated.description,

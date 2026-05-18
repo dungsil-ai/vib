@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { serializeData } from '@/lib/serialize'
 import {
   buildRecurringTransactionData,
+  calculateNextRunAtAfterProgress,
   RECURRING_TRANSACTION_INCLUDE,
   unwrapRecurringValidation,
   validateRecurringTransactionInput,
@@ -47,7 +48,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     return validation
   }
 
-  const transactionData = buildRecurringTransactionData(validation)
+  const transactionData = buildRecurringTransactionData({
+    ...validation,
+    nextRunAt: calculateNextRunAtAfterProgress(validation, existing.nextRunAt),
+  })
   const updated = await prisma.recurringTransaction.update({
     where: { id },
     data: {
