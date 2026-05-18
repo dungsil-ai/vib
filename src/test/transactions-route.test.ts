@@ -100,7 +100,7 @@ describe('GET /api/transactions', () => {
     expect(body.error).toMatch(/키워드/)
   })
 
-  it('startDate/endDate 기간 필터가 where 절에 반영된다', async () => {
+  it('startDate/endDate 기간 필터를 UTC 일자 경계로 반영한다', async () => {
     vi.mocked(prisma.$transaction).mockResolvedValue([0, []])
     const req = makeRequest('/api/transactions', {
       startDate: '2024-01-01',
@@ -109,14 +109,12 @@ describe('GET /api/transactions', () => {
     await GET(req)
     const countCalls = vi.mocked(prisma.transaction.count).mock.calls
     expect(countCalls.length).toBeGreaterThan(0)
-    const where = countCalls[0][0]?.where as Record<string, unknown>
-    expect(where.date).toMatchObject({
-      gte: expect.any(Date),
-      lte: expect.any(Date),
-    })
+    const where = countCalls[0][0]?.where as Record<string, { gte?: Date; lte?: Date }>
+    expect(where.date?.gte?.toISOString()).toBe('2024-01-01T00:00:00.000Z')
+    expect(where.date?.lte?.toISOString()).toBe('2024-01-31T23:59:59.999Z')
   })
 
-  it('endDate의 시간은 23:59:59.999로 설정된다', async () => {
+  it('endDate의 시간은 UTC 23:59:59.999로 설정된다', async () => {
     vi.mocked(prisma.$transaction).mockResolvedValue([0, []])
     const req = makeRequest('/api/transactions', { endDate: '2024-01-15' })
     await GET(req)
@@ -124,10 +122,7 @@ describe('GET /api/transactions', () => {
     const where = countCalls[0][0]?.where as Record<string, { lte?: Date }>
     const lte = where.date?.lte
     expect(lte).toBeDefined()
-    expect(lte!.getHours()).toBe(23)
-    expect(lte!.getMinutes()).toBe(59)
-    expect(lte!.getSeconds()).toBe(59)
-    expect(lte!.getMilliseconds()).toBe(999)
+    expect(lte!.toISOString()).toBe('2024-01-15T23:59:59.999Z')
   })
 
   it('유효하지 않은 startDate에 400을 반환한다', async () => {

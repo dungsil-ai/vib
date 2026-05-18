@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { serializeData } from '@/lib/serialize'
+import { makeUTCMonthRange, parseUTCDateOnly, parseUTCEndOfDay } from '@/lib/date-range'
 import { TRANSACTION_ENTRY_INCLUDE, validateTransactionPayload } from './shared'
 
 export async function GET(request: NextRequest) {
@@ -40,25 +41,15 @@ export async function GET(request: NextRequest) {
   if (startDateParam || endDateParam) {
     dateWhere = {}
     if (startDateParam) {
-      const parts = startDateParam.split('-').map(Number)
-      if (parts.length !== 3 || parts.some(isNaN)) {
-        return NextResponse.json({ error: '유효한 startDate를 입력해주세요.' }, { status: 400 })
-      }
-      const [sy, sm, sd] = parts
-      const d = new Date(sy, sm - 1, sd)
-      if (isNaN(d.getTime()) || d.getFullYear() !== sy || d.getMonth() !== sm - 1 || d.getDate() !== sd) {
+      const d = parseUTCDateOnly(startDateParam)
+      if (!d) {
         return NextResponse.json({ error: '유효한 startDate를 입력해주세요.' }, { status: 400 })
       }
       dateWhere.gte = d
     }
     if (endDateParam) {
-      const parts = endDateParam.split('-').map(Number)
-      if (parts.length !== 3 || parts.some(isNaN)) {
-        return NextResponse.json({ error: '유효한 endDate를 입력해주세요.' }, { status: 400 })
-      }
-      const [ey, em, ed] = parts
-      const d = new Date(ey, em - 1, ed, 23, 59, 59, 999)
-      if (isNaN(d.getTime()) || d.getFullYear() !== ey || d.getMonth() !== em - 1 || d.getDate() !== ed) {
+      const d = parseUTCEndOfDay(endDateParam)
+      if (!d) {
         return NextResponse.json({ error: '유효한 endDate를 입력해주세요.' }, { status: 400 })
       }
       dateWhere.lte = d
