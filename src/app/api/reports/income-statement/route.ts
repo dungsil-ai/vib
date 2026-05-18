@@ -64,60 +64,78 @@ export async function GET(request: NextRequest) {
   const revenueIds = accounts.filter(a => a.type === 'REVENUE').map(a => a.id)
   const expenseIds = accounts.filter(a => a.type === 'EXPENSE').map(a => a.id)
 
-  const txFilter = { transaction: { userId, date: dateFilter } }
-
   const [revDebitSums, revCreditSums, expDebitSums, expCreditSums] = await Promise.all([
     revenueIds.length === 0
       ? Promise.resolve([])
-      : prisma.entry.groupBy({
-          by: ['debitAccountId'],
-          where: { debitAccountId: { in: revenueIds }, ...txFilter },
-          _sum: { amount: true },
-        }),
+      : prisma.$queryRaw<Array<{ debitAccountId: string; total: string }>>`
+          SELECT e."debitAccountId", SUM(e.amount * e."exchangeRate")::text AS total
+          FROM "Entry" e
+          JOIN "Transaction" t ON t.id = e."transactionId"
+          WHERE t."userId" = ${userId}
+            AND t."date" >= ${dateFilter.gte}
+            AND t."date" <= ${dateFilter.lte}
+            AND e."debitAccountId" = ANY(${revenueIds}::text[])
+          GROUP BY e."debitAccountId"
+        `,
     revenueIds.length === 0
       ? Promise.resolve([])
-      : prisma.entry.groupBy({
-          by: ['creditAccountId'],
-          where: { creditAccountId: { in: revenueIds }, ...txFilter },
-          _sum: { amount: true },
-        }),
+      : prisma.$queryRaw<Array<{ creditAccountId: string; total: string }>>`
+          SELECT e."creditAccountId", SUM(e.amount * e."exchangeRate")::text AS total
+          FROM "Entry" e
+          JOIN "Transaction" t ON t.id = e."transactionId"
+          WHERE t."userId" = ${userId}
+            AND t."date" >= ${dateFilter.gte}
+            AND t."date" <= ${dateFilter.lte}
+            AND e."creditAccountId" = ANY(${revenueIds}::text[])
+          GROUP BY e."creditAccountId"
+        `,
     expenseIds.length === 0
       ? Promise.resolve([])
-      : prisma.entry.groupBy({
-          by: ['debitAccountId'],
-          where: { debitAccountId: { in: expenseIds }, ...txFilter },
-          _sum: { amount: true },
-        }),
+      : prisma.$queryRaw<Array<{ debitAccountId: string; total: string }>>`
+          SELECT e."debitAccountId", SUM(e.amount * e."exchangeRate")::text AS total
+          FROM "Entry" e
+          JOIN "Transaction" t ON t.id = e."transactionId"
+          WHERE t."userId" = ${userId}
+            AND t."date" >= ${dateFilter.gte}
+            AND t."date" <= ${dateFilter.lte}
+            AND e."debitAccountId" = ANY(${expenseIds}::text[])
+          GROUP BY e."debitAccountId"
+        `,
     expenseIds.length === 0
       ? Promise.resolve([])
-      : prisma.entry.groupBy({
-          by: ['creditAccountId'],
-          where: { creditAccountId: { in: expenseIds }, ...txFilter },
-          _sum: { amount: true },
-        }),
+      : prisma.$queryRaw<Array<{ creditAccountId: string; total: string }>>`
+          SELECT e."creditAccountId", SUM(e.amount * e."exchangeRate")::text AS total
+          FROM "Entry" e
+          JOIN "Transaction" t ON t.id = e."transactionId"
+          WHERE t."userId" = ${userId}
+            AND t."date" >= ${dateFilter.gte}
+            AND t."date" <= ${dateFilter.lte}
+            AND e."creditAccountId" = ANY(${expenseIds}::text[])
+          GROUP BY e."creditAccountId"
+        `,
   ])
 
-  function toAmountMap<T extends { _sum: { amount: unknown } }>(
+  function toAmountMap<T>(
     sums: T[],
     getId: (item: T) => string,
   ): Map<string, number> {
-    return new Map((sums as T[]).map(r => [getId(r), Number(r._sum.amount ?? 0)]))
+    return new Map(sums.map(r => [getId(r), Number((r as { total?: unknown }).total ?? 0)]))
   }
 
   const revDebitMap = toAmountMap(
-    revDebitSums as Array<{ debitAccountId: string; _sum: { amount: unknown } }>,
+    revDebitSums as Array<{ debitAccountId: string; total: string }>,
     r => r.debitAccountId,
   )
   const revCreditMap = toAmountMap(
-    revCreditSums as Array<{ creditAccountId: string; _sum: { amount: unknown } }>,
+    revCreditSums as Array<{ creditAccountId: string; total: string }>,
     r => r.creditAccountId,
   )
   const expDebitMap = toAmountMap(
-    expDebitSums as Array<{ debitAccountId: string; _sum: { amount: unknown } }>,
+    expDebitSums as Array<{ debitAccountId: string; total: string }>,
     r => r.debitAccountId,
   )
   const expCreditMap = toAmountMap(
-    expCreditSums as Array<{ creditAccountId: string; _sum: { amount: unknown } }>,
+    expCreditSums as Array<{ creditAccountId: string; total: string }>,
     r => r.creditAccountId,
   )
 

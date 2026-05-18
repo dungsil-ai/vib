@@ -34,6 +34,8 @@ import { prisma } from '@/lib/prisma'
 import { GET as trialBalanceGET } from '@/app/api/reports/trial-balance/route'
 import { GET as ledgerGET } from '@/app/api/reports/ledger/route'
 import { GET as monthlySummaryGET } from '@/app/api/reports/monthly-summary/route'
+import { GET as balanceSheetGET } from '@/app/api/reports/balance-sheet/route'
+import { GET as incomeStatementGET } from '@/app/api/reports/income-statement/route'
 import { NextRequest } from 'next/server'
 
 const mockSession = { user: { id: 'user-1', email: 'test@example.com', name: 'Test' } }
@@ -283,5 +285,97 @@ describe('monthly-summary GET', () => {
     expect(body.totalCashIn).toBe(1000000)
     expect(body.totalCashOut).toBe(300000)
     expect(body.totalNetCashFlow).toBe(700000)
+  })
+})
+
+
+// ─── balance-sheet 테스트 ─────────────────────────────────────────────────
+
+describe('balance-sheet GET', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(getServerSession).mockResolvedValue(mockSession)
+    vi.mocked(prisma.account.findMany).mockResolvedValue([
+      { id: 'asset-1', type: 'ASSET', userId: 'user-1', name: '달러 예금', code: '1001', currency: 'USD', description: null, createdAt: new Date() },
+      { id: 'liability-1', type: 'LIABILITY', userId: 'user-1', name: '외화 차입금', code: '2001', currency: 'USD', description: null, createdAt: new Date() },
+      { id: 'equity-1', type: 'EQUITY', userId: 'user-1', name: '자본금', code: '3001', currency: 'KRW', description: null, createdAt: new Date() },
+    ])
+    vi.mocked(prisma.$queryRaw).mockResolvedValue([])
+  })
+
+  it('외화 분개를 환율 반영 금액으로 재무상태표에 집계한다', async () => {
+    vi.mocked(prisma.$queryRaw)
+      .mockResolvedValueOnce([{ debitAccountId: 'asset-1', total: '130000' }])
+      .mockResolvedValueOnce([
+        { creditAccountId: 'liability-1', total: '65000' },
+        { creditAccountId: 'equity-1', total: '65000' },
+      ])
+
+    const res = await balanceSheetGET()
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.assets[0].balance).toBe(130000)
+    expect(body.liabilities[0].balance).toBe(65000)
+    expect(body.equity[0].balance).toBe(65000)
+    expect(body.totalAssets).toBe(130000)
+    expect(body.totalLiabilities).toBe(65000)
+    expect(body.totalEquity).toBe(65000)
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(2)
+    expect(prisma.entry.groupBy).not.toHaveBeenCalled()
+  })
+
+  it('미인증 요청에 401을 반환한다', async () => {
+    vi.mocked(getServerSession).mockResolvedValue(null)
+    const res = await balanceSheetGET()
+    expect(res.status).toBe(401)
+  })
+})
+
+// ─── income-statement 테스트 ───────────────────────────────────────────────
+
+describe('income-statement GET', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(getServerSession).mockResolvedValue(mockSession)
+    vi.mocked(prisma.account.findMany).mockResolvedValue([
+      { id: 'rev-1', type: 'REVENUE', userId: 'user-1', name: '외화 매출', code: '4001', currency: 'USD', description: null, createdAt: new Date() },
+      { id: 'exp-1', type: 'EXPENSE', userId: 'user-1', name: '외화 비용', code: '5001', currency: 'USD', description: null, createdAt: new Date() },
+    ])
+    vi.mocked(prisma.$queryRaw).mockResolvedValue([])
+  })
+
+  it('외화 수익과 비용을 환율 반영 금액으로 손익계산서에 집계한다', async () => {
+    vi.mocked(prisma.$queryRaw)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ creditAccountId: 'rev-1', total: '130000' }])
+      .mockResolvedValueOnce([{ debitAccountId: 'exp-1', total: '26000' }])
+      .mockResolvedValueOnce([])
+
+    const req = makeRequest('/api/reports/income-statement', { year: '2024', month: '1' })
+    const res = await incomeStatementGET(req)
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.revenues[0].balance).toBe(130000)
+    expect(body.expenses[0].balance).toBe(26000)
+    expect(body.totalRevenue).toBe(130000)
+    expect(body.totalExpense).toBe(26000)
+    expect(body.netIncome).toBe(104000)
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(4)
+    expect(prisma.entry.groupBy).not.toHaveBeenCalled()
+  })
+
+  it('year 없으면 400을 반환한다', async () => {
+    const req = makeRequest('/api/reports/income-statement')
+    const res = await incomeStatementGET(req)
+    expect(res.status).toBe(400)
+  })
+
+  it('미인증 요청에 401을 반환한다', async () => {
+    vi.mocked(getServerSession).mockResolvedValue(null)
+    const req = makeRequest('/api/reports/income-statement', { year: '2024' })
+    const res = await incomeStatementGET(req)
+    expect(res.status).toBe(401)
   })
 })

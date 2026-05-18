@@ -19,24 +19,32 @@ export async function GET() {
 
   const accountIds = accounts.map(a => a.id)
 
-  const [debitSums, creditSums] = await Promise.all([
-    prisma.entry.groupBy({
-      by: ['debitAccountId'],
-      where: { debitAccountId: { in: accountIds }, transaction: { userId } },
-      _sum: { amount: true },
-    }),
-    prisma.entry.groupBy({
-      by: ['creditAccountId'],
-      where: { creditAccountId: { in: accountIds }, transaction: { userId } },
-      _sum: { amount: true },
-    }),
-  ])
+  const [debitSums, creditSums] = accountIds.length > 0
+    ? await Promise.all([
+        prisma.$queryRaw<Array<{ debitAccountId: string; total: string }>>`
+          SELECT e."debitAccountId", SUM(e.amount * e."exchangeRate")::text AS total
+          FROM "Entry" e
+          JOIN "Transaction" t ON t.id = e."transactionId"
+          WHERE t."userId" = ${userId}
+            AND e."debitAccountId" = ANY(${accountIds}::text[])
+          GROUP BY e."debitAccountId"
+        `,
+        prisma.$queryRaw<Array<{ creditAccountId: string; total: string }>>`
+          SELECT e."creditAccountId", SUM(e.amount * e."exchangeRate")::text AS total
+          FROM "Entry" e
+          JOIN "Transaction" t ON t.id = e."transactionId"
+          WHERE t."userId" = ${userId}
+            AND e."creditAccountId" = ANY(${accountIds}::text[])
+          GROUP BY e."creditAccountId"
+        `,
+      ])
+    : [[], []]
 
   const debitByAccount = new Map(
-    debitSums.map(r => [r.debitAccountId, Number(r._sum.amount ?? 0)]),
+    debitSums.map(r => [r.debitAccountId, Number(r.total ?? 0)]),
   )
   const creditByAccount = new Map(
-    creditSums.map(r => [r.creditAccountId, Number(r._sum.amount ?? 0)]),
+    creditSums.map(r => [r.creditAccountId, Number(r.total ?? 0)]),
   )
 
   let totalAssets = 0

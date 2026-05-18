@@ -213,12 +213,13 @@ export async function POST(request: NextRequest) {
               name: OPENING_BALANCE_ACCOUNT_NAME,
               code: String(firstFree),
               type: 'EQUITY',
+              currency: finalCurrency,
               description: OPENING_BALANCE_ACCOUNT_DESCRIPTION,
             },
           })
           newAccountCode = String(secondFree)
         } else {
-          // Compute next equity code (used only when creating the opening balance account)
+          // 개시잔액 계정 생성에 사용할 다음 자본 계정 코드를 계산합니다.
           const existingEquityAccounts = await tx.account.findMany({
             where: { userId, code: { startsWith: equityPrefix } },
             select: { code: true },
@@ -236,18 +237,19 @@ export async function POST(request: NextRequest) {
             throw new AccountApiError('개시잔액 계정을 생성할 수 없습니다. 자본 계정 코드가 모두 사용되었습니다.', 409)
           }
 
-          // create opening balance account if it doesn't already exist
+          // 개시잔액 계정이 아직 없으면 생성합니다.
           openingEquityAccount = existingOpeningEquityAccount ?? await tx.account.create({
             data: {
               userId,
               name: OPENING_BALANCE_ACCOUNT_NAME,
               code: String(firstFreeEquity),
               type: 'EQUITY',
+              currency: finalCurrency,
               description: OPENING_BALANCE_ACCOUNT_DESCRIPTION,
             },
           })
 
-          // Compute code for the new account inside the transaction
+          // 트랜잭션 안에서 새 계정 코드를 계산합니다.
           const existingAccounts = await tx.account.findMany({
             where: { userId, code: { startsWith: prefix } },
             select: { code: true },
@@ -274,12 +276,13 @@ export async function POST(request: NextRequest) {
             name: accountName,
             code: newAccountCode,
             type: accountType,
+            currency: finalCurrency,
             description: description ? String(description) : undefined,
           },
         })
 
-        // Debit-normal types (ASSET, EXPENSE): Dr. new account / Cr. opening equity
-        // Credit-normal types (LIABILITY, EQUITY, REVENUE): Dr. opening equity / Cr. new account
+        // 차변 정상 잔액 유형(자산, 비용): 새 계정 차변 / 개시잔액 자본 대변
+        // 대변 정상 잔액 유형(부채, 자본, 수익): 개시잔액 자본 차변 / 새 계정 대변
         const isDebitNormal = accountType === 'ASSET' || accountType === 'EXPENSE'
         const debitAccountId = isDebitNormal ? newAccount.id : openingEquityAccount.id
         const creditAccountId = isDebitNormal ? openingEquityAccount.id : newAccount.id
@@ -294,6 +297,8 @@ export async function POST(request: NextRequest) {
                 debitAccountId,
                 creditAccountId,
                 amount: openingBalance,
+                currency: finalCurrency,
+                exchangeRate: '1',
                 description: OPENING_BALANCE_ENTRY_DESCRIPTION,
               }],
             },
