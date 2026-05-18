@@ -166,7 +166,7 @@ describe('TransactionsPage', () => {
 
   it('빈 거래 목록 메시지를 표시한다', async () => {
     setupFetchMock({
-      transactions: { ok: true, json: () => Promise.resolve([]) } as Response,
+      transactions: { ok: true, json: () => Promise.resolve({ data: [], total: 0, page: 1, pageSize: 20 }) } as Response,
     })
 
     render(<TransactionsPage />)

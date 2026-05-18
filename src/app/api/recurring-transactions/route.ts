@@ -1,18 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { serializeData } from '@/lib/serialize'
 import { computeNextRunAt } from '@/lib/recurring'
+import { apiData, apiError, parseStrictInteger, parseStrictNumber, withAuth } from '@/lib/api'
 
-export async function GET(_request: NextRequest) {
-  const session = await getServerSession(authOptions)
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
-  }
-
+export const GET = withAuth(async (_request: NextRequest, userId: string) => {
   const recurringTransactions = await prisma.recurringTransaction.findMany({
-    where: { userId: session.user.id },
+    where: { userId },
     orderBy: { createdAt: 'desc' },
     include: {
       entries: {
@@ -24,65 +18,62 @@ export async function GET(_request: NextRequest) {
     },
   })
 
-  return NextResponse.json(serializeData(recurringTransactions))
-}
+  return apiData(serializeData(recurringTransactions))
+})
 
-export async function POST(request: NextRequest) {
-  const session = await getServerSession(authOptions)
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
-  }
-
+export const POST = withAuth(async (request: NextRequest, userId: string) => {
   const { description, frequency, dayOfMonth, monthOfYear, startDate, endDate, entries } =
     await request.json()
 
   if (!description || !frequency || !startDate || !entries || !Array.isArray(entries) || entries.length === 0) {
-    return NextResponse.json({ error: '필수 필드를 입력해주세요.' }, { status: 400 })
+    return apiError('필수 필드를 입력해주세요.')
   }
 
   const validFrequencies = ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY']
   if (!validFrequencies.includes(frequency)) {
-    return NextResponse.json({ error: '유효한 반복 주기를 입력해주세요.' }, { status: 400 })
+    return apiError('유효한 반복 주기를 입력해주세요.')
   }
 
   const parsedStart = new Date(startDate)
   if (Number.isNaN(parsedStart.getTime())) {
-    return NextResponse.json({ error: '유효한 시작 날짜를 입력해주세요.' }, { status: 400 })
+    return apiError('유효한 시작 날짜를 입력해주세요.')
   }
 
   if (endDate) {
     const parsedEnd = new Date(endDate)
     if (Number.isNaN(parsedEnd.getTime())) {
-      return NextResponse.json({ error: '유효한 종료 날짜를 입력해주세요.' }, { status: 400 })
+      return apiError('유효한 종료 날짜를 입력해주세요.')
     }
     if (parsedEnd <= parsedStart) {
-      return NextResponse.json({ error: '종료 날짜는 시작 날짜 이후여야 합니다.' }, { status: 400 })
+      return apiError('종료 날짜는 시작 날짜 이후여야 합니다.')
     }
   }
 
   if (frequency === 'MONTHLY' || frequency === 'YEARLY') {
     const rangeLabel = frequency === 'MONTHLY' ? '월' : '연'
-    if (!dayOfMonth || !Number.isFinite(Number(dayOfMonth)) || Number(dayOfMonth) < 1 || Number(dayOfMonth) > 31) {
-      return NextResponse.json({ error: `${rangeLabel} 반복의 경우 1~31 사이의 날짜를 입력해주세요.` }, { status: 400 })
+    const parsedDayOfMonth = parseStrictInteger(dayOfMonth, '반복일')
+    if (!parsedDayOfMonth.ok || parsedDayOfMonth.value < 1 || parsedDayOfMonth.value > 31) {
+      return apiError(`${rangeLabel} 반복의 경우 1~31 사이의 날짜를 입력해주세요.`)
     }
   }
 
   if (frequency === 'YEARLY') {
-    if (!monthOfYear || !Number.isFinite(Number(monthOfYear)) || Number(monthOfYear) < 1 || Number(monthOfYear) > 12) {
-      return NextResponse.json({ error: '연 반복의 경우 1~12 사이의 월을 입력해주세요.' }, { status: 400 })
+    const parsedMonthOfYear = parseStrictInteger(monthOfYear, '반복월')
+    if (!parsedMonthOfYear.ok || parsedMonthOfYear.value < 1 || parsedMonthOfYear.value > 12) {
+      return apiError('연 반복의 경우 1~12 사이의 월을 입력해주세요.')
     }
   }
 
   for (const entry of entries) {
     if (!entry.debitAccountId || !entry.creditAccountId || entry.amount == null) {
-      return NextResponse.json({ error: '각 항목의 차변·대변 계정과 금액을 입력해주세요.' }, { status: 400 })
+      return apiError('각 항목의 차변·대변 계정과 금액을 입력해주세요.')
     }
-    const amount = Number(entry.amount)
-    if (!Number.isFinite(amount) || amount <= 0) {
-      return NextResponse.json({ error: '유효한 거래 금액을 입력해주세요.' }, { status: 400 })
+    const parsedAmount = parseStrictNumber(entry.amount, '거래 금액')
+    if (!parsedAmount.ok || parsedAmount.value <= 0) {
+      return apiError('유효한 거래 금액을 입력해주세요.')
     }
     if (entry.debitAccountId === entry.creditAccountId) {
-      return NextResponse.json({ error: '차변 계정과 대변 계정은 달라야 합니다.' }, { status: 400 })
+      return apiError('차변 계정과 대변 계정은 달라야 합니다.')
     }
   }
 
@@ -93,14 +84,14 @@ export async function POST(request: NextRequest) {
     ]),
   ]
   const ownedAccounts = await prisma.account.findMany({
-    where: { id: { in: accountIds }, userId: session.user.id },
+    where: { id: { in: accountIds }, userId },
     select: { id: true },
   })
   if (ownedAccounts.length !== accountIds.length) {
-    return NextResponse.json({ error: '잘못된 계정이 포함되어 있습니다.' }, { status: 403 })
+    return apiError('잘못된 계정이 포함되어 있습니다.', 403)
   }
 
-  // Compute initial nextRunAt: first occurrence on or after startDate with the given day settings
+  // 지정한 날짜 설정에 따라 시작일 이후 첫 실행일을 계산합니다.
   let nextRunAt = new Date(parsedStart)
   if ((frequency === 'MONTHLY' || frequency === 'YEARLY') && dayOfMonth) {
     const maxDay = new Date(nextRunAt.getFullYear(), nextRunAt.getMonth() + 1, 0).getDate()
@@ -126,7 +117,7 @@ export async function POST(request: NextRequest) {
   try {
     const recurring = await prisma.recurringTransaction.create({
       data: {
-        userId: session.user.id,
+        userId,
         description,
         frequency,
         dayOfMonth: dayOfMonth ? Number(dayOfMonth) : null,
@@ -162,4 +153,4 @@ export async function POST(request: NextRequest) {
     console.error(error)
     return NextResponse.json({ error: '반복 거래 생성에 실패했습니다.' }, { status: 400 })
   }
-}
+})

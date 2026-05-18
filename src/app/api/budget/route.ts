@@ -1,80 +1,71 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { serializeData } from '@/lib/serialize'
+import { apiData, apiError, parseStrictInteger, parseStrictNumber, withAuth } from '@/lib/api'
 
-export async function GET(request: NextRequest) {
-  const session = await getServerSession(authOptions)
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
-  }
-
+export const GET = withAuth(async (request: NextRequest, userId: string) => {
   const { searchParams } = new URL(request.url)
-  const year = parseInt(searchParams.get('year') || String(new Date().getFullYear()), 10)
-  const month = parseInt(searchParams.get('month') || String(new Date().getMonth() + 1), 10)
+  const yearParam = searchParams.get('year') || String(new Date().getFullYear())
+  const monthParam = searchParams.get('month') || String(new Date().getMonth() + 1)
+  const parsedYear = parseStrictInteger(yearParam, 'year')
+  const parsedMonth = parseStrictInteger(monthParam, 'month')
 
-  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
-    return NextResponse.json({ error: '유효한 year/month를 입력해주세요.' }, { status: 400 })
+  if (!parsedYear.ok || !parsedMonth.ok || parsedMonth.value < 1 || parsedMonth.value > 12) {
+    return apiError('유효한 year/month를 입력해주세요.')
   }
+
+  const year = parsedYear.value
+  const month = parsedMonth.value
 
   try {
     const budgets = await prisma.budget.findMany({
-      where: { userId: session.user.id, year, month },
+      where: { userId, year, month },
       include: { account: { select: { name: true, code: true, type: true } } },
     })
 
-    return NextResponse.json(serializeData(budgets))
+    return apiData(serializeData(budgets))
   } catch (error) {
     console.error('[budget] GET error:', error)
     return NextResponse.json({ error: '예산 목록을 불러오지 못했습니다.' }, { status: 500 })
   }
-}
+})
 
-export async function POST(request: NextRequest) {
-  const session = await getServerSession(authOptions)
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
-  }
-
+export const POST = withAuth(async (request: NextRequest, userId: string) => {
   const { accountId, year, month, amount } = await request.json()
 
   if (!accountId || year === undefined || month === undefined || amount === undefined) {
-    return NextResponse.json({ error: '필수 필드를 입력해주세요.' }, { status: 400 })
+    return apiError('필수 필드를 입력해주세요.')
   }
 
-  const parsedYear = Number(year)
-  const parsedMonth = Number(month)
-  if (
-    !Number.isFinite(parsedYear) ||
-    !Number.isInteger(parsedYear) ||
-    !Number.isFinite(parsedMonth) ||
-    !Number.isInteger(parsedMonth) ||
-    parsedMonth < 1 ||
-    parsedMonth > 12
-  ) {
-    return NextResponse.json({ error: '유효한 year/month를 입력해주세요.' }, { status: 400 })
+  const parsedYearResult = parseStrictInteger(year, 'year')
+  const parsedMonthResult = parseStrictInteger(month, 'month')
+  if (!parsedYearResult.ok || !parsedMonthResult.ok || parsedMonthResult.value < 1 || parsedMonthResult.value > 12) {
+    return apiError('유효한 year/month를 입력해주세요.')
   }
 
-  const parsedAmount = Number(amount)
-  if (!Number.isFinite(parsedAmount) || parsedAmount < 0) {
-    return NextResponse.json({ error: '유효한 금액을 입력해주세요.' }, { status: 400 })
+  const parsedAmountResult = parseStrictNumber(amount, '금액')
+  if (!parsedAmountResult.ok) {
+    return apiError('유효한 금액을 입력해주세요.')
   }
 
-  // Verify the account belongs to the authenticated user
+  const parsedYear = parsedYearResult.value
+  const parsedMonth = parsedMonthResult.value
+  const parsedAmount = parsedAmountResult.value
+
+  // 인증된 사용자의 계정인지 확인합니다.
   const account = await prisma.account.findFirst({
-    where: { id: accountId, userId: session.user.id },
+    where: { id: accountId, userId },
     select: { id: true },
   })
   if (!account) {
-    return NextResponse.json({ error: '계정을 찾을 수 없습니다.' }, { status: 404 })
+    return apiError('계정을 찾을 수 없습니다.', 404)
   }
 
   try {
     const budget = await prisma.budget.upsert({
       where: {
         userId_accountId_year_month: {
-          userId: session.user.id,
+          userId,
           accountId,
           year: parsedYear,
           month: parsedMonth,
@@ -82,7 +73,7 @@ export async function POST(request: NextRequest) {
       },
       update: { amount: parsedAmount },
       create: {
-        userId: session.user.id,
+        userId,
         accountId,
         year: parsedYear,
         month: parsedMonth,
@@ -94,5 +85,5 @@ export async function POST(request: NextRequest) {
     console.error(error)
     return NextResponse.json({ error: '예산 설정에 실패했습니다.' }, { status: 400 })
   }
-}
+})
 

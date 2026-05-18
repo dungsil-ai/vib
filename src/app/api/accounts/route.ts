@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import type { Account } from '@prisma/client'
-import { CURRENCY_CODES } from '@/lib/currencies'
+import { normalizeCurrencyCode, parseStrictNumber } from '@/lib/api'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
@@ -27,14 +27,14 @@ export async function GET() {
 
     const accountIds = accounts.map(a => a.id)
 
-    // Fetch the user's base currency for balance conversion
+    // 잔액 환산에 사용할 사용자의 기준 통화를 조회합니다.
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
       select: { currency: true },
     })
     const baseCurrency = user?.currency ?? 'KRW'
 
-    // Use raw SQL to compute balance in base currency: SUM(amount * exchangeRate)
+    // 기준 통화 잔액 계산에는 amount * exchangeRate 합계를 사용합니다.
     const [debitSums, creditSums] = accountIds.length > 0
       ? await Promise.all([
           prisma.$queryRaw<Array<{ debitAccountId: string; total: string }>>`
@@ -93,6 +93,10 @@ const OPENING_BALANCE_ACCOUNT_NAME = '개시잔액'
 const OPENING_BALANCE_ACCOUNT_DESCRIPTION = '초기잔액 자동 분개용 계정'
 const OPENING_BALANCE_ENTRY_DESCRIPTION = '초기잔액 자동 분개'
 
+function getAccountCodePrefix(baseCode: number) {
+  return String(baseCode).slice(0, -3) || String(baseCode)
+}
+
 class AccountApiError extends Error {
   constructor(public readonly apiMessage: string, public readonly apiStatus: number) {
     super(apiMessage)
@@ -133,14 +137,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `'${OPENING_BALANCE_ACCOUNT_NAME}'은 예약된 계정명입니다.` }, { status: 400 })
     }
 
-    // Validate currency if provided
-    const accountCurrency = currency ? String(currency) : undefined
-    if (accountCurrency && !CURRENCY_CODES.includes(accountCurrency)) {
-      return NextResponse.json({ error: '지원하지 않는 통화 코드입니다.' }, { status: 400 })
+    // 통화 코드가 입력되면 정규화하고, 없으면 사용자의 기준 통화를 사용합니다.
+    const normalizedCurrency = normalizeCurrencyCode(currency)
+    if (!normalizedCurrency.ok) {
+      return normalizedCurrency.response
     }
 
-    // If no currency specified, use user's base currency
-    let finalCurrency = accountCurrency
+    let finalCurrency = normalizedCurrency.value
     if (!finalCurrency) {
       const user = await prisma.user.findUnique({
         where: { id: userId },
@@ -150,11 +153,11 @@ export async function POST(request: NextRequest) {
     }
 
     const openingBalanceRaw = (body as { openingBalance?: unknown }).openingBalance
-    const openingBalance = openingBalanceRaw != null ? Number(openingBalanceRaw) : 0
-
-    if (openingBalanceRaw != null && (!Number.isFinite(openingBalance) || openingBalance < 0)) {
+    const parsedOpeningBalance = openingBalanceRaw != null ? parseStrictNumber(openingBalanceRaw, '초기잔액') : { ok: true as const, value: 0 }
+    if (!parsedOpeningBalance.ok) {
       return NextResponse.json({ error: '초기잔액은 0 이상의 숫자여야 합니다.' }, { status: 400 })
     }
+    const openingBalance = parsedOpeningBalance.value
 
     if (openingBalance > 0 && !OPENING_BALANCE_ALLOWED_TYPES.has(accountType)) {
       return NextResponse.json(
@@ -162,19 +165,18 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       )
     }
-    const prefix = String(TYPE_CODE_PREFIX[accountType]).slice(0, 1)
     const base = TYPE_CODE_PREFIX[accountType]
+    const prefix = getAccountCodePrefix(base)
     const upperBound = base + 999
 
     if (openingBalance > 0) {
-      // All code allocation, account creation and entry creation in a single transaction
-      // to prevent partial-success and code-collision issues.
+      // 코드 할당, 계정 생성, 분개 생성을 하나의 트랜잭션으로 처리해 부분 성공과 코드 충돌을 방지합니다.
       const account = await prisma.$transaction(async (tx) => {
         const equityBase = TYPE_CODE_PREFIX['EQUITY']
-        const equityPrefix = String(equityBase)[0]
+        const equityPrefix = getAccountCodePrefix(equityBase)
         const equityUpperBound = equityBase + 999
 
-        // Use findFirst with orderBy for deterministic lookup
+        // 안정적인 조회를 위해 orderBy와 함께 findFirst를 사용합니다.
         const existingOpeningEquityAccount = await tx.account.findFirst({
           where: { userId, name: OPENING_BALANCE_ACCOUNT_NAME, type: 'EQUITY' },
           orderBy: { createdAt: 'asc' },
@@ -184,8 +186,7 @@ export async function POST(request: NextRequest) {
         let newAccountCode: string
 
         if (accountType === 'EQUITY' && !existingOpeningEquityAccount) {
-          // New account and opening balance account both need codes from the same EQUITY range.
-          // Allocate two distinct free codes in one pass to avoid collision.
+          // 새 계정과 개시잔액 계정이 같은 자본 코드 범위를 사용하므로 한 번에 서로 다른 빈 코드를 할당합니다.
           const existingCodes = await tx.account.findMany({
             where: { userId, code: { startsWith: equityPrefix } },
             select: { code: true },
@@ -218,7 +219,7 @@ export async function POST(request: NextRequest) {
           })
           newAccountCode = String(secondFree)
         } else {
-          // Compute next equity code (used only when creating the opening balance account)
+          // 개시잔액 계정 생성 시 사용할 다음 자본 코드를 계산합니다.
           const existingEquityAccounts = await tx.account.findMany({
             where: { userId, code: { startsWith: equityPrefix } },
             select: { code: true },
@@ -236,7 +237,7 @@ export async function POST(request: NextRequest) {
             throw new AccountApiError('개시잔액 계정을 생성할 수 없습니다. 자본 계정 코드가 모두 사용되었습니다.', 409)
           }
 
-          // create opening balance account if it doesn't already exist
+          // 개시잔액 계정이 없으면 생성합니다.
           openingEquityAccount = existingOpeningEquityAccount ?? await tx.account.create({
             data: {
               userId,
@@ -247,7 +248,7 @@ export async function POST(request: NextRequest) {
             },
           })
 
-          // Compute code for the new account inside the transaction
+          // 트랜잭션 내부에서 새 계정 코드를 계산합니다.
           const existingAccounts = await tx.account.findMany({
             where: { userId, code: { startsWith: prefix } },
             select: { code: true },
@@ -278,8 +279,8 @@ export async function POST(request: NextRequest) {
           },
         })
 
-        // Debit-normal types (ASSET, EXPENSE): Dr. new account / Cr. opening equity
-        // Credit-normal types (LIABILITY, EQUITY, REVENUE): Dr. opening equity / Cr. new account
+        // 차변 정상 계정(자산, 비용)은 새 계정 차변/개시잔액 자본 대변으로 기록합니다.
+        // 대변 정상 계정(부채, 자본, 수익)은 개시잔액 자본 차변/새 계정 대변으로 기록합니다.
         const isDebitNormal = accountType === 'ASSET' || accountType === 'EXPENSE'
         const debitAccountId = isDebitNormal ? newAccount.id : openingEquityAccount.id
         const creditAccountId = isDebitNormal ? openingEquityAccount.id : newAccount.id
@@ -306,7 +307,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(account, { status: 201 })
     }
 
-    // No opening balance — compute code and create account
+    // 초기잔액이 없으면 코드를 계산한 뒤 계정을 생성합니다.
     const existingAccounts = await prisma.account.findMany({
       where: { userId, code: { startsWith: prefix } },
       select: { code: true },

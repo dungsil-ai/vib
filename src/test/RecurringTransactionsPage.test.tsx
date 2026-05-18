@@ -96,7 +96,7 @@ function setupFetchMock(overrides: Partial<{
       } as Response
     }
     if (url === '/api/recurring-transactions' && method === 'GET') {
-      return overrides.recurring ?? { ok: true, json: () => Promise.resolve(mockRecurring) } as Response
+      return overrides.recurring ?? { ok: true, json: () => Promise.resolve({ data: mockRecurring }) } as Response
     }
     if (url === '/api/recurring-transactions' && method === 'POST') {
       return overrides.post ?? { ok: true, json: () => Promise.resolve({ id: 'new-rec' }) } as Response
@@ -142,7 +142,7 @@ describe('RecurringTransactionsPage (반복 거래 탭)', () => {
           json: () => Promise.resolve({ data: [], total: 0, page: 1, pageSize: 20 }),
         } as Response
       }
-      // recurring-transactions는 pending
+      // 반복 거래는 pending 상태로 둡니다.
       return new Promise(() => {})
     })
 
@@ -210,7 +210,7 @@ describe('RecurringTransactionsPage (반복 거래 탭)', () => {
 
   it('빈 반복 거래 목록 메시지를 표시한다', async () => {
     setupFetchMock({
-      recurring: { ok: true, json: () => Promise.resolve([]) } as Response,
+      recurring: { ok: true, json: () => Promise.resolve({ data: [] }) } as Response,
     })
 
     const user = userEvent.setup()

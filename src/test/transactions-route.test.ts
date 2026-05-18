@@ -229,13 +229,22 @@ describe('GET /api/transactions', () => {
     expect(findManyCalls[0][0]?.take).toBe(100)
   })
 
-  it('year/month 레거시 파라미터로 배열을 직접 반환한다', async () => {
-    vi.mocked(prisma.transaction.findMany).mockResolvedValue(mockTransactions)
+  it('year/month 파라미터도 페이지네이션 응답으로 반환한다', async () => {
+    vi.mocked(prisma.$transaction).mockResolvedValue([1, mockTransactions])
     const req = makeRequest('/api/transactions', { year: '2024', month: '1' })
     const res = await GET(req)
     expect(res.status).toBe(200)
     const body = await res.json()
-    expect(Array.isArray(body)).toBe(true)
+    expect(body).toMatchObject({ total: 1, page: 1, pageSize: 20 })
+    expect(body.data[0]).toMatchObject({ id: 'tx-1', description: '점심 식사' })
+  })
+
+  it('부분 숫자가 섞인 금액 필터는 거절한다', async () => {
+    const req = makeRequest('/api/transactions', { minAmount: '100abc' })
+    const res = await GET(req)
+    expect(res.status).toBe(400)
+    const body = await res.json()
+    expect(body.error).toMatch(/minAmount/)
   })
 
   it('year만 있고 month가 없으면 400을 반환한다', async () => {

@@ -1,6 +1,5 @@
-import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { CURRENCY_CODES } from '@/lib/currencies'
+import { apiError, normalizeCurrencyCode, parseStrictNumber } from '@/lib/api'
 
 export type TransactionEntryInput = {
   debitAccountId: string
@@ -20,50 +19,23 @@ export const TRANSACTION_ENTRY_INCLUDE = {
   },
 } as const
 
-function errorResponse(message: string, status = 400) {
-  return NextResponse.json({ error: message }, { status })
-}
-
-function normalizeCurrencyInternal(currency: unknown) {
-  if (currency === undefined || currency === null) {
-    return { ok: true as const }
-  }
-
-  if (typeof currency !== 'string') {
-    return {
-      ok: false as const,
-      response: errorResponse('통화 코드는 문자열이어야 합니다.'),
-    }
-  }
-
-  const normalizedCurrency = currency.trim().toUpperCase()
-  if (!normalizedCurrency || !CURRENCY_CODES.includes(normalizedCurrency)) {
-    return {
-      ok: false as const,
-      response: errorResponse('지원하지 않는 통화 코드입니다.'),
-    }
-  }
-
-  return { ok: true as const, currency: normalizedCurrency }
-}
-
 function parseExchangeRateInternal(exchangeRate: unknown) {
   if (exchangeRate === undefined || exchangeRate === null) {
     return { ok: true as const }
   }
-  const raw = typeof exchangeRate === 'number' ? String(exchangeRate) : typeof exchangeRate === 'string' ? exchangeRate.trim() : null
-  if (raw === null) {
-    return { ok: false as const, response: errorResponse('환율(exchangeRate)은 문자열 또는 숫자여야 합니다.') }
+
+  const parsed = parseStrictNumber(exchangeRate, '환율')
+  if (!parsed.ok) {
+    return { ok: false as const, response: apiError('환율은 양의 숫자 형식이어야 합니다.') }
   }
-  if (!/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(raw)) {
-    return { ok: false as const, response: errorResponse('환율은 양의 숫자 형식이어야 합니다.') }
+
+  if (parsed.value <= 0) {
+    return { ok: false as const, response: apiError('유효한 환율을 입력해주세요.') }
   }
-  const rate = Number(raw)
-  if (!Number.isFinite(rate) || rate <= 0) {
-    return { ok: false as const, response: errorResponse('유효한 환율을 입력해주세요.') }
-  }
-  return { ok: true as const, exchangeRate: raw }
+
+  return { ok: true as const, exchangeRate: String(exchangeRate).trim() }
 }
+
 
 export async function validateTransactionPayload(userId: string, body: unknown) {
   const payload = body as {
@@ -75,14 +47,14 @@ export async function validateTransactionPayload(userId: string, body: unknown) 
   if (!payload.date || !payload.description || !payload.entries || !Array.isArray(payload.entries) || payload.entries.length === 0) {
     return {
       ok: false as const,
-      response: errorResponse('필수 필드를 입력해주세요.'),
+      response: apiError('필수 필드를 입력해주세요.'),
     }
   }
 
   if (typeof payload.description !== 'string') {
     return {
       ok: false as const,
-      response: errorResponse('거래 설명은 문자열이어야 합니다.'),
+      response: apiError('거래 설명은 문자열이어야 합니다.'),
     }
   }
 
@@ -90,7 +62,7 @@ export async function validateTransactionPayload(userId: string, body: unknown) 
   if (Number.isNaN(parsedDate.getTime())) {
     return {
       ok: false as const,
-      response: errorResponse('유효한 날짜를 입력해주세요.'),
+      response: apiError('유효한 날짜를 입력해주세요.'),
     }
   }
 
@@ -100,7 +72,7 @@ export async function validateTransactionPayload(userId: string, body: unknown) 
     if (!entry || typeof entry !== 'object') {
       return {
         ok: false as const,
-        response: errorResponse('각 항목의 차변·대변 계정과 금액을 입력해주세요.'),
+        response: apiError('각 항목의 차변·대변 계정과 금액을 입력해주세요.'),
       }
     }
 
@@ -108,31 +80,32 @@ export async function validateTransactionPayload(userId: string, body: unknown) 
     if (!candidate.debitAccountId || !candidate.creditAccountId || candidate.amount == null) {
       return {
         ok: false as const,
-        response: errorResponse('각 항목의 차변·대변 계정과 금액을 입력해주세요.'),
+        response: apiError('각 항목의 차변·대변 계정과 금액을 입력해주세요.'),
       }
     }
 
-    const amount = Number(candidate.amount)
-    if (!Number.isFinite(amount)) {
+    const parsedAmount = parseStrictNumber(candidate.amount, '거래 금액')
+    if (!parsedAmount.ok) {
       return {
         ok: false as const,
-        response: errorResponse('유효한 거래 금액을 입력해주세요.'),
+        response: apiError('유효한 거래 금액을 입력해주세요.'),
       }
     }
+    const amount = parsedAmount.value
     if (amount <= 0) {
       return {
         ok: false as const,
-        response: errorResponse('거래 금액은 0보다 커야 합니다.'),
+        response: apiError('거래 금액은 0보다 커야 합니다.'),
       }
     }
     if (candidate.debitAccountId === candidate.creditAccountId) {
       return {
         ok: false as const,
-        response: errorResponse('차변 계정과 대변 계정은 달라야 합니다.'),
+        response: apiError('차변 계정과 대변 계정은 달라야 합니다.'),
       }
     }
 
-    const normalizedCurrency = normalizeCurrencyInternal(candidate.currency)
+    const normalizedCurrency = normalizeCurrencyCode(candidate.currency)
     if (!normalizedCurrency.ok) {
       return normalizedCurrency
     }
@@ -144,7 +117,7 @@ export async function validateTransactionPayload(userId: string, body: unknown) 
       debitAccountId: String(candidate.debitAccountId),
       creditAccountId: String(candidate.creditAccountId),
       amount: String(candidate.amount),
-      currency: normalizedCurrency.currency,
+      currency: normalizedCurrency.value,
       exchangeRate: normalizedExchangeRate.exchangeRate,
       description: typeof candidate.description === 'string' ? candidate.description : undefined,
     })
@@ -171,7 +144,7 @@ export async function validateTransactionPayload(userId: string, body: unknown) 
   if (ownedAccounts.length !== accountIds.length) {
     return {
       ok: false as const,
-      response: errorResponse('잘못된 계정이 포함되어 있습니다.', 403),
+      response: apiError('잘못된 계정이 포함되어 있습니다.', 403),
     }
   }
 
@@ -182,7 +155,7 @@ export async function validateTransactionPayload(userId: string, body: unknown) 
     if (entryCurrency !== baseCurrency && (entry.exchangeRate === undefined || entry.exchangeRate === null)) {
       return {
         ok: false as const,
-        response: errorResponse(`외화(${entryCurrency}) 분개에는 환율(exchangeRate)이 필요합니다.`),
+        response: apiError(`외화(${entryCurrency}) 분개에는 환율(exchangeRate)이 필요합니다.`),
       }
     }
   }
