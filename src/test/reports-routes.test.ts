@@ -63,7 +63,7 @@ describe('trial-balance GET', () => {
     vi.mocked(prisma.$queryRaw).mockResolvedValue([])
   })
 
-  it('endDate를 23:59:59.999로 보정해 당일 거래를 포함한다', async () => {
+  it('endDate를 UTC 23:59:59.999로 보정해 당일 거래를 포함한다', async () => {
     vi.mocked(prisma.account.findMany).mockResolvedValue([
       { id: 'acc-1', code: '1001', name: '현금', type: 'ASSET' },
     ] as never)
@@ -71,7 +71,6 @@ describe('trial-balance GET', () => {
     const res = await trialBalanceGET(req)
     expect(res.status).toBe(200)
 
-    // 원화 환산 집계 쿼리 호출 시 lte가 당일 끝으로 설정되었는지 검증
     const calls = vi.mocked(prisma.$queryRaw).mock.calls
     expect(calls.length).toBeGreaterThan(0)
     const dates = calls.flatMap(call => call.flatMap(collectDates))
@@ -153,7 +152,7 @@ describe('ledger GET', () => {
     vi.mocked(prisma.entry.findMany).mockResolvedValue([])
   })
 
-  it('endDate를 23:59:59.999로 보정해 당일 거래를 포함한다', async () => {
+  it('endDate를 UTC 23:59:59.999로 보정해 당일 거래를 포함한다', async () => {
     const req = makeRequest('/api/reports/ledger', {
       accountId: 'acc-1',
       endDate: '2024-01-15',
@@ -161,15 +160,10 @@ describe('ledger GET', () => {
     const res = await ledgerGET(req)
     expect(res.status).toBe(200)
 
-    // entry.findMany 호출 시 lte가 당일 끝으로 설정되었는지 검증
     const calls = vi.mocked(prisma.entry.findMany).mock.calls
     expect(calls.length).toBeGreaterThan(0)
     const txDate = (calls[0][0] as { where: { transaction: { date: { lte: Date } } } }).where.transaction.date.lte as Date
-    expect(txDate.getHours()).toBe(23)
-    expect(txDate.getMinutes()).toBe(59)
-    expect(txDate.getSeconds()).toBe(59)
-    expect(txDate.getMilliseconds()).toBe(999)
-    expect(txDate.getDate()).toBe(15)
+    expect(txDate.toISOString()).toBe('2024-01-15T23:59:59.999Z')
   })
 
   it('분개 금액에 exchangeRate를 곱한 원화 환산 금액으로 원장 잔액을 계산한다', async () => {

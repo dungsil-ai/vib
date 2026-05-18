@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { getBaseCurrencyEntrySumMap } from '@/lib/report-sums'
+import { parseUTCDateOnly, parseUTCEndOfDay } from '@/lib/date-range'
 import { serializeData } from '@/lib/serialize'
 
 export async function GET(request: NextRequest) {
@@ -34,18 +35,17 @@ export async function GET(request: NextRequest) {
   let endDate: Date | undefined
 
   if (startDateParam) {
-    const d = new Date(startDateParam)
-    if (isNaN(d.getTime())) {
+    const d = parseUTCDateOnly(startDateParam)
+    if (!d) {
       return NextResponse.json({ error: '유효한 startDate를 입력해주세요.' }, { status: 400 })
     }
     startDate = d
   }
   if (endDateParam) {
-    const d = new Date(endDateParam)
-    if (isNaN(d.getTime())) {
+    const d = parseUTCEndOfDay(endDateParam)
+    if (!d) {
       return NextResponse.json({ error: '유효한 endDate를 입력해주세요.' }, { status: 400 })
     }
-    d.setHours(23, 59, 59, 999)
     endDate = d
   }
 
