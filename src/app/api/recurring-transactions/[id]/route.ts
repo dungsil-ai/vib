@@ -3,6 +3,12 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { serializeData } from '@/lib/serialize'
+import {
+  buildRecurringTransactionData,
+  RECURRING_TRANSACTION_INCLUDE,
+  unwrapRecurringValidation,
+  validateRecurringTransactionInput,
+} from '../shared'
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions)
@@ -19,23 +25,40 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   }
 
   const body = await request.json()
-  const { isActive } = body
+  const updatesActiveOnly = Object.keys(body).every(key => key === 'isActive')
 
-  if (typeof isActive !== 'boolean') {
-    return NextResponse.json({ error: 'isActive 값이 필요합니다.' }, { status: 400 })
+  if (updatesActiveOnly) {
+    const { isActive } = body
+    if (typeof isActive !== 'boolean') {
+      return NextResponse.json({ error: 'isActive 값이 필요합니다.' }, { status: 400 })
+    }
+
+    const updated = await prisma.recurringTransaction.update({
+      where: { id },
+      data: { isActive },
+      include: RECURRING_TRANSACTION_INCLUDE,
+    })
+
+    return NextResponse.json(serializeData(updated))
   }
 
+  const validation = unwrapRecurringValidation(await validateRecurringTransactionInput(body, session.user.id))
+  if (validation instanceof NextResponse) {
+    return validation
+  }
+
+  const transactionData = buildRecurringTransactionData(validation)
   const updated = await prisma.recurringTransaction.update({
     where: { id },
-    data: { isActive },
-    include: {
+    data: {
+      ...transactionData,
+      isActive: typeof body.isActive === 'boolean' ? body.isActive : existing.isActive,
       entries: {
-        include: {
-          debitAccount: { select: { name: true, code: true, type: true } },
-          creditAccount: { select: { name: true, code: true, type: true } },
-        },
+        deleteMany: {},
+        create: transactionData.entries.create,
       },
     },
+    include: RECURRING_TRANSACTION_INCLUDE,
   })
 
   return NextResponse.json(serializeData(updated))

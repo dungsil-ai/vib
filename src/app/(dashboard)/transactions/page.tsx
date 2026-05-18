@@ -1096,6 +1096,8 @@ function TransactionsTab({ accounts, accountsLoading, accountsError, baseCurrenc
 
 interface RecurringEntry {
   id: string
+  debitAccountId: string
+  creditAccountId: string
   amount: string
   description: string | null
   debitAccount: { name: string; code: string; type: string }
@@ -1146,7 +1148,8 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
   const [monthOfYear, setMonthOfYear] = useState('1')
   const [startDate, setStartDate] = useState(todayDate())
   const [endDate, setEndDate] = useState('')
-  const [entries, setEntries] = useState<EntryForm[]>([defaultEntry()])
+  const [entries, setEntries] = useState<EntryForm[]>([defaultEntry(baseCurrency)])
+  const [editingRecurringId, setEditingRecurringId] = useState<string | null>(null)
   const [formError, setFormError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -1191,10 +1194,11 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
     setMonthOfYear('1')
     setStartDate(todayDate())
     setEndDate('')
-    setEntries([defaultEntry()])
+    setEntries([defaultEntry(baseCurrency)])
+    setEditingRecurringId(null)
   }
 
-  const addEntry = () => setEntries(prev => [...prev, defaultEntry()])
+  const addEntry = () => setEntries(prev => [...prev, defaultEntry(baseCurrency)])
   const removeEntry = (index: number) => {
     setEntries(prev => {
       if (prev.length === 1) return prev
@@ -1230,8 +1234,8 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
     }
 
     try {
-      const res = await fetch('/api/recurring-transactions', {
-        method: 'POST',
+      const res = await fetch(editingRecurringId ? `/api/recurring-transactions/${editingRecurringId}` : '/api/recurring-transactions', {
+        method: editingRecurringId ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           description,
@@ -1259,7 +1263,7 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
       setListLoading(true)
       fetchRecurring()
     } catch {
-      setFormError('반복 거래 저장 중 오류가 발생했습니다.')
+      setFormError(editingRecurringId ? '반복 거래 수정 중 오류가 발생했습니다.' : '반복 거래 저장 중 오류가 발생했습니다.')
     } finally {
       setSubmitting(false)
     }
@@ -1280,6 +1284,26 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
     } catch (err) {
       setListError(err instanceof Error ? err.message : '상태 변경 중 오류가 발생했습니다.')
     }
+  }
+
+  const handleEdit = (recurring: RecurringTransaction) => {
+    setFormError('')
+    setEditingRecurringId(recurring.id)
+    setDescription(recurring.description)
+    setFrequency(recurring.frequency)
+    setDayOfMonth(recurring.dayOfMonth ? String(recurring.dayOfMonth) : '25')
+    setMonthOfYear(recurring.monthOfYear ? String(recurring.monthOfYear) : '1')
+    setStartDate(recurring.startDate.split('T')[0])
+    setEndDate(recurring.endDate ? recurring.endDate.split('T')[0] : '')
+    setEntries(recurring.entries.map(entry => ({
+      id: crypto.randomUUID(),
+      debitAccountId: entry.debitAccountId,
+      creditAccountId: entry.creditAccountId,
+      amount: String(entry.amount),
+      currency: baseCurrency,
+      exchangeRate: '1',
+      description: entry.description ?? '',
+    })))
   }
 
   const handleDelete = async (id: string) => {
@@ -1330,7 +1354,7 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
 
       {/* ── Add recurring transaction form ── */}
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border dark:border-gray-700 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">반복 거래 추가</h2>
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">{editingRecurringId ? '반복 거래 수정' : '반복 거래 추가'}</h2>
 
         {formError && (
           <div className="mb-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded text-sm">
@@ -1532,14 +1556,14 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
               disabled={submitting}
               className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium disabled:opacity-50"
             >
-              {submitting ? '저장 중...' : '반복 거래 저장'}
+              {submitting ? (editingRecurringId ? '수정 중...' : '저장 중...') : (editingRecurringId ? '반복 거래 수정 저장' : '반복 거래 저장')}
             </button>
             <button
               type="button"
               onClick={resetForm}
               className="px-6 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 text-sm font-medium"
             >
-              초기화
+              {editingRecurringId ? '수정 취소' : '초기화'}
             </button>
           </div>
         </form>
@@ -1626,12 +1650,20 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
                             </button>
                           </td>
                           <td className="px-4 py-3 text-center">
-                            <button
-                              onClick={e => { e.stopPropagation(); handleDelete(r.id) }}
-                              className="text-xs text-red-600 hover:text-red-800"
-                            >
-                              삭제
-                            </button>
+                            <div className="flex justify-center gap-2">
+                              <button
+                                onClick={e => { e.stopPropagation(); handleEdit(r) }}
+                                className="text-xs text-blue-600 hover:text-blue-800"
+                              >
+                                수정
+                              </button>
+                              <button
+                                onClick={e => { e.stopPropagation(); handleDelete(r.id) }}
+                                className="text-xs text-red-600 hover:text-red-800"
+                              >
+                                삭제
+                              </button>
+                            </div>
                           </td>
                         </tr>
                         {isExpanded && r.entries.length > 0 && (
