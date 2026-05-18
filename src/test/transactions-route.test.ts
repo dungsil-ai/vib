@@ -229,37 +229,25 @@ describe('GET /api/transactions', () => {
     expect(findManyCalls[0][0]?.take).toBe(100)
   })
 
-  it('year/month 레거시 파라미터로 배열을 직접 반환한다', async () => {
-    vi.mocked(prisma.transaction.findMany).mockResolvedValue(mockTransactions)
+  it('year/month 레거시 파라미터를 더 이상 지원하지 않는다', async () => {
     const req = makeRequest('/api/transactions', { year: '2024', month: '1' })
     const res = await GET(req)
-    expect(res.status).toBe(200)
-    const body = await res.json()
-    expect(Array.isArray(body)).toBe(true)
-  })
-
-  it('year만 있고 month가 없으면 400을 반환한다', async () => {
-    const req = makeRequest('/api/transactions', { year: '2024' })
-    const res = await GET(req)
     expect(res.status).toBe(400)
     const body = await res.json()
-    expect(body.error).toMatch(/year.*month|month.*year/)
+    expect(body.error).toMatch(/year\/month.*startDate\/endDate/)
+    expect(prisma.transaction.findMany).not.toHaveBeenCalled()
   })
 
-  it('month만 있고 year가 없으면 400을 반환한다', async () => {
-    const req = makeRequest('/api/transactions', { month: '1' })
-    const res = await GET(req)
-    expect(res.status).toBe(400)
-    const body = await res.json()
-    expect(body.error).toMatch(/year.*month|month.*year/)
-  })
+  it('year 또는 month 중 하나만 있어도 레거시 파라미터 오류를 반환한다', async () => {
+    const yearReq = makeRequest('/api/transactions', { year: '2024' })
+    const yearRes = await GET(yearReq)
+    expect(yearRes.status).toBe(400)
+    expect((await yearRes.json()).error).toMatch(/year\/month.*startDate\/endDate/)
 
-  it('유효하지 않은 month(13)에 400을 반환한다', async () => {
-    const req = makeRequest('/api/transactions', { year: '2024', month: '13' })
-    const res = await GET(req)
-    expect(res.status).toBe(400)
-    const body = await res.json()
-    expect(body.error).toMatch(/year.*month|month.*year|유효/)
+    const monthReq = makeRequest('/api/transactions', { month: '1' })
+    const monthRes = await GET(monthReq)
+    expect(monthRes.status).toBe(400)
+    expect((await monthRes.json()).error).toMatch(/year\/month.*startDate\/endDate/)
   })
 
   it('여러 필터를 동시에 적용할 수 있다', async () => {

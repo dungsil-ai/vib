@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { serializeData } from '@/lib/serialize'
+import { accountBalance, isDebitNormalAccount } from '@/lib/accounting'
 
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -78,11 +79,7 @@ export async function GET(request: NextRequest) {
     const priorDebitSum = Number(priorDebitSumResult._sum.amount ?? 0)
     const priorCreditSum = Number(priorCreditSumResult._sum.amount ?? 0)
 
-    if (account.type === 'ASSET' || account.type === 'EXPENSE') {
-      openingBalance = priorDebitSum - priorCreditSum
-    } else {
-      openingBalance = priorCreditSum - priorDebitSum
-    }
+    openingBalance = accountBalance(account.type, priorDebitSum, priorCreditSum)
   }
 
   const txFilter: { userId: string; date?: { gte?: Date; lte?: Date } } = { userId }
@@ -116,12 +113,12 @@ export async function GET(request: NextRequest) {
     let debit = 0
     let credit = 0
 
-    if (account.type === 'ASSET' || account.type === 'EXPENSE') {
-      if (isDebit) { debit = amount; balance += amount }
-      else { credit = amount; balance -= amount }
+    if (isDebit) {
+      debit = amount
+      balance += isDebitNormalAccount(account.type) ? amount : -amount
     } else {
-      if (isDebit) { debit = amount; balance -= amount }
-      else { credit = amount; balance += amount }
+      credit = amount
+      balance += isDebitNormalAccount(account.type) ? -amount : amount
     }
 
     return {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { assertAccountsOwned } from '@/lib/accounting'
 import { serializeData } from '@/lib/serialize'
 import { computeNextRunAt } from '@/lib/recurring'
 
@@ -92,11 +93,9 @@ export async function POST(request: NextRequest) {
       ...entries.map((e: { creditAccountId: string }) => e.creditAccountId),
     ]),
   ]
-  const ownedAccounts = await prisma.account.findMany({
-    where: { id: { in: accountIds }, userId: session.user.id },
-    select: { id: true },
-  })
-  if (ownedAccounts.length !== accountIds.length) {
+  try {
+    await assertAccountsOwned(session.user.id, accountIds)
+  } catch {
     return NextResponse.json({ error: '잘못된 계정이 포함되어 있습니다.' }, { status: 403 })
   }
 

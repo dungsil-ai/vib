@@ -50,7 +50,7 @@ function mockFetchResponses() {
       return { ok: true, json: () => Promise.resolve(mockBudgets) } as Response
     }
     if (url.startsWith('/api/transactions')) {
-      return { ok: true, json: () => Promise.resolve(mockTransactions) } as Response
+      return { ok: true, json: () => Promise.resolve({ data: mockTransactions, total: mockTransactions.length }) } as Response
     }
     return { ok: true, json: () => Promise.resolve({}) } as Response
   })
@@ -156,7 +156,7 @@ describe('BudgetPage', () => {
         return { ok: true, json: () => Promise.resolve([]) } as Response
       }
       if (url.startsWith('/api/transactions')) {
-        return { ok: true, json: () => Promise.resolve([]) } as Response
+        return { ok: true, json: () => Promise.resolve({ data: [], total: 0 }) } as Response
       }
       return { ok: true, json: () => Promise.resolve({}) } as Response
     })
@@ -221,7 +221,7 @@ describe('BudgetPage', () => {
         return { ok: true, json: () => Promise.resolve(mockBudgets) } as Response
       }
       if (url.startsWith('/api/transactions')) {
-        return { ok: true, json: () => Promise.resolve(mockTransactions) } as Response
+        return { ok: true, json: () => Promise.resolve({ data: mockTransactions, total: mockTransactions.length }) } as Response
       }
       return { ok: true, json: () => Promise.resolve({}) } as Response
     })
