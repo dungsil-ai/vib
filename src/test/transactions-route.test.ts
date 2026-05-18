@@ -358,6 +358,23 @@ describe('POST /api/transactions', () => {
     expect(res.status).toBe(403)
   })
 
+
+  it('계정 조회 실패는 403으로 숨기지 않고 전파한다', async () => {
+    const dbError = new Error('계정 조회 실패')
+    vi.mocked(prisma.account.findMany).mockRejectedValue(dbError as never)
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ currency: 'KRW' } as never)
+    const req = new NextRequest('http://localhost/api/transactions', {
+      method: 'POST',
+      body: JSON.stringify({
+        date: '2024-01-15',
+        description: '테스트',
+        entries: [{ debitAccountId: 'acc-1', creditAccountId: 'acc-2', amount: '1000' }],
+      }),
+    })
+
+    await expect(POST(req)).rejects.toBe(dbError)
+  })
+
   it('거래 생성 성공 시 201을 반환한다', async () => {
     const createdTx = {
       id: 'new-tx',

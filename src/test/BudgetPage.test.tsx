@@ -6,7 +6,7 @@ vi.mock('@iconify/react', () => ({
   Icon: ({ icon }: { icon: string }) => <span data-testid={`icon-${icon}`} />,
 }))
 
-import BudgetPage from '@/app/(dashboard)/budget/page'
+import BudgetPage, { getMonthEndDateString } from '@/app/(dashboard)/budget/page'
 
 const mockAccounts = [
   { id: 'exp-1', code: '501', name: '식비', type: 'EXPENSE', balance: 0 },
@@ -55,6 +55,14 @@ function mockFetchResponses() {
     return { ok: true, json: () => Promise.resolve({}) } as Response
   })
 }
+
+describe('getMonthEndDateString', () => {
+  it('UTC 변환 없이 월말 로컬 날짜 문자열을 만든다', () => {
+    expect(getMonthEndDateString(2024, 5)).toBe('2024-05-31')
+    expect(getMonthEndDateString(2024, 2)).toBe('2024-02-29')
+    expect(getMonthEndDateString(2023, 2)).toBe('2023-02-28')
+  })
+})
 
 describe('BudgetPage', () => {
   beforeEach(() => {

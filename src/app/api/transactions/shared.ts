@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { CURRENCY_CODES } from '@/lib/currencies'
-import { assertAccountsOwned } from '@/lib/accounting'
+import { AccountOwnershipError, assertAccountsOwned } from '@/lib/accounting'
 
 export type TransactionEntryInput = {
   debitAccountId: string
@@ -167,10 +167,13 @@ export async function validateTransactionPayload(userId: string, body: unknown) 
   ])
 
   if (ownershipResult.status === 'rejected') {
-    return {
-      ok: false as const,
-      response: errorResponse('잘못된 계정이 포함되어 있습니다.', 403),
+    if (ownershipResult.reason instanceof AccountOwnershipError) {
+      return {
+        ok: false as const,
+        response: errorResponse(ownershipResult.reason.message, 403),
+      }
     }
+    throw ownershipResult.reason
   }
 
   if (userRecord.status === 'rejected') {

@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { serializeData } from '@/lib/serialize'
-import { assertAccountsOwned } from '@/lib/accounting'
+import { AccountOwnershipError, assertAccountsOwned } from '@/lib/accounting'
 
 interface TemplateEntryInput {
   debitAccountId: string
@@ -67,8 +67,11 @@ export async function POST(request: NextRequest) {
   ]
   try {
     await assertAccountsOwned(session.user.id, accountIds)
-  } catch {
-    return NextResponse.json({ error: '잘못된 계정이 포함되어 있습니다.' }, { status: 403 })
+  } catch (error) {
+    if (error instanceof AccountOwnershipError) {
+      return NextResponse.json({ error: error.message }, { status: 403 })
+    }
+    throw error
   }
 
   try {

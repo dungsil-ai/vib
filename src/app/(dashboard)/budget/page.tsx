@@ -27,6 +27,11 @@ interface BudgetRow {
   editing: boolean
 }
 
+export function getMonthEndDateString(year: number, month: number) {
+  const lastDay = new Date(year, month, 0).getDate()
+  return `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+}
+
 async function loadBudgetData(year: number, month: number) {
   const [accRes, budRes] = await Promise.all([
     fetch('/api/accounts'),
@@ -41,7 +46,7 @@ async function loadBudgetData(year: number, month: number) {
   const budgetMap = new Map(buds.map(b => [b.accountId, b]))
 
   const startDate = `${year}-${String(month).padStart(2, '0')}-01`
-  const endDate = new Date(year, month, 0).toISOString().split('T')[0]
+  const endDate = getMonthEndDateString(year, month)
   const transactions = []
   let page = 1
   let total = 0

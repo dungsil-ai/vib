@@ -13,15 +13,7 @@ interface Account {
   type: string
 }
 
-interface EntryForm {
-  id: string
-  debitAccountId: string
-  creditAccountId: string
-  amount: string
-  currency: string
-  exchangeRate: string
-  description: string
-}
+type EntryForm = EditableEntry
 
 
 // ─── Shared utilities ─────────────────────────────────────────────────────────
@@ -591,7 +583,7 @@ function TransactionsTab({ accounts, accountsLoading, accountsError, baseCurrenc
                 accountsError={accountsError}
                 hasActiveFilter={hasActiveFilter}
                 baseCurrency={baseCurrency}
-                onUpdate={updateEntry as (index: number, field: keyof EditableEntry, value: string) => void}
+                onUpdate={updateEntry}
                 onRemove={removeEntry}
               />
             ))}
@@ -1290,7 +1282,7 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
                   baseCurrency={baseCurrency}
                   showCurrency={false}
                   amountLabel="금액 (원)"
-                  onUpdate={updateEntry as (index: number, field: keyof EditableEntry, value: string) => void}
+                  onUpdate={updateEntry}
                   onRemove={removeEntry}
                 />
               ))}
@@ -1671,7 +1663,7 @@ function TemplatesTab({ accounts, accountsLoading, accountsError, baseCurrency }
                   hasActiveFilter={hasActiveFilter}
                   baseCurrency={baseCurrency}
                   showCurrency={false}
-                  onUpdate={updateEntry as (index: number, field: keyof EditableEntry, value: string) => void}
+                  onUpdate={updateEntry}
                   onRemove={removeEntry}
                 />
               ))}
