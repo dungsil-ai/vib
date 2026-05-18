@@ -14,20 +14,20 @@ export const RECURRING_TRANSACTION_INCLUDE = {
 export const VALID_RECURRING_FREQUENCIES = ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'] as const
 
 type RecurringEntryInput = {
-  debitAccountId?: string
-  creditAccountId?: string
-  amount?: string | number | null
-  description?: string | null
+  debitAccountId?: unknown
+  creditAccountId?: unknown
+  amount?: unknown
+  description?: unknown
 }
 
 export type RecurringTransactionInput = {
-  description?: string
-  frequency?: string
-  dayOfMonth?: string | number | null
-  monthOfYear?: string | number | null
-  startDate?: string
-  endDate?: string | null
-  entries?: RecurringEntryInput[]
+  description?: unknown
+  frequency?: unknown
+  dayOfMonth?: unknown
+  monthOfYear?: unknown
+  startDate?: unknown
+  endDate?: unknown
+  entries?: unknown
 }
 
 type ValidatedRecurringTransactionInput = {
@@ -54,28 +54,40 @@ const isValidationFailure = (
   result: ValidatedRecurringTransactionInput | ValidationFailure,
 ): result is ValidationFailure => 'response' in result
 
+export function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
 export async function validateRecurringTransactionInput(
-  input: RecurringTransactionInput,
+  input: unknown,
   userId: string,
 ): Promise<ValidatedRecurringTransactionInput | ValidationFailure> {
-  const { description, frequency, dayOfMonth, monthOfYear, startDate, endDate, entries } = input
+  if (!isRecord(input)) {
+    return { response: NextResponse.json({ error: '요청 본문은 객체여야 합니다.' }, { status: 400 }) }
+  }
+
+  const { description, frequency, dayOfMonth, monthOfYear, startDate, endDate, entries } = input as RecurringTransactionInput
 
   if (!description || !frequency || !startDate || !entries || !Array.isArray(entries) || entries.length === 0) {
     return { response: NextResponse.json({ error: '필수 필드를 입력해주세요.' }, { status: 400 }) }
+  }
+
+  if (typeof description !== 'string' || typeof frequency !== 'string') {
+    return { response: NextResponse.json({ error: '설명과 반복 주기는 문자열이어야 합니다.' }, { status: 400 }) }
   }
 
   if (!VALID_RECURRING_FREQUENCIES.includes(frequency as (typeof VALID_RECURRING_FREQUENCIES)[number])) {
     return { response: NextResponse.json({ error: '유효한 반복 주기를 입력해주세요.' }, { status: 400 }) }
   }
 
-  const parsedStart = new Date(startDate)
+  const parsedStart = new Date(startDate instanceof Date ? startDate : String(startDate))
   if (Number.isNaN(parsedStart.getTime())) {
     return { response: NextResponse.json({ error: '유효한 시작 날짜를 입력해주세요.' }, { status: 400 }) }
   }
 
   let parsedEnd: Date | null = null
   if (endDate) {
-    parsedEnd = new Date(endDate)
+    parsedEnd = new Date(endDate instanceof Date ? endDate : String(endDate))
     if (Number.isNaN(parsedEnd.getTime())) {
       return { response: NextResponse.json({ error: '유효한 종료 날짜를 입력해주세요.' }, { status: 400 }) }
     }
@@ -100,23 +112,44 @@ export async function validateRecurringTransactionInput(
     }
   }
 
+  const normalizedEntries: Array<{
+    debitAccountId: string
+    creditAccountId: string
+    amount: string | number
+    description?: string | null
+  }> = []
+
   for (const entry of entries) {
-    if (!entry.debitAccountId || !entry.creditAccountId || entry.amount == null) {
+    if (!isRecord(entry)) {
       return { response: NextResponse.json({ error: '각 항목의 차변·대변 계정과 금액을 입력해주세요.' }, { status: 400 }) }
     }
-    const amount = Number(entry.amount)
+
+    const candidate = entry as RecurringEntryInput
+    if (!candidate.debitAccountId || !candidate.creditAccountId || candidate.amount == null) {
+      return { response: NextResponse.json({ error: '각 항목의 차변·대변 계정과 금액을 입력해주세요.' }, { status: 400 }) }
+    }
+    const amount = Number(candidate.amount)
     if (!Number.isFinite(amount) || amount <= 0) {
       return { response: NextResponse.json({ error: '유효한 거래 금액을 입력해주세요.' }, { status: 400 }) }
     }
-    if (entry.debitAccountId === entry.creditAccountId) {
+    const debitAccountId = String(candidate.debitAccountId)
+    const creditAccountId = String(candidate.creditAccountId)
+    if (debitAccountId === creditAccountId) {
       return { response: NextResponse.json({ error: '차변 계정과 대변 계정은 달라야 합니다.' }, { status: 400 }) }
     }
+
+    normalizedEntries.push({
+      debitAccountId,
+      creditAccountId,
+      amount: candidate.amount as string | number,
+      description: typeof candidate.description === 'string' ? candidate.description : null,
+    })
   }
 
   const accountIds = [
     ...new Set([
-      ...entries.map(entry => entry.debitAccountId as string),
-      ...entries.map(entry => entry.creditAccountId as string),
+      ...normalizedEntries.map(entry => entry.debitAccountId),
+      ...normalizedEntries.map(entry => entry.creditAccountId),
     ]),
   ]
   const ownedAccounts = await prisma.account.findMany({
@@ -135,12 +168,7 @@ export async function validateRecurringTransactionInput(
     startDate: parsedStart,
     endDate: parsedEnd,
     nextRunAt: computeInitialNextRunAt(parsedStart, frequency, parsedDayOfMonth, parsedMonthOfYear),
-    entries: entries.map(entry => ({
-      debitAccountId: entry.debitAccountId as string,
-      creditAccountId: entry.creditAccountId as string,
-      amount: entry.amount as string | number,
-      description: entry.description,
-    })),
+    entries: normalizedEntries,
   }
 }
 
@@ -149,7 +177,6 @@ export function unwrapRecurringValidation(
 ): ValidatedRecurringTransactionInput | ReturnType<typeof NextResponse.json> {
   return isValidationFailure(result) ? result.response : result
 }
-
 
 export function calculateNextRunAtAfterProgress(
   validated: ValidatedRecurringTransactionInput,
@@ -190,6 +217,19 @@ export function buildRecurringTransactionData(validated: ValidatedRecurringTrans
   }
 }
 
+function getLastDayOfMonthUtc(year: number, monthIndex: number) {
+  return new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate()
+}
+
+function setUtcYearMonthDay(date: Date, year: number, monthIndex: number, day: number) {
+  const nextDate = new Date(date)
+  nextDate.setUTCDate(1)
+  nextDate.setUTCFullYear(year)
+  nextDate.setUTCMonth(monthIndex)
+  nextDate.setUTCDate(day)
+  return nextDate
+}
+
 function computeInitialNextRunAt(
   parsedStart: Date,
   frequency: string,
@@ -198,23 +238,28 @@ function computeInitialNextRunAt(
 ) {
   let nextRunAt = new Date(parsedStart)
   if ((frequency === 'MONTHLY' || frequency === 'YEARLY') && dayOfMonth) {
-    const maxDay = new Date(nextRunAt.getFullYear(), nextRunAt.getMonth() + 1, 0).getDate()
-    nextRunAt.setDate(Math.min(dayOfMonth, maxDay))
+    const maxDay = getLastDayOfMonthUtc(nextRunAt.getUTCFullYear(), nextRunAt.getUTCMonth())
+    nextRunAt.setUTCDate(Math.min(dayOfMonth, maxDay))
     if (nextRunAt < parsedStart) {
-      nextRunAt = computeNextRunAt(frequency, dayOfMonth, monthOfYear, nextRunAt)
+      nextRunAt = computeNextRunAt(
+        frequency as (typeof VALID_RECURRING_FREQUENCIES)[number],
+        dayOfMonth,
+        monthOfYear,
+        nextRunAt,
+      )
     }
   }
   if (frequency === 'YEARLY' && monthOfYear) {
     const targetMonthIndex = monthOfYear - 1
-    let targetYear = nextRunAt.getFullYear()
-    const maxDayOfTargetMonth = new Date(targetYear, targetMonthIndex + 1, 0).getDate()
+    let targetYear = nextRunAt.getUTCFullYear()
+    const maxDayOfTargetMonth = getLastDayOfMonthUtc(targetYear, targetMonthIndex)
     const targetDay = dayOfMonth ? Math.min(dayOfMonth, maxDayOfTargetMonth) : 1
-    nextRunAt = new Date(targetYear, targetMonthIndex, targetDay)
+    nextRunAt = setUtcYearMonthDay(parsedStart, targetYear, targetMonthIndex, targetDay)
     if (nextRunAt < parsedStart) {
       targetYear += 1
-      const maxDayOfNextYear = new Date(targetYear, targetMonthIndex + 1, 0).getDate()
+      const maxDayOfNextYear = getLastDayOfMonthUtc(targetYear, targetMonthIndex)
       const clampedDay = dayOfMonth ? Math.min(dayOfMonth, maxDayOfNextYear) : 1
-      nextRunAt = new Date(targetYear, targetMonthIndex, clampedDay)
+      nextRunAt = setUtcYearMonthDay(parsedStart, targetYear, targetMonthIndex, clampedDay)
     }
   }
   return nextRunAt

@@ -6,6 +6,7 @@ import { serializeData } from '@/lib/serialize'
 import {
   buildRecurringTransactionData,
   calculateNextRunAtAfterProgress,
+  isRecord,
   RECURRING_TRANSACTION_INCLUDE,
   unwrapRecurringValidation,
   validateRecurringTransactionInput,
@@ -25,7 +26,17 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ error: '반복 거래를 찾을 수 없습니다.' }, { status: 404 })
   }
 
-  const body = await request.json()
+  let body: unknown
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: '유효한 JSON 본문을 입력해주세요.' }, { status: 400 })
+  }
+
+  if (!isRecord(body)) {
+    return NextResponse.json({ error: '요청 본문은 객체여야 합니다.' }, { status: 400 })
+  }
+
   const updatesActiveOnly = Object.keys(body).every(key => key === 'isActive')
 
   if (updatesActiveOnly) {

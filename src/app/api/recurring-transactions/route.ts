@@ -31,7 +31,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
   }
 
-  const body = await request.json()
+  let body: unknown
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: '유효한 JSON 본문을 입력해주세요.' }, { status: 400 })
+  }
   const validation = unwrapRecurringValidation(await validateRecurringTransactionInput(body, session.user.id))
   if (validation instanceof NextResponse) {
     return validation

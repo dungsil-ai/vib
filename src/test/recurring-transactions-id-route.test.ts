@@ -80,6 +80,32 @@ describe('recurring-transactions/[id] PUT', () => {
     } as Awaited<ReturnType<typeof prisma.recurringTransaction.update>>)
   })
 
+  it('객체가 아닌 요청 본문은 400으로 거부한다', async () => {
+    const res = await PUT(makePutRequest(null), { params: Promise.resolve({ id: 'rec-1' }) })
+    const body = await res.json()
+
+    expect(res.status).toBe(400)
+    expect(body.error).toContain('객체')
+    expect(prisma.account.findMany).not.toHaveBeenCalled()
+    expect(prisma.recurringTransaction.update).not.toHaveBeenCalled()
+  })
+
+  it('잘못된 JSON 본문은 400으로 거부한다', async () => {
+    const req = new NextRequest('http://localhost/api/recurring-transactions/rec-1', {
+      method: 'PUT',
+      body: '{invalid',
+      headers: { 'Content-Type': 'application/json' },
+    })
+
+    const res = await PUT(req, { params: Promise.resolve({ id: 'rec-1' }) })
+    const body = await res.json()
+
+    expect(res.status).toBe(400)
+    expect(body.error).toContain('JSON')
+    expect(prisma.account.findMany).not.toHaveBeenCalled()
+    expect(prisma.recurringTransaction.update).not.toHaveBeenCalled()
+  })
+
   it('isActive만 전달하면 활성 상태만 변경한다', async () => {
     const res = await PUT(makePutRequest({ isActive: false }), { params: Promise.resolve({ id: 'rec-1' }) })
 
