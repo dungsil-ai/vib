@@ -274,6 +274,7 @@ export async function POST(request: NextRequest) {
             name: accountName,
             code: newAccountCode,
             type: accountType,
+            currency: finalCurrency,
             description: description ? String(description) : undefined,
           },
         })
