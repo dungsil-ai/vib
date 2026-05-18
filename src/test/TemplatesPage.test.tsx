@@ -137,6 +137,29 @@ describe('TemplatesTab (템플릿 탭)', () => {
     expect(screen.getByText('통신비')).toBeInTheDocument()
   })
 
+  it('템플릿 목록과 상세에서 외화 금액을 기준 통화로 환산해 표시한다', async () => {
+    setupFetchMock({
+      templates: {
+        ok: true,
+        json: () => Promise.resolve([{ ...mockTemplates[0], entries: [{ ...mockTemplates[0].entries[0], amount: '10', currency: 'USD', exchangeRate: '1300.50' }] }]),
+      } as Response,
+    })
+    const user = userEvent.setup()
+    render(<TransactionsPage />)
+
+    await user.click(screen.getByRole('button', { name: '템플릿' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('₩13,005')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByText('월세').closest('tr')!)
+
+    await waitFor(() => {
+      expect(screen.getByText('US$10.00 (₩13,005)')).toBeInTheDocument()
+    })
+  })
+
   it('다중 항목 템플릿에 항목 수 배지를 표시한다', async () => {
     setupFetchMock()
     const user = userEvent.setup()
@@ -290,6 +313,42 @@ describe('TemplatesTab (템플릿 탭)', () => {
 
     await waitFor(() => {
       expect(within(templateForm).getByPlaceholderText('예: 월세, 통신비, 식비 지출')).toHaveValue('')
+    })
+  })
+
+  it('템플릿 저장 시 선택한 통화와 환율을 전송한다', async () => {
+    setupFetchMock()
+    const user = userEvent.setup()
+    render(<TransactionsPage />)
+
+    await user.click(screen.getByRole('button', { name: '템플릿' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('템플릿 추가')).toBeInTheDocument()
+    })
+
+    const templateForm = screen.getByRole('button', { name: '템플릿 저장' }).closest('form') as HTMLElement
+    const debitSection = within(templateForm).getByText('차변 (Debit)').closest('div')!
+    const creditSection = within(templateForm).getByText('대변 (Credit)').closest('div')!
+
+    await user.click(await within(debitSection).findByRole('button', { name: '501 식비' }))
+    await user.click(within(creditSection).getByRole('button', { name: '101 현금' }))
+    await user.type(within(templateForm).getByPlaceholderText('0'), '10')
+    await user.selectOptions(within(templateForm).getByLabelText('통화'), 'USD')
+    await user.clear(within(templateForm).getByPlaceholderText('1'))
+    await user.type(within(templateForm).getByPlaceholderText('1'), '1300.50')
+    await user.type(within(templateForm).getByPlaceholderText('예: 월세, 통신비, 식비 지출'), '외화 템플릿')
+
+    await user.click(screen.getByRole('button', { name: '템플릿 저장' }))
+
+    await waitFor(() => {
+      const postCall = vi.mocked(global.fetch).mock.calls.find(
+        ([url, opts]) => url === '/api/templates' && (opts as RequestInit | undefined)?.method === 'POST',
+      )
+      expect(postCall).toBeDefined()
+      expect(JSON.parse(String((postCall?.[1] as RequestInit).body))).toMatchObject({
+        entries: [expect.objectContaining({ currency: 'USD', exchangeRate: '1300.5' })],
+      })
     })
   })
 

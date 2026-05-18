@@ -24,43 +24,37 @@ function errorResponse(message: string, status = 400) {
   return NextResponse.json({ error: message }, { status })
 }
 
-function normalizeCurrencyInternal(currency: unknown) {
+export function normalizeCurrencyInput(currency: unknown): { ok: true; currency?: string } | { ok: false; error: string } {
   if (currency === undefined || currency === null) {
     return { ok: true as const }
   }
 
   if (typeof currency !== 'string') {
-    return {
-      ok: false as const,
-      response: errorResponse('통화 코드는 문자열이어야 합니다.'),
-    }
+    return { ok: false as const, error: '통화 코드는 문자열이어야 합니다.' }
   }
 
   const normalizedCurrency = currency.trim().toUpperCase()
   if (!normalizedCurrency || !CURRENCY_CODES.includes(normalizedCurrency)) {
-    return {
-      ok: false as const,
-      response: errorResponse('지원하지 않는 통화 코드입니다.'),
-    }
+    return { ok: false as const, error: '지원하지 않는 통화 코드입니다.' }
   }
 
   return { ok: true as const, currency: normalizedCurrency }
 }
 
-function parseExchangeRateInternal(exchangeRate: unknown) {
+export function parseExchangeRateInput(exchangeRate: unknown): { ok: true; exchangeRate?: string } | { ok: false; error: string } {
   if (exchangeRate === undefined || exchangeRate === null) {
     return { ok: true as const }
   }
   const raw = typeof exchangeRate === 'number' ? String(exchangeRate) : typeof exchangeRate === 'string' ? exchangeRate.trim() : null
   if (raw === null) {
-    return { ok: false as const, response: errorResponse('환율(exchangeRate)은 문자열 또는 숫자여야 합니다.') }
+    return { ok: false as const, error: '환율(exchangeRate)은 문자열 또는 숫자여야 합니다.' }
   }
   if (!/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(raw)) {
-    return { ok: false as const, response: errorResponse('환율은 양의 숫자 형식이어야 합니다.') }
+    return { ok: false as const, error: '환율은 양의 숫자 형식이어야 합니다.' }
   }
   const rate = Number(raw)
   if (!Number.isFinite(rate) || rate <= 0) {
-    return { ok: false as const, response: errorResponse('유효한 환율을 입력해주세요.') }
+    return { ok: false as const, error: '유효한 환율을 입력해주세요.' }
   }
   return { ok: true as const, exchangeRate: raw }
 }
@@ -132,13 +126,13 @@ export async function validateTransactionPayload(userId: string, body: unknown) 
       }
     }
 
-    const normalizedCurrency = normalizeCurrencyInternal(candidate.currency)
+    const normalizedCurrency = normalizeCurrencyInput(candidate.currency)
     if (!normalizedCurrency.ok) {
-      return normalizedCurrency
+      return { ok: false as const, response: errorResponse(normalizedCurrency.error) }
     }
 
-    const normalizedExchangeRate = parseExchangeRateInternal(candidate.exchangeRate)
-    if (!normalizedExchangeRate.ok) return normalizedExchangeRate
+    const normalizedExchangeRate = parseExchangeRateInput(candidate.exchangeRate)
+    if (!normalizedExchangeRate.ok) return { ok: false as const, response: errorResponse(normalizedExchangeRate.error) }
 
     normalizedEntries.push({
       debitAccountId: String(candidate.debitAccountId),

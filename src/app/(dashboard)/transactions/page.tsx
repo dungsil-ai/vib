@@ -56,6 +56,33 @@ const isEntryEmpty = (entry?: EntryForm, baseCurrency = 'KRW') => {
     entry.currency === baseCurrency
 }
 
+const isSavedEntryFormPristine = ({
+  description,
+  entryCount,
+  firstEntry,
+  baseCurrency,
+}: {
+  description: string
+  entryCount: number
+  firstEntry?: EntryForm
+  baseCurrency: string
+}) => description === '' && entryCount === 1 && isEntryEmpty(firstEntry, baseCurrency)
+
+const calculateBaseAmount = (entry: { amount: string; exchangeRate?: string }) => (
+  (Number(entry.amount) || 0) * (Number(entry.exchangeRate) || 1)
+)
+
+const formatEntryAmount = (entry: { amount: string; currency?: string; exchangeRate?: string }, baseCurrency: string) => {
+  const currency = entry.currency || baseCurrency
+  const amount = Number(entry.amount) || 0
+
+  if (currency === baseCurrency) {
+    return formatCurrency(amount, baseCurrency)
+  }
+
+  return `${formatCurrency(amount, currency)} (${formatCurrency(calculateBaseAmount(entry), baseCurrency)})`
+}
+
 const isTransactionFormPristine = ({
   date,
   txDescription,
@@ -1187,6 +1214,19 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
     return () => { cancelled = true }
   }, [])
 
+  const prevBaseCurrencyRef = useRef(baseCurrency)
+  useEffect(() => {
+    if (baseCurrency === prevBaseCurrencyRef.current) return
+
+    const previousBaseCurrency = prevBaseCurrencyRef.current
+    prevBaseCurrencyRef.current = baseCurrency
+    setEntries(prev => (
+      isSavedEntryFormPristine({ description, entryCount: prev.length, firstEntry: prev[0], baseCurrency: previousBaseCurrency })
+        ? [defaultEntry(baseCurrency)]
+        : prev
+    ))
+  }, [baseCurrency, description])
+
   const resetForm = () => {
     setFormError('')
     setDescription('')
@@ -1208,12 +1248,16 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
   const updateEntry = (index: number, field: keyof EntryForm, value: string) => {
     setEntries(prev => {
       const updated = [...prev]
-      updated[index] = { ...updated[index], [field]: value }
+      const newEntry = { ...updated[index], [field]: value }
+      if (field === 'currency' && value === baseCurrency) {
+        newEntry.exchangeRate = '1'
+      }
+      updated[index] = newEntry
       return updated
     })
   }
 
-  const formTotal = entries.reduce((sum, e) => sum + (Number(e.amount) || 0), 0)
+  const formTotal = entries.reduce((sum, e) => sum + calculateBaseAmount(e), 0)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -1496,17 +1540,59 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">금액 (원)</label>
-                        <input
-                          type="number"
-                          value={entry.amount}
-                          onChange={e => updateEntry(index, 'amount', e.target.value)}
-                          className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
-                          placeholder="0"
-                          min="1"
-                          required
-                        />
+                        <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">금액</label>
+                        <div className="flex gap-1">
+                          <input
+                            type="number"
+                            value={entry.amount}
+                            onChange={e => updateEntry(index, 'amount', e.target.value)}
+                            className="flex-1 min-w-0 px-3 py-2 border dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
+                            placeholder="0"
+                            min="1"
+                            required
+                          />
+                          <select
+                            value={entry.currency}
+                            onChange={e => updateEntry(index, 'currency', e.target.value)}
+                            className="px-2 py-2 border dark:border-gray-600 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
+                            aria-label="통화"
+                          >
+                            {SUPPORTED_CURRENCIES.map(c => (
+                              <option key={c.code} value={c.code}>{c.code}</option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
+                      {entry.currency !== baseCurrency ? (
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                            환율 (1 {entry.currency} = ? {baseCurrency})
+                          </label>
+                          <input
+                            type="number"
+                            value={entry.exchangeRate}
+                            onChange={e => updateEntry(index, 'exchangeRate', e.target.value)}
+                            className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
+                            placeholder="1"
+                            min="0.000001"
+                            step="any"
+                            required
+                          />
+                        </div>
+                      ) : (
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">메모 (선택)</label>
+                          <input
+                            type="text"
+                            value={entry.description}
+                            onChange={e => updateEntry(index, 'description', e.target.value)}
+                            className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
+                            placeholder="항목 설명"
+                          />
+                        </div>
+                      )}
+                    </div>
+                    {entry.currency !== baseCurrency && (
                       <div>
                         <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">메모 (선택)</label>
                         <input
@@ -1517,7 +1603,7 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
                           placeholder="항목 설명"
                         />
                       </div>
-                    </div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -1586,7 +1672,7 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
                 </thead>
                 <tbody className="divide-y dark:divide-gray-700">
                   {recurringList.map(r => {
-                    const total = r.entries.reduce((sum, e) => sum + Number(e.amount), 0)
+                    const total = r.entries.reduce((sum, e) => sum + calculateBaseAmount(e), 0)
                     const isExpanded = expandedId === r.id
                     return (
                       <React.Fragment key={r.id}>
@@ -1653,7 +1739,7 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
                                       대변: {entry.creditAccount.name}
                                     </span>
                                     <span className="font-medium dark:text-gray-300">
-                                      {formatCurrency(Number(entry.amount), baseCurrency)}
+                                      {formatEntryAmount(entry, baseCurrency)}
                                     </span>
                                     {entry.description && (
                                       <span className="text-gray-500 dark:text-gray-400">{entry.description}</span>
@@ -1748,6 +1834,19 @@ function TemplatesTab({ accounts, accountsLoading, accountsError, baseCurrency }
     return () => { cancelled = true }
   }, [fetchTemplates])
 
+  const prevBaseCurrencyRef = useRef(baseCurrency)
+  useEffect(() => {
+    if (baseCurrency === prevBaseCurrencyRef.current) return
+
+    const previousBaseCurrency = prevBaseCurrencyRef.current
+    prevBaseCurrencyRef.current = baseCurrency
+    setEntries(prev => (
+      isSavedEntryFormPristine({ description, entryCount: prev.length, firstEntry: prev[0], baseCurrency: previousBaseCurrency })
+        ? [defaultEntry(baseCurrency)]
+        : prev
+    ))
+  }, [baseCurrency, description])
+
   const resetForm = () => {
     setFormError('')
     setDescription('')
@@ -1764,12 +1863,16 @@ function TemplatesTab({ accounts, accountsLoading, accountsError, baseCurrency }
   const updateEntry = (index: number, field: keyof EntryForm, value: string) => {
     setEntries(prev => {
       const updated = [...prev]
-      updated[index] = { ...updated[index], [field]: value }
+      const newEntry = { ...updated[index], [field]: value }
+      if (field === 'currency' && value === baseCurrency) {
+        newEntry.exchangeRate = '1'
+      }
+      updated[index] = newEntry
       return updated
     })
   }
 
-  const formTotal = entries.reduce((sum, e) => sum + (Number(e.amount) || 0), 0)
+  const formTotal = entries.reduce((sum, e) => sum + calculateBaseAmount(e), 0)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -1934,16 +2037,58 @@ function TemplatesTab({ accounts, accountsLoading, accountsError, baseCurrency }
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div>
                         <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">금액</label>
-                        <input
-                          type="number"
-                          value={entry.amount}
-                          onChange={e => updateEntry(index, 'amount', e.target.value)}
-                          className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
-                          placeholder="0"
-                          min="1"
-                          required
-                        />
+                        <div className="flex gap-1">
+                          <input
+                            type="number"
+                            value={entry.amount}
+                            onChange={e => updateEntry(index, 'amount', e.target.value)}
+                            className="flex-1 min-w-0 px-3 py-2 border dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
+                            placeholder="0"
+                            min="1"
+                            required
+                          />
+                          <select
+                            value={entry.currency}
+                            onChange={e => updateEntry(index, 'currency', e.target.value)}
+                            className="px-2 py-2 border dark:border-gray-600 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
+                            aria-label="통화"
+                          >
+                            {SUPPORTED_CURRENCIES.map(c => (
+                              <option key={c.code} value={c.code}>{c.code}</option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
+                      {entry.currency !== baseCurrency ? (
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                            환율 (1 {entry.currency} = ? {baseCurrency})
+                          </label>
+                          <input
+                            type="number"
+                            value={entry.exchangeRate}
+                            onChange={e => updateEntry(index, 'exchangeRate', e.target.value)}
+                            className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
+                            placeholder="1"
+                            min="0.000001"
+                            step="any"
+                            required
+                          />
+                        </div>
+                      ) : (
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">메모 (선택)</label>
+                          <input
+                            type="text"
+                            value={entry.description}
+                            onChange={e => updateEntry(index, 'description', e.target.value)}
+                            className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
+                            placeholder="항목 설명"
+                          />
+                        </div>
+                      )}
+                    </div>
+                    {entry.currency !== baseCurrency && (
                       <div>
                         <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">메모 (선택)</label>
                         <input
@@ -1954,7 +2099,7 @@ function TemplatesTab({ accounts, accountsLoading, accountsError, baseCurrency }
                           placeholder="항목 설명"
                         />
                       </div>
-                    </div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -2021,7 +2166,7 @@ function TemplatesTab({ accounts, accountsLoading, accountsError, baseCurrency }
                 </thead>
                 <tbody className="divide-y dark:divide-gray-700">
                   {templateList.map(t => {
-                    const total = t.entries.reduce((sum, e) => sum + Number(e.amount), 0)
+                    const total = t.entries.reduce((sum, e) => sum + calculateBaseAmount(e), 0)
                     const isExpanded = expandedId === t.id
                     return (
                       <React.Fragment key={t.id}>
@@ -2077,7 +2222,7 @@ function TemplatesTab({ accounts, accountsLoading, accountsError, baseCurrency }
                                       대변: {entry.creditAccount.name}
                                     </span>
                                     <span className="font-medium dark:text-gray-300">
-                                      {formatCurrency(Number(entry.amount), baseCurrency)}
+                                      {formatEntryAmount(entry, baseCurrency)}
                                     </span>
                                     {entry.description && (
                                       <span className="text-gray-500 dark:text-gray-400">{entry.description}</span>

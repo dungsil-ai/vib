@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { serializeData } from '@/lib/serialize'
 import { computeNextRunAt } from '@/lib/recurring'
-import { CURRENCY_CODES } from '@/lib/currencies'
+import { normalizeCurrencyInput, parseExchangeRateInput } from '@/app/api/transactions/shared'
 
 
 type RecurringEntryInput = {
@@ -14,31 +14,6 @@ type RecurringEntryInput = {
   currency?: string
   exchangeRate?: string
   description?: string
-}
-
-function normalizeCurrency(currency: unknown): { ok: true; currency?: string } | { ok: false; error: string } {
-  if (currency === undefined || currency === null) return { ok: true as const }
-  if (typeof currency !== 'string') return { ok: false as const, error: '통화 코드는 문자열이어야 합니다.' }
-
-  const normalizedCurrency = currency.trim().toUpperCase()
-  if (!normalizedCurrency || !CURRENCY_CODES.includes(normalizedCurrency)) {
-    return { ok: false as const, error: '지원하지 않는 통화 코드입니다.' }
-  }
-
-  return { ok: true as const, currency: normalizedCurrency }
-}
-
-function parseExchangeRate(exchangeRate: unknown): { ok: true; exchangeRate?: string } | { ok: false; error: string } {
-  if (exchangeRate === undefined || exchangeRate === null) return { ok: true as const }
-
-  const raw = typeof exchangeRate === 'number' ? String(exchangeRate) : typeof exchangeRate === 'string' ? exchangeRate.trim() : null
-  if (raw === null) return { ok: false as const, error: '환율(exchangeRate)은 문자열 또는 숫자여야 합니다.' }
-  if (!/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(raw)) return { ok: false as const, error: '환율은 양의 숫자 형식이어야 합니다.' }
-
-  const rate = Number(raw)
-  if (!Number.isFinite(rate) || rate <= 0) return { ok: false as const, error: '유효한 환율을 입력해주세요.' }
-
-  return { ok: true as const, exchangeRate: raw }
 }
 
 export async function GET() {
@@ -122,12 +97,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '차변 계정과 대변 계정은 달라야 합니다.' }, { status: 400 })
     }
 
-    const normalizedCurrency = normalizeCurrency(entry.currency)
+    const normalizedCurrency = normalizeCurrencyInput(entry.currency)
     if (!normalizedCurrency.ok) {
       return NextResponse.json({ error: normalizedCurrency.error }, { status: 400 })
     }
 
-    const normalizedExchangeRate = parseExchangeRate(entry.exchangeRate)
+    const normalizedExchangeRate = parseExchangeRateInput(entry.exchangeRate)
     if (!normalizedExchangeRate.ok) {
       return NextResponse.json({ error: normalizedExchangeRate.error }, { status: 400 })
     }

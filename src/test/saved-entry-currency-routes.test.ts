@@ -86,6 +86,48 @@ describe('저장된 분개 통화/환율 처리', () => {
     }))
   })
 
+  it.each([
+    ['템플릿', createTemplate, '/api/templates', { description: '외화 템플릿' }],
+    ['반복 거래', createRecurring, '/api/recurring-transactions', {
+      description: '외화 반복 거래',
+      frequency: 'MONTHLY',
+      dayOfMonth: 25,
+      startDate: '2024-01-01',
+    }],
+  ])('%s 생성 시 외화 분개에 환율이 없으면 거부한다', async (_label, handler, path, baseBody) => {
+    const res = await handler(postRequest(path, {
+      ...baseBody,
+      entries: [{ debitAccountId: 'acc-1', creditAccountId: 'acc-2', amount: '10', currency: 'USD' }],
+    }))
+    const body = await res.json()
+
+    expect(res.status).toBe(400)
+    expect(body.error).toContain('외화(USD) 분개에는 환율(exchangeRate)이 필요합니다.')
+    expect(prisma.transactionTemplate.create).not.toHaveBeenCalled()
+    expect(prisma.recurringTransaction.create).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['템플릿', createTemplate, '/api/templates', { description: '지원하지 않는 통화 템플릿' }],
+    ['반복 거래', createRecurring, '/api/recurring-transactions', {
+      description: '지원하지 않는 통화 반복 거래',
+      frequency: 'MONTHLY',
+      dayOfMonth: 25,
+      startDate: '2024-01-01',
+    }],
+  ])('%s 생성 시 지원하지 않는 통화 코드를 거부한다', async (_label, handler, path, baseBody) => {
+    const res = await handler(postRequest(path, {
+      ...baseBody,
+      entries: [{ debitAccountId: 'acc-1', creditAccountId: 'acc-2', amount: '10', currency: 'ZZZ', exchangeRate: '1300' }],
+    }))
+    const body = await res.json()
+
+    expect(res.status).toBe(400)
+    expect(body.error).toBe('지원하지 않는 통화 코드입니다.')
+    expect(prisma.transactionTemplate.create).not.toHaveBeenCalled()
+    expect(prisma.recurringTransaction.create).not.toHaveBeenCalled()
+  })
+
   it('반복 거래 생성 실행 시 원본 분개의 통화와 환율을 거래 분개로 복사한다', async () => {
     const dueDate = new Date('2024-01-25T00:00:00.000Z')
     vi.mocked(prisma.recurringTransaction.findMany).mockResolvedValue([
