@@ -16,6 +16,9 @@ vi.mock('@/lib/prisma', () => ({
       findMany: vi.fn(),
       findFirst: vi.fn(),
     },
+    user: {
+      findUnique: vi.fn(),
+    },
     entry: {
       groupBy: vi.fn(),
       aggregate: vi.fn(),
@@ -52,6 +55,7 @@ describe('trial-balance GET', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(getServerSession).mockResolvedValue(mockSession)
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ currency: 'KRW' } as never)
     vi.mocked(prisma.account.findMany).mockResolvedValue([])
     vi.mocked(prisma.entry.groupBy).mockResolvedValue([])
   })
@@ -183,6 +187,7 @@ describe('monthly-summary GET', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(getServerSession).mockResolvedValue(mockSession)
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ currency: 'KRW' } as never)
     vi.mocked(prisma.account.findMany).mockResolvedValue([])
     vi.mocked(prisma.$queryRaw).mockResolvedValue([])
   })
@@ -295,6 +300,7 @@ describe('balance-sheet GET', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(getServerSession).mockResolvedValue(mockSession)
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ currency: 'KRW' } as never)
     vi.mocked(prisma.account.findMany).mockResolvedValue([
       { id: 'asset-1', type: 'ASSET', userId: 'user-1', name: '달러 예금', code: '1001', currency: 'USD', description: null, createdAt: new Date() },
       { id: 'liability-1', type: 'LIABILITY', userId: 'user-1', name: '외화 차입금', code: '2001', currency: 'USD', description: null, createdAt: new Date() },
@@ -322,6 +328,9 @@ describe('balance-sheet GET', () => {
     expect(body.totalLiabilities).toBe(65000)
     expect(body.totalEquity).toBe(65000)
     expect(prisma.$queryRaw).toHaveBeenCalledTimes(2)
+    const debitSql = (vi.mocked(prisma.$queryRaw).mock.calls[0][0] as TemplateStringsArray).join('?')
+    expect(debitSql).toContain('CASE WHEN e.currency IS NULL OR e.currency =')
+    expect(debitSql).toContain('THEN e.amount ELSE e.amount * e."exchangeRate" END')
     expect(prisma.entry.groupBy).not.toHaveBeenCalled()
   })
 
@@ -338,6 +347,7 @@ describe('income-statement GET', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(getServerSession).mockResolvedValue(mockSession)
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ currency: 'KRW' } as never)
     vi.mocked(prisma.account.findMany).mockResolvedValue([
       { id: 'rev-1', type: 'REVENUE', userId: 'user-1', name: '외화 매출', code: '4001', currency: 'USD', description: null, createdAt: new Date() },
       { id: 'exp-1', type: 'EXPENSE', userId: 'user-1', name: '외화 비용', code: '5001', currency: 'USD', description: null, createdAt: new Date() },
@@ -363,6 +373,9 @@ describe('income-statement GET', () => {
     expect(body.totalExpense).toBe(26000)
     expect(body.netIncome).toBe(104000)
     expect(prisma.$queryRaw).toHaveBeenCalledTimes(4)
+    const revenueSql = (vi.mocked(prisma.$queryRaw).mock.calls[1][0] as TemplateStringsArray).join('?')
+    expect(revenueSql).toContain('CASE WHEN e.currency IS NULL OR e.currency =')
+    expect(revenueSql).toContain('THEN e.amount ELSE e.amount * e."exchangeRate" END')
     expect(prisma.entry.groupBy).not.toHaveBeenCalled()
   })
 

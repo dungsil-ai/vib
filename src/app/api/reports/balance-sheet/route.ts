@@ -10,6 +10,11 @@ export async function GET() {
   }
 
   const userId = session.user.id
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { currency: true },
+  })
+  const baseCurrency = user?.currency ?? 'KRW'
 
   const accounts = await prisma.account.findMany({
     where: { userId, type: { in: ['ASSET', 'LIABILITY', 'EQUITY'] } },
@@ -22,7 +27,7 @@ export async function GET() {
   const [debitSums, creditSums] = accountIds.length > 0
     ? await Promise.all([
         prisma.$queryRaw<Array<{ debitAccountId: string; total: string }>>`
-          SELECT e."debitAccountId", SUM(e.amount * e."exchangeRate")::text AS total
+          SELECT e."debitAccountId", SUM(CASE WHEN e.currency IS NULL OR e.currency = ${baseCurrency} THEN e.amount ELSE e.amount * e."exchangeRate" END)::text AS total
           FROM "Entry" e
           JOIN "Transaction" t ON t.id = e."transactionId"
           WHERE t."userId" = ${userId}
@@ -30,7 +35,7 @@ export async function GET() {
           GROUP BY e."debitAccountId"
         `,
         prisma.$queryRaw<Array<{ creditAccountId: string; total: string }>>`
-          SELECT e."creditAccountId", SUM(e.amount * e."exchangeRate")::text AS total
+          SELECT e."creditAccountId", SUM(CASE WHEN e.currency IS NULL OR e.currency = ${baseCurrency} THEN e.amount ELSE e.amount * e."exchangeRate" END)::text AS total
           FROM "Entry" e
           JOIN "Transaction" t ON t.id = e."transactionId"
           WHERE t."userId" = ${userId}

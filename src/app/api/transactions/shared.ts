@@ -185,6 +185,10 @@ export async function validateTransactionPayload(userId: string, body: unknown) 
         response: errorResponse(`외화(${entryCurrency}) 분개에는 환율(exchangeRate)이 필요합니다.`),
       }
     }
+
+    if (entryCurrency === baseCurrency) {
+      entry.exchangeRate = '1'
+    }
   }
 
   return {

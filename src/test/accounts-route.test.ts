@@ -154,4 +154,79 @@ describe('accounts POST', () => {
       }),
     })
   })
+
+  it('기준 통화와 다른 초기잔액 계정에 환율이 없으면 400을 반환한다', async () => {
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ currency: 'KRW' } as never)
+
+    const res = await POST(makePostRequest({
+      name: '달러 예금',
+      type: 'ASSET',
+      currency: 'USD',
+      openingBalance: '100',
+    }))
+    const body = await res.json()
+
+    expect(res.status).toBe(400)
+    expect(body.error).toMatch(/환율/)
+    expect(prisma.$transaction).not.toHaveBeenCalled()
+  })
+
+  it('기준 통화와 다른 초기잔액 계정에는 입력받은 환율을 저장한다', async () => {
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ currency: 'KRW' } as never)
+    const tx = {
+      account: {
+        findFirst: vi.fn().mockResolvedValue(null),
+        findMany: vi.fn()
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([]),
+        create: vi.fn()
+          .mockResolvedValueOnce({
+            id: 'opening-equity-1',
+            userId: 'user-1',
+            name: '개시잔액',
+            code: '3000',
+            type: 'EQUITY',
+            currency: 'USD',
+            description: '초기잔액 자동 분개용 계정',
+            createdAt: new Date('2024-01-01T00:00:00.000Z'),
+          })
+          .mockResolvedValueOnce({
+            id: 'asset-1',
+            userId: 'user-1',
+            name: '달러 예금',
+            code: '1000',
+            type: 'ASSET',
+            currency: 'USD',
+            description: undefined,
+            createdAt: new Date('2024-01-01T00:00:00.000Z'),
+          }),
+      },
+      transaction: {
+        create: vi.fn().mockResolvedValue({ id: 'tx-1' }),
+      },
+    }
+
+    vi.mocked(prisma.$transaction).mockImplementation(async (callback) => callback(tx as never))
+
+    const res = await POST(makePostRequest({
+      name: '달러 예금',
+      type: 'ASSET',
+      currency: 'USD',
+      openingBalance: '100',
+      exchangeRate: '1300',
+    }))
+
+    expect(res.status).toBe(201)
+    expect(tx.transaction.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        entries: {
+          create: [expect.objectContaining({
+            amount: 100,
+            currency: 'USD',
+            exchangeRate: '1300',
+          })],
+        },
+      }),
+    })
+  })
 })

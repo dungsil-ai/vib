@@ -34,17 +34,17 @@ export async function GET() {
     })
     const baseCurrency = user?.currency ?? 'KRW'
 
-    // Use raw SQL to compute balance in base currency: SUM(amount * exchangeRate)
+    // 기준 통화 분개는 환율 입력값과 관계없이 원 금액으로, 외화 분개만 환율을 곱해 기준 통화 잔액을 계산합니다.
     const [debitSums, creditSums] = accountIds.length > 0
       ? await Promise.all([
           prisma.$queryRaw<Array<{ debitAccountId: string; total: string }>>`
-            SELECT "debitAccountId", SUM(amount * "exchangeRate")::text AS total
+            SELECT "debitAccountId", SUM(CASE WHEN currency IS NULL OR currency = ${baseCurrency} THEN amount ELSE amount * "exchangeRate" END)::text AS total
             FROM "Entry"
             WHERE "debitAccountId" = ANY(${accountIds}::text[])
             GROUP BY "debitAccountId"
           `,
           prisma.$queryRaw<Array<{ creditAccountId: string; total: string }>>`
-            SELECT "creditAccountId", SUM(amount * "exchangeRate")::text AS total
+            SELECT "creditAccountId", SUM(CASE WHEN currency IS NULL OR currency = ${baseCurrency} THEN amount ELSE amount * "exchangeRate" END)::text AS total
             FROM "Entry"
             WHERE "creditAccountId" = ANY(${accountIds}::text[])
             GROUP BY "creditAccountId"
@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
 
   const userId = session.user.id
 
-  let body: { name?: unknown; type?: unknown; description?: unknown; currency?: unknown }
+  let body: { name?: unknown; type?: unknown; description?: unknown; currency?: unknown; openingBalance?: unknown; exchangeRate?: unknown }
   try {
     body = await request.json()
   } catch {
@@ -139,15 +139,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '지원하지 않는 통화 코드입니다.' }, { status: 400 })
     }
 
-    // If no currency specified, use user's base currency
-    let finalCurrency = accountCurrency
-    if (!finalCurrency) {
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { currency: true },
-      })
-      finalCurrency = user?.currency ?? 'KRW'
-    }
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { currency: true },
+    })
+    const baseCurrency = user?.currency ?? 'KRW'
+    const finalCurrency = accountCurrency ?? baseCurrency
 
     const openingBalanceRaw = (body as { openingBalance?: unknown }).openingBalance
     const openingBalance = openingBalanceRaw != null ? Number(openingBalanceRaw) : 0
@@ -162,6 +159,35 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       )
     }
+
+    const openingExchangeRateRaw = body.exchangeRate
+    let openingExchangeRate = '1'
+    if (openingBalance > 0 && finalCurrency !== baseCurrency) {
+      if (openingExchangeRateRaw === undefined || openingExchangeRateRaw === null) {
+        return NextResponse.json(
+          { error: `외화(${finalCurrency}) 초기잔액에는 환율(exchangeRate)이 필요합니다.` },
+          { status: 400 },
+        )
+      }
+
+      const rawRate = typeof openingExchangeRateRaw === 'number'
+        ? String(openingExchangeRateRaw)
+        : typeof openingExchangeRateRaw === 'string'
+          ? openingExchangeRateRaw.trim()
+          : null
+
+      if (rawRate === null || !/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(rawRate)) {
+        return NextResponse.json({ error: '환율은 양의 숫자 형식이어야 합니다.' }, { status: 400 })
+      }
+
+      const rate = Number(rawRate)
+      if (!Number.isFinite(rate) || rate <= 0) {
+        return NextResponse.json({ error: '유효한 환율을 입력해주세요.' }, { status: 400 })
+      }
+
+      openingExchangeRate = rawRate
+    }
+
     const prefix = String(TYPE_CODE_PREFIX[accountType]).slice(0, 1)
     const base = TYPE_CODE_PREFIX[accountType]
     const upperBound = base + 999
@@ -298,7 +324,7 @@ export async function POST(request: NextRequest) {
                 creditAccountId,
                 amount: openingBalance,
                 currency: finalCurrency,
-                exchangeRate: '1',
+                exchangeRate: openingExchangeRate,
                 description: OPENING_BALANCE_ENTRY_DESCRIPTION,
               }],
             },
