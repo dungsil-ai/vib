@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { serializeData } from '@/lib/serialize'
-import { makeUTCMonthRange, parseUTCDateOnly, parseUTCEndOfDay } from '@/lib/date-range'
+import { parseUTCDateOnly, parseUTCEndOfDay } from '@/lib/date-range'
 import { TRANSACTION_ENTRY_INCLUDE, validateTransactionPayload } from './shared'
 
 export async function GET(request: NextRequest) {
