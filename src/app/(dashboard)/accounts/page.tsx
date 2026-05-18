@@ -34,7 +34,7 @@ export default function AccountsPage() {
   const [accounts, setAccounts] = useState<Account[]>([])
   const [loading, setLoading] = useState(true)
   const [showFormFor, setShowFormFor] = useState<string | null>(null)
-  const [formData, setFormData] = useState({ name: '', description: '', currency: 'KRW', openingBalance: '' })
+  const [formData, setFormData] = useState({ name: '', description: '', currency: 'KRW', openingBalance: '', exchangeRate: '1' })
   const [userCurrency, setUserCurrency] = useState('KRW')
   const [error, setError] = useState('')
   const [formError, setFormError] = useState('')
@@ -92,7 +92,13 @@ export default function AccountsPage() {
           name: formData.name,
           description: formData.description,
           type: showFormFor,
-          ...(formData.openingBalance !== '' ? { openingBalance: Number(formData.openingBalance) } : {}),
+          currency: formData.currency,
+          ...(formData.openingBalance !== ''
+            ? {
+                openingBalance: Number(formData.openingBalance),
+                ...(formData.currency !== userCurrency ? { exchangeRate: formData.exchangeRate } : {}),
+              }
+            : {}),
         }),
       })
       const data = await res.json()
@@ -100,7 +106,7 @@ export default function AccountsPage() {
         setFormError(data.error || '오류가 발생했습니다.')
       } else {
         setShowFormFor(null)
-        setFormData({ name: '', description: '', currency: userCurrency, openingBalance: '' })
+        setFormData({ name: '', description: '', currency: userCurrency, openingBalance: '', exchangeRate: '1' })
         fetchAccounts()
       }
     } catch {
@@ -291,10 +297,11 @@ editingId === account.id ? (
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">통화</label>
+                      <label htmlFor={`accountCurrency-${type}`} className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">통화</label>
                       <select
+                        id={`accountCurrency-${type}`}
                         value={formData.currency}
-                        onChange={e => setFormData({ ...formData, currency: e.target.value })}
+                        onChange={e => setFormData({ ...formData, currency: e.target.value, exchangeRate: e.target.value === userCurrency ? '1' : formData.exchangeRate })}
                         className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
                       >
                         {SUPPORTED_CURRENCIES.map(c => (
@@ -329,13 +336,30 @@ editingId === account.id ? (
                         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">입력하면 개시잔액 자동 분개가 생성됩니다.</p>
                       </div>
                     )}
+                    {(type === 'ASSET' || type === 'LIABILITY' || type === 'EQUITY') && formData.openingBalance !== '' && formData.currency !== userCurrency && (
+                      <div className="col-span-2">
+                        <label htmlFor={`openingBalanceExchangeRate-${type}`} className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">환율 (1 {formData.currency} = ? {userCurrency})</label>
+                        <input
+                          id={`openingBalanceExchangeRate-${type}`}
+                          type="number"
+                          min="0"
+                          step="any"
+                          value={formData.exchangeRate}
+                          onChange={e => setFormData({ ...formData, exchangeRate: e.target.value })}
+                          className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
+                          placeholder="예: 1300"
+                          required
+                        />
+                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">외화 초기잔액을 기준 통화 잔액으로 환산할 때 사용됩니다.</p>
+                      </div>
+                    )}
                     <div className="col-span-2 flex gap-2">
                       <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium">
                         저장
                       </button>
                       <button
                         type="button"
-                        onClick={() => { setShowFormFor(null); setFormData({ name: '', description: '', currency: userCurrency, openingBalance: '' }); setFormError('') }}
+                        onClick={() => { setShowFormFor(null); setFormData({ name: '', description: '', currency: userCurrency, openingBalance: '', exchangeRate: '1' }); setFormError('') }}
                         className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 text-sm font-medium"
                       >
                         취소
@@ -346,7 +370,7 @@ editingId === account.id ? (
               ) : (
                 <div className="p-3">
                   <button
-onClick={() => { cancelEditing(); setShowFormFor(type); setFormData({ name: '', description: '', currency: userCurrency, openingBalance: '' }); setFormError('') }}
+                    onClick={() => { cancelEditing(); setShowFormFor(type); setFormData({ name: '', description: '', currency: userCurrency, openingBalance: '', exchangeRate: '1' }); setFormError('') }}
                     className="w-full py-2 border-2 border-dashed border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-blue-400 hover:text-blue-500 rounded-lg text-sm"
                   >
                     + 계정 추가

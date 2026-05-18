@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
 
   const userId = session.user.id
 
-  let body: { name?: unknown; type?: unknown; description?: unknown; currency?: unknown }
+  let body: { name?: unknown; type?: unknown; description?: unknown; currency?: unknown; exchangeRate?: unknown }
   try {
     body = await request.json()
   } catch {
@@ -141,12 +141,14 @@ export async function POST(request: NextRequest) {
 
     // If no currency specified, use user's base currency
     let finalCurrency = accountCurrency
+    let baseCurrency: string | undefined
     if (!finalCurrency) {
       const user = await prisma.user.findUnique({
         where: { id: userId },
         select: { currency: true },
       })
-      finalCurrency = user?.currency ?? 'KRW'
+      baseCurrency = user?.currency ?? 'KRW'
+      finalCurrency = baseCurrency
     }
 
     const openingBalanceRaw = (body as { openingBalance?: unknown }).openingBalance
@@ -161,6 +163,45 @@ export async function POST(request: NextRequest) {
         { error: '초기잔액은 자산, 부채, 자본 계정에만 설정할 수 있습니다.' },
         { status: 400 },
       )
+    }
+
+    let openingBalanceExchangeRate = '1'
+    if (openingBalance > 0) {
+      if (!baseCurrency) {
+        const user = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { currency: true },
+        })
+        baseCurrency = user?.currency ?? 'KRW'
+      }
+
+      const exchangeRateRaw = body.exchangeRate
+      if (finalCurrency !== baseCurrency && (exchangeRateRaw === undefined || exchangeRateRaw === null || exchangeRateRaw === '')) {
+        return NextResponse.json(
+          { error: `외화(${finalCurrency}) 초기잔액에는 환율(exchangeRate)이 필요합니다.` },
+          { status: 400 },
+        )
+      }
+
+      if (exchangeRateRaw !== undefined && exchangeRateRaw !== null && exchangeRateRaw !== '') {
+        const exchangeRateText = typeof exchangeRateRaw === 'number'
+          ? String(exchangeRateRaw)
+          : typeof exchangeRateRaw === 'string'
+            ? exchangeRateRaw.trim()
+            : null
+
+        if (exchangeRateText === null) {
+          return NextResponse.json({ error: '환율(exchangeRate)은 문자열 또는 숫자여야 합니다.' }, { status: 400 })
+        }
+        if (!/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(exchangeRateText)) {
+          return NextResponse.json({ error: '환율은 양의 숫자 형식이어야 합니다.' }, { status: 400 })
+        }
+        const exchangeRate = Number(exchangeRateText)
+        if (!Number.isFinite(exchangeRate) || exchangeRate <= 0) {
+          return NextResponse.json({ error: '유효한 환율을 입력해주세요.' }, { status: 400 })
+        }
+        openingBalanceExchangeRate = exchangeRateText
+      }
     }
     const prefix = String(TYPE_CODE_PREFIX[accountType]).slice(0, 1)
     const base = TYPE_CODE_PREFIX[accountType]
@@ -295,6 +336,8 @@ export async function POST(request: NextRequest) {
                 debitAccountId,
                 creditAccountId,
                 amount: openingBalance,
+                currency: finalCurrency,
+                exchangeRate: openingBalanceExchangeRate,
                 description: OPENING_BALANCE_ENTRY_DESCRIPTION,
               }],
             },
