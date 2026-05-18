@@ -165,6 +165,8 @@ interface TemplateSummaryEntry {
   debitAccountId: string
   creditAccountId: string
   amount: string
+  currency: string
+  exchangeRate: string
   description: string | null
 }
 
@@ -273,8 +275,8 @@ function TransactionsTab({ accounts, accountsLoading, accountsError, baseCurrenc
         debitAccountId: e.debitAccountId,
         creditAccountId: e.creditAccountId,
         amount: String(e.amount),
-        currency: baseCurrency,
-        exchangeRate: '1',
+        currency: e.currency ?? baseCurrency,
+        exchangeRate: e.exchangeRate ?? '1',
         description: e.description ?? '',
       })),
     )
@@ -1097,6 +1099,8 @@ function TransactionsTab({ accounts, accountsLoading, accountsError, baseCurrenc
 interface RecurringEntry {
   id: string
   amount: string
+  currency: string
+  exchangeRate: string
   description: string | null
   debitAccount: { name: string; code: string; type: string }
   creditAccount: { name: string; code: string; type: string }
@@ -1146,7 +1150,7 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
   const [monthOfYear, setMonthOfYear] = useState('1')
   const [startDate, setStartDate] = useState(todayDate())
   const [endDate, setEndDate] = useState('')
-  const [entries, setEntries] = useState<EntryForm[]>([defaultEntry()])
+  const [entries, setEntries] = useState<EntryForm[]>([defaultEntry(baseCurrency)])
   const [formError, setFormError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -1191,10 +1195,10 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
     setMonthOfYear('1')
     setStartDate(todayDate())
     setEndDate('')
-    setEntries([defaultEntry()])
+    setEntries([defaultEntry(baseCurrency)])
   }
 
-  const addEntry = () => setEntries(prev => [...prev, defaultEntry()])
+  const addEntry = () => setEntries(prev => [...prev, defaultEntry(baseCurrency)])
   const removeEntry = (index: number) => {
     setEntries(prev => {
       if (prev.length === 1) return prev
@@ -1244,6 +1248,8 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
             debitAccountId: entry.debitAccountId,
             creditAccountId: entry.creditAccountId,
             amount: entry.amount,
+            currency: entry.currency,
+            exchangeRate: entry.exchangeRate,
             description: entry.description || undefined,
           })),
         }),
@@ -1676,6 +1682,8 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
 interface TemplateEntry {
   id: string
   amount: string
+  currency: string
+  exchangeRate: string
   description: string | null
   debitAccount: { name: string; code: string; type: string }
   creditAccount: { name: string; code: string; type: string }
@@ -1703,7 +1711,7 @@ function TemplatesTab({ accounts, accountsLoading, accountsError, baseCurrency }
 
   const [accountFilter, setAccountFilter] = useState('')
   const [description, setDescription] = useState('')
-  const [entries, setEntries] = useState<EntryForm[]>([defaultEntry()])
+  const [entries, setEntries] = useState<EntryForm[]>([defaultEntry(baseCurrency)])
   const [formError, setFormError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -1743,10 +1751,10 @@ function TemplatesTab({ accounts, accountsLoading, accountsError, baseCurrency }
   const resetForm = () => {
     setFormError('')
     setDescription('')
-    setEntries([defaultEntry()])
+    setEntries([defaultEntry(baseCurrency)])
   }
 
-  const addEntry = () => setEntries(prev => [...prev, defaultEntry()])
+  const addEntry = () => setEntries(prev => [...prev, defaultEntry(baseCurrency)])
   const removeEntry = (index: number) => {
     setEntries(prev => {
       if (prev.length === 1) return prev
@@ -1791,6 +1799,8 @@ function TemplatesTab({ accounts, accountsLoading, accountsError, baseCurrency }
             debitAccountId: entry.debitAccountId,
             creditAccountId: entry.creditAccountId,
             amount: entry.amount,
+            currency: entry.currency,
+            exchangeRate: entry.exchangeRate,
             description: entry.description || undefined,
           })),
         }),
