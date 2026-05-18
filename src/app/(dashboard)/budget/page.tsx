@@ -20,6 +20,21 @@ interface Budget {
   account: { name: string; code: string; type: string }
 }
 
+
+interface TransactionEntry {
+  debitAccountId: string
+  amount: string
+  debitAccount: { type: string }
+}
+
+interface Transaction {
+  entries: TransactionEntry[]
+}
+
+interface ApiData<T> {
+  data: T
+}
+
 interface BudgetRow {
   account: Account
   budget: Budget | null
@@ -35,14 +50,16 @@ async function loadBudgetData(year: number, month: number) {
   if (!accRes.ok) throw new Error(`계정 목록을 불러오지 못했습니다. (${accRes.status})`)
   if (!budRes.ok) throw new Error(`예산 데이터를 불러오지 못했습니다. (${budRes.status})`)
   const accs: Account[] = await accRes.json()
-  const buds: Budget[] = await budRes.json()
+  const budgetBody: ApiData<Budget[]> = await budRes.json()
+  const buds = Array.isArray(budgetBody.data) ? budgetBody.data : []
 
   const expenseAccounts = accs.filter(a => a.type === 'EXPENSE')
   const budgetMap = new Map(buds.map(b => [b.accountId, b]))
 
   const txRes = await fetch(`/api/transactions?year=${year}&month=${month}`)
   if (!txRes.ok) throw new Error(`거래 데이터를 불러오지 못했습니다. (${txRes.status})`)
-  const transactions = await txRes.json()
+  const transactionBody: ApiData<Transaction[]> = await txRes.json()
+  const transactions = Array.isArray(transactionBody.data) ? transactionBody.data : []
 
   const actuals: Record<string, number> = {}
   for (const tx of transactions) {

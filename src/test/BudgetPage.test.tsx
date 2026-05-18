@@ -47,10 +47,10 @@ function mockFetchResponses() {
       return { ok: true, json: () => Promise.resolve(mockAccounts) } as Response
     }
     if (url.startsWith('/api/budget')) {
-      return { ok: true, json: () => Promise.resolve(mockBudgets) } as Response
+      return { ok: true, json: () => Promise.resolve({ data: mockBudgets }) } as Response
     }
     if (url.startsWith('/api/transactions')) {
-      return { ok: true, json: () => Promise.resolve(mockTransactions) } as Response
+      return { ok: true, json: () => Promise.resolve({ data: mockTransactions, total: mockTransactions.length, page: 1, pageSize: 20 }) } as Response
     }
     return { ok: true, json: () => Promise.resolve({}) } as Response
   })
@@ -156,7 +156,7 @@ describe('BudgetPage', () => {
         return { ok: true, json: () => Promise.resolve([]) } as Response
       }
       if (url.startsWith('/api/transactions')) {
-        return { ok: true, json: () => Promise.resolve([]) } as Response
+        return { ok: true, json: () => Promise.resolve({ data: [], total: 0, page: 1, pageSize: 20 }) } as Response
       }
       return { ok: true, json: () => Promise.resolve({}) } as Response
     })
@@ -218,10 +218,10 @@ describe('BudgetPage', () => {
         return { ok: true, json: () => Promise.resolve({ message: '삭제되었습니다.' }) } as Response
       }
       if (url.startsWith('/api/budget')) {
-        return { ok: true, json: () => Promise.resolve(mockBudgets) } as Response
+        return { ok: true, json: () => Promise.resolve({ data: mockBudgets }) } as Response
       }
       if (url.startsWith('/api/transactions')) {
-        return { ok: true, json: () => Promise.resolve(mockTransactions) } as Response
+        return { ok: true, json: () => Promise.resolve({ data: mockTransactions, total: mockTransactions.length, page: 1, pageSize: 20 }) } as Response
       }
       return { ok: true, json: () => Promise.resolve({}) } as Response
     })

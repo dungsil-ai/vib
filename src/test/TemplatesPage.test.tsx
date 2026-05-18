@@ -79,10 +79,10 @@ function setupFetchMock(overrides: Partial<{
       } as Response
     }
     if (url === '/api/recurring-transactions' && method === 'GET') {
-      return overrides.recurring ?? { ok: true, json: () => Promise.resolve([]) } as Response
+      return overrides.recurring ?? { ok: true, json: () => Promise.resolve({ data: [] }) } as Response
     }
     if (url === '/api/templates' && method === 'GET') {
-      return overrides.templates ?? { ok: true, json: () => Promise.resolve(mockTemplates) } as Response
+      return overrides.templates ?? { ok: true, json: () => Promise.resolve({ data: mockTemplates }) } as Response
     }
     if (url === '/api/templates' && method === 'POST') {
       return overrides.postTemplate ?? { ok: true, json: () => Promise.resolve({ id: 'new-tmpl' }), status: 201 } as unknown as Response
@@ -151,7 +151,7 @@ describe('TemplatesTab (템플릿 탭)', () => {
 
   it('빈 템플릿 목록 메시지를 표시한다', async () => {
     setupFetchMock({
-      templates: { ok: true, json: () => Promise.resolve([]) } as Response,
+      templates: { ok: true, json: () => Promise.resolve({ data: [] }) } as Response,
     })
     const user = userEvent.setup()
     render(<TransactionsPage />)

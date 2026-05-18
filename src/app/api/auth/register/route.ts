@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
-import { CURRENCY_CODES } from '@/lib/currencies'
+import { normalizeCurrencyCode } from '@/lib/api'
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,11 +15,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '비밀번호는 6자 이상이어야 합니다.' }, { status: 400 })
     }
 
-    // Validate currency if provided
-    const userCurrency = currency && typeof currency === 'string' ? currency : 'KRW'
-    if (!CURRENCY_CODES.includes(userCurrency)) {
-      return NextResponse.json({ error: '지원하지 않는 통화 코드입니다.' }, { status: 400 })
+    // 통화 코드가 입력되면 정규화하고, 없으면 원화로 설정합니다.
+    const normalizedCurrency = normalizeCurrencyCode(currency)
+    if (!normalizedCurrency.ok) {
+      return normalizedCurrency.response
     }
+    const userCurrency = normalizedCurrency.value ?? 'KRW'
 
     const normalizedEmail = email.trim().toLowerCase()
 
@@ -49,7 +50,7 @@ export async function POST(request: NextRequest) {
       { code: '5008', name: '교육비', type: 'EXPENSE' as const, description: '교육 관련 비용' },
     ]
 
-    // Create user and default accounts atomically
+    // 사용자와 기본 계정을 원자적으로 생성합니다.
     await prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
         data: { name, email: normalizedEmail, password: hashedPassword, currency: userCurrency },

@@ -235,20 +235,20 @@ function TransactionsTab({ accounts, accountsLoading, accountsError, baseCurrenc
   const editingTransactionIdRef = useRef<string | null>(null)
   const isFormPristineRef = useRef(true)
 
-  // --- template state ---
+  // 템플릿 상태
   const [templates, setTemplates] = useState<TemplateSummary[]>([])
   const [showTemplates, setShowTemplates] = useState(false)
 
   useEffect(() => {
     let cancelled = false
     fetch('/api/templates')
-      .then(r => r.ok ? r.json() : [])
-      .then(data => { if (!cancelled) setTemplates(data) })
+      .then(r => r.ok ? r.json() : { data: [] })
+      .then(body => { if (!cancelled) setTemplates(Array.isArray(body.data) ? body.data : []) })
       .catch(err => { console.error('템플릿 목록 로딩 오류:', err) })
     return () => { cancelled = true }
   }, [])
 
-  // baseCurrency prop이 변경될 때 기본 상태의 entries 통화 업데이트
+  // 기준 통화 값이 변경될 때 기본 분개 통화를 업데이트합니다.
   const prevBaseCurrencyRef = useRef(baseCurrency)
   useEffect(() => {
     if (baseCurrency !== prevBaseCurrencyRef.current) {
@@ -322,9 +322,9 @@ function TransactionsTab({ accounts, accountsLoading, accountsError, baseCurrenc
       }
       const body = await res.json()
       if (!isCancelled()) {
-        setTransactions(body.data ?? body)
-        setListTotal(body.total ?? 0)
-        setListPage(body.page ?? page)
+        setTransactions(Array.isArray(body.data) ? body.data : [])
+        setListTotal(typeof body.total === 'number' ? body.total : 0)
+        setListPage(typeof body.page === 'number' ? body.page : page)
       }
     } catch (err) {
       if (!isCancelled()) {
@@ -337,7 +337,7 @@ function TransactionsTab({ accounts, accountsLoading, accountsError, baseCurrenc
     }
   }, [buildListUrl])
 
-  // Debounce keyword input (300ms)
+  // 키워드 입력을 300ms 지연 처리합니다.
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedKeyword(listKeyword)
@@ -383,7 +383,7 @@ function TransactionsTab({ accounts, accountsLoading, accountsError, baseCurrenc
   }, [isFormPristine])
 
 
-  // Re-fetch when filters change (reset to page 1)
+  // 필터가 변경되면 1페이지부터 다시 조회합니다.
   useEffect(() => {
     let cancelled = false
     setListLoading(true)
@@ -434,7 +434,7 @@ function TransactionsTab({ accounts, accountsLoading, accountsError, baseCurrenc
     setEntries(prev => {
       const updated = [...prev]
       const newEntry = { ...updated[index], [field]: value }
-      // When currency changes back to base currency, reset exchange rate to 1
+      // 기준 통화로 돌아오면 환율을 1로 초기화합니다.
       if (field === 'currency' && value === baseCurrency) {
         newEntry.exchangeRate = '1'
       }
@@ -571,7 +571,7 @@ function TransactionsTab({ accounts, accountsLoading, accountsError, baseCurrenc
       )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* ── Template loader ── */}
+        {/* 템플릿 불러오기 */}
         {templates.length > 0 && (
           <div className="relative">
             <button
@@ -978,7 +978,7 @@ function TransactionsTab({ accounts, accountsLoading, accountsError, baseCurrenc
                 </thead>
                 <tbody className="divide-y dark:divide-gray-700">
                   {transactions.map(tx => {
-                    // Show total in base currency (amount * exchangeRate)
+                    // 기준 통화 환산 합계(amount * exchangeRate)를 표시합니다.
                     const txTotal = tx.entries.reduce((sum, e) => sum + Number(e.amount) * (Number(e.exchangeRate) || 1), 0)
                     const hasForeignCurrency = tx.entries.some(e => e.currency && e.currency !== baseCurrency)
                     const isExpanded = expandedId === tx.id
@@ -1172,7 +1172,7 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
         if (!res.ok) throw new Error(`반복 거래를 불러오지 못했습니다. (${res.status})`)
         return res.json()
       })
-      .then(data => { if (!isCancelled()) setRecurringList(data) })
+      .then(body => { if (!isCancelled()) setRecurringList(Array.isArray(body.data) ? body.data : []) })
       .catch(err => { if (!isCancelled()) setListError(err instanceof Error ? err.message : '반복 거래를 불러오는 중 오류가 발생했습니다.') })
       .finally(() => { if (!isCancelled()) setListLoading(false) })
   }
@@ -1729,7 +1729,7 @@ function TemplatesTab({ accounts, accountsLoading, accountsError, baseCurrency }
         if (!res.ok) throw new Error(`템플릿을 불러오지 못했습니다. (${res.status})`)
         return res.json()
       })
-      .then(data => { if (!isCancelled()) setTemplateList(data) })
+      .then(body => { if (!isCancelled()) setTemplateList(Array.isArray(body.data) ? body.data : []) })
       .catch(err => { if (!isCancelled()) setListError(err instanceof Error ? err.message : '템플릿을 불러오는 중 오류가 발생했습니다.') })
       .finally(() => { if (!isCancelled()) setListLoading(false) })
   }, [])
