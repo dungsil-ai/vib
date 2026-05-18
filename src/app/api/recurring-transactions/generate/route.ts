@@ -1,11 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { serializeData } from '@/lib/serialize'
 import { computeNextRunAt } from '@/lib/recurring'
 
-export async function POST(_request: NextRequest) {
+export async function POST() {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) {
     return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
@@ -13,7 +13,7 @@ export async function POST(_request: NextRequest) {
 
   const now = new Date()
 
-  // Find all active recurring transactions due for this user
+  // 현재 사용자에게 실행 기한이 도래한 활성 반복 거래를 조회
   const due = await prisma.recurringTransaction.findMany({
     where: {
       userId: session.user.id,
@@ -30,9 +30,7 @@ export async function POST(_request: NextRequest) {
     return NextResponse.json({ generated: 0, transactions: [] })
   }
 
-  const created = []
-
-  for (const recurring of due) {
+  const transactions = await Promise.all(due.map(async recurring => {
     const nextRunAt = computeNextRunAt(
       recurring.frequency,
       recurring.dayOfMonth,
@@ -40,7 +38,7 @@ export async function POST(_request: NextRequest) {
       recurring.nextRunAt,
     )
 
-    const transaction = await prisma.$transaction(async tx => {
+    return prisma.$transaction(async tx => {
       // nextRunAt 일치 조건으로 낙관적 동시성 제어 - 중복 생성 방지
       const updateResult = await tx.recurringTransaction.updateMany({
         where: {
@@ -84,11 +82,9 @@ export async function POST(_request: NextRequest) {
         },
       })
     })
+  }))
 
-    if (transaction) {
-      created.push(transaction)
-    }
-  }
+  const created = transactions.filter(transaction => transaction !== null)
 
   return NextResponse.json({ generated: created.length, transactions: serializeData(created) })
 }

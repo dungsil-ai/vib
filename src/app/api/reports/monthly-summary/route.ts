@@ -1,12 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 
-type MonthRow = { month: number; total: string }
+type MonthlySummaryRow = {
+  month: number
+  revenueCredits: string | null
+  revenueDebits: string | null
+  expenseDebits: string | null
+  expenseCredits: string | null
+  assetDebits: string | null
+  assetCredits: string | null
+}
 
-function makeMonthMap(rows: MonthRow[]): Map<number, number> {
-  return new Map(rows.map(r => [r.month, Number(r.total ?? 0)]))
+function makeMonthlySummaryMap(rows: MonthlySummaryRow[]): Map<number, MonthlySummaryRow> {
+  return new Map(rows.map(row => [row.month, row]))
+}
+
+function toNumber(value: string | null | undefined) {
+  return Number(value ?? 0)
+}
+
+function toTextArraySql(ids: string[]) {
+  return ids.length === 0
+    ? Prisma.sql`ARRAY[]::text[]`
+    : Prisma.sql`ARRAY[${Prisma.join(ids)}]::text[]`
 }
 
 export async function GET(request: NextRequest) {
@@ -48,95 +67,37 @@ export async function GET(request: NextRequest) {
   const revenueIds = accounts.filter(a => a.type === 'REVENUE').map(a => a.id)
   const expenseIds = accounts.filter(a => a.type === 'EXPENSE').map(a => a.id)
   const assetIds = accounts.filter(a => a.type === 'ASSET').map(a => a.id)
+  const revenueIdArray = toTextArraySql(revenueIds)
+  const expenseIdArray = toTextArraySql(expenseIds)
+  const assetIdArray = toTextArraySql(assetIds)
 
-  const [revCredits, revDebits, expDebits, expCredits, assetDebits, assetCredits] =
-    await Promise.all([
-      revenueIds.length === 0
-        ? Promise.resolve([] as MonthRow[])
-        : prisma.$queryRaw<MonthRow[]>`
-            SELECT EXTRACT(MONTH FROM t.date)::int AS month,
-                   SUM(e.amount * e."exchangeRate")::text AS total
-            FROM "Entry" e
-            JOIN "Transaction" t ON e."transactionId" = t.id
-            WHERE t."userId" = ${userId}
-              AND t.date >= ${startOfYear}
-              AND t.date <= ${endOfYear}
-              AND e."creditAccountId" = ANY(${revenueIds}::text[])
-            GROUP BY EXTRACT(MONTH FROM t.date)
-          `,
-      revenueIds.length === 0
-        ? Promise.resolve([] as MonthRow[])
-        : prisma.$queryRaw<MonthRow[]>`
-            SELECT EXTRACT(MONTH FROM t.date)::int AS month,
-                   SUM(e.amount * e."exchangeRate")::text AS total
-            FROM "Entry" e
-            JOIN "Transaction" t ON e."transactionId" = t.id
-            WHERE t."userId" = ${userId}
-              AND t.date >= ${startOfYear}
-              AND t.date <= ${endOfYear}
-              AND e."debitAccountId" = ANY(${revenueIds}::text[])
-            GROUP BY EXTRACT(MONTH FROM t.date)
-          `,
-      expenseIds.length === 0
-        ? Promise.resolve([] as MonthRow[])
-        : prisma.$queryRaw<MonthRow[]>`
-            SELECT EXTRACT(MONTH FROM t.date)::int AS month,
-                   SUM(e.amount * e."exchangeRate")::text AS total
-            FROM "Entry" e
-            JOIN "Transaction" t ON e."transactionId" = t.id
-            WHERE t."userId" = ${userId}
-              AND t.date >= ${startOfYear}
-              AND t.date <= ${endOfYear}
-              AND e."debitAccountId" = ANY(${expenseIds}::text[])
-            GROUP BY EXTRACT(MONTH FROM t.date)
-          `,
-      expenseIds.length === 0
-        ? Promise.resolve([] as MonthRow[])
-        : prisma.$queryRaw<MonthRow[]>`
-            SELECT EXTRACT(MONTH FROM t.date)::int AS month,
-                   SUM(e.amount * e."exchangeRate")::text AS total
-            FROM "Entry" e
-            JOIN "Transaction" t ON e."transactionId" = t.id
-            WHERE t."userId" = ${userId}
-              AND t.date >= ${startOfYear}
-              AND t.date <= ${endOfYear}
-              AND e."creditAccountId" = ANY(${expenseIds}::text[])
-            GROUP BY EXTRACT(MONTH FROM t.date)
-          `,
-      assetIds.length === 0
-        ? Promise.resolve([] as MonthRow[])
-        : prisma.$queryRaw<MonthRow[]>`
-            SELECT EXTRACT(MONTH FROM t.date)::int AS month,
-                   SUM(e.amount * e."exchangeRate")::text AS total
-            FROM "Entry" e
-            JOIN "Transaction" t ON e."transactionId" = t.id
-            WHERE t."userId" = ${userId}
-              AND t.date >= ${startOfYear}
-              AND t.date <= ${endOfYear}
-              AND e."debitAccountId" = ANY(${assetIds}::text[])
-            GROUP BY EXTRACT(MONTH FROM t.date)
-          `,
-      assetIds.length === 0
-        ? Promise.resolve([] as MonthRow[])
-        : prisma.$queryRaw<MonthRow[]>`
-            SELECT EXTRACT(MONTH FROM t.date)::int AS month,
-                   SUM(e.amount * e."exchangeRate")::text AS total
-            FROM "Entry" e
-            JOIN "Transaction" t ON e."transactionId" = t.id
-            WHERE t."userId" = ${userId}
-              AND t.date >= ${startOfYear}
-              AND t.date <= ${endOfYear}
-              AND e."creditAccountId" = ANY(${assetIds}::text[])
-            GROUP BY EXTRACT(MONTH FROM t.date)
-          `,
-    ])
+  const summaryRows = accounts.length === 0
+    ? []
+    : await prisma.$queryRaw<MonthlySummaryRow[]>`
+        WITH monthly_entries AS (
+          SELECT EXTRACT(MONTH FROM t.date)::int AS month,
+                 e.amount * e."exchangeRate" AS base_amount,
+                 e."debitAccountId",
+                 e."creditAccountId"
+          FROM "Entry" e
+          JOIN "Transaction" t ON e."transactionId" = t.id
+          WHERE t."userId" = ${userId}
+            AND t.date >= ${startOfYear}
+            AND t.date <= ${endOfYear}
+        )
+        SELECT month,
+               COALESCE(SUM(base_amount) FILTER (WHERE "creditAccountId" = ANY(${revenueIdArray})), 0)::text AS "revenueCredits",
+               COALESCE(SUM(base_amount) FILTER (WHERE "debitAccountId" = ANY(${revenueIdArray})), 0)::text AS "revenueDebits",
+               COALESCE(SUM(base_amount) FILTER (WHERE "debitAccountId" = ANY(${expenseIdArray})), 0)::text AS "expenseDebits",
+               COALESCE(SUM(base_amount) FILTER (WHERE "creditAccountId" = ANY(${expenseIdArray})), 0)::text AS "expenseCredits",
+               COALESCE(SUM(base_amount) FILTER (WHERE "debitAccountId" = ANY(${assetIdArray})), 0)::text AS "assetDebits",
+               COALESCE(SUM(base_amount) FILTER (WHERE "creditAccountId" = ANY(${assetIdArray})), 0)::text AS "assetCredits"
+        FROM monthly_entries
+        GROUP BY month
+        ORDER BY month
+      `
 
-  const revCreditMap = makeMonthMap(revCredits)
-  const revDebitMap = makeMonthMap(revDebits)
-  const expDebitMap = makeMonthMap(expDebits)
-  const expCreditMap = makeMonthMap(expCredits)
-  const assetDebitMap = makeMonthMap(assetDebits)
-  const assetCreditMap = makeMonthMap(assetCredits)
+  const summaryMap = makeMonthlySummaryMap(summaryRows)
 
   let totalRevenue = 0
   let totalExpense = 0
@@ -145,11 +106,12 @@ export async function GET(request: NextRequest) {
 
   const months = Array.from({ length: 12 }, (_, i) => {
     const m = i + 1
-    const revenue = (revCreditMap.get(m) ?? 0) - (revDebitMap.get(m) ?? 0)
-    const expense = (expDebitMap.get(m) ?? 0) - (expCreditMap.get(m) ?? 0)
+    const row = summaryMap.get(m)
+    const revenue = toNumber(row?.revenueCredits) - toNumber(row?.revenueDebits)
+    const expense = toNumber(row?.expenseDebits) - toNumber(row?.expenseCredits)
     const netIncome = revenue - expense
-    const cashIn = assetDebitMap.get(m) ?? 0
-    const cashOut = assetCreditMap.get(m) ?? 0
+    const cashIn = toNumber(row?.assetDebits)
+    const cashOut = toNumber(row?.assetCredits)
     const netCashFlow = cashIn - cashOut
 
     totalRevenue += revenue

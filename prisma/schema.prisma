@@ -59,7 +59,8 @@ model Transaction {
   entries     Entry[]
   createdAt   DateTime @default(now())
 
-  @@index([userId, date(sort: Desc)])
+  @@index([userId, date(sort: Desc)], map: "Transaction_userId_date_idx")
+  @@index([userId, date(sort: Asc)], map: "Transaction_userId_date_asc_idx")
 }
 
 model Entry {
@@ -77,6 +78,8 @@ model Entry {
   createdAt       DateTime    @default(now())
 
   @@index([transactionId])
+  @@index([transactionId, debitAccountId], map: "Entry_transactionId_debitAccountId_idx")
+  @@index([transactionId, creditAccountId], map: "Entry_transactionId_creditAccountId_idx")
   @@index([debitAccountId])
   @@index([creditAccountId])
 }

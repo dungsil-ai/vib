@@ -11,23 +11,56 @@ interface TemplateEntryInput {
   description?: string
 }
 
-export async function GET(_request: NextRequest) {
+const LIST_INCLUDE = {
+  entries: {
+    include: {
+      debitAccount: { select: { name: true, code: true, type: true } },
+      creditAccount: { select: { name: true, code: true, type: true } },
+    },
+  },
+}
+
+export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) {
     return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
   }
 
+  const { searchParams } = new URL(request.url)
+  const pageParam = searchParams.get('page')
+  const pageSizeParam = searchParams.get('pageSize')
+  const usesPagination = pageParam !== null || pageSizeParam !== null
+
+  if (usesPagination) {
+    const page = pageParam ? Number(pageParam) : 1
+    const pageSize = pageSizeParam ? Number(pageSizeParam) : 20
+
+    if (!Number.isInteger(page) || page < 1) {
+      return NextResponse.json({ error: '유효한 page 값을 입력해주세요.' }, { status: 400 })
+    }
+    if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100) {
+      return NextResponse.json({ error: 'pageSize는 1 이상 100 이하로 입력해주세요.' }, { status: 400 })
+    }
+
+    const where = { userId: session.user.id }
+    const [total, data] = await prisma.$transaction([
+      prisma.transactionTemplate.count({ where }),
+      prisma.transactionTemplate.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: LIST_INCLUDE,
+      }),
+    ])
+
+    return NextResponse.json({ data: serializeData(data), total, page, pageSize })
+  }
+
   const templates = await prisma.transactionTemplate.findMany({
     where: { userId: session.user.id },
     orderBy: { createdAt: 'desc' },
-    include: {
-      entries: {
-        include: {
-          debitAccount: { select: { name: true, code: true, type: true } },
-          creditAccount: { select: { name: true, code: true, type: true } },
-        },
-      },
-    },
+    include: LIST_INCLUDE,
   })
 
   return NextResponse.json(serializeData(templates))
