@@ -291,6 +291,45 @@ describe('monthly-summary GET', () => {
     expect(body.totalCashOut).toBe(300000)
     expect(body.totalNetCashFlow).toBe(700000)
   })
+
+  it('월별 수익/비용/현금흐름 집계 SQL이 기준 통화 조건과 외화 환율을 반영한다', async () => {
+    vi.mocked(prisma.account.findMany).mockResolvedValue([
+      { id: 'rev-1', type: 'REVENUE', userId: 'user-1', name: '외화 매출', code: '4001', currency: 'USD', description: null, createdAt: new Date() },
+      { id: 'exp-1', type: 'EXPENSE', userId: 'user-1', name: '외화 비용', code: '5001', currency: 'USD', description: null, createdAt: new Date() },
+      { id: 'asset-1', type: 'ASSET', userId: 'user-1', name: '달러 예금', code: '1001', currency: 'USD', description: null, createdAt: new Date() },
+    ])
+    vi.mocked(prisma.$queryRaw)
+      .mockResolvedValueOnce([{ month: 2, total: '130000' }])
+      .mockResolvedValueOnce([{ month: 2, total: '13000' }])
+      .mockResolvedValueOnce([{ month: 2, total: '26000' }])
+      .mockResolvedValueOnce([{ month: 2, total: '6000' }])
+      .mockResolvedValueOnce([{ month: 2, total: '39000' }])
+      .mockResolvedValueOnce([{ month: 2, total: '9000' }])
+
+    const req = makeRequest('/api/reports/monthly-summary', { year: '2024' })
+    const res = await monthlySummaryGET(req)
+    expect(res.status).toBe(200)
+    const body = await res.json()
+
+    const feb = body.months[1]
+    expect(feb.revenue).toBe(117000)
+    expect(feb.expense).toBe(20000)
+    expect(feb.netIncome).toBe(97000)
+    expect(feb.cashIn).toBe(39000)
+    expect(feb.cashOut).toBe(9000)
+    expect(feb.netCashFlow).toBe(30000)
+    expect(body.totalRevenue).toBe(117000)
+    expect(body.totalExpense).toBe(20000)
+    expect(body.totalCashIn).toBe(39000)
+    expect(body.totalCashOut).toBe(9000)
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(6)
+
+    for (const call of vi.mocked(prisma.$queryRaw).mock.calls) {
+      const sql = (call[0] as TemplateStringsArray).join('?')
+      expect(sql).toContain('CASE WHEN e.currency IS NULL OR e.currency =')
+      expect(sql).toContain('THEN e.amount ELSE e.amount * e."exchangeRate" END')
+    }
+  })
 })
 
 

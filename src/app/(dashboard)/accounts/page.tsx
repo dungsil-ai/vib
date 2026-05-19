@@ -34,7 +34,7 @@ export default function AccountsPage() {
   const [accounts, setAccounts] = useState<Account[]>([])
   const [loading, setLoading] = useState(true)
   const [showFormFor, setShowFormFor] = useState<string | null>(null)
-  const [formData, setFormData] = useState({ name: '', description: '', currency: 'KRW', openingBalance: '' })
+  const [formData, setFormData] = useState({ name: '', description: '', currency: 'KRW', openingBalance: '', exchangeRate: '' })
   const [userCurrency, setUserCurrency] = useState('KRW')
   const [error, setError] = useState('')
   const [formError, setFormError] = useState('')
@@ -92,7 +92,9 @@ export default function AccountsPage() {
           name: formData.name,
           description: formData.description,
           type: showFormFor,
+          currency: formData.currency,
           ...(formData.openingBalance !== '' ? { openingBalance: Number(formData.openingBalance) } : {}),
+          ...(formData.openingBalance !== '' && formData.currency !== userCurrency ? { exchangeRate: formData.exchangeRate } : {}),
         }),
       })
       const data = await res.json()
@@ -100,7 +102,7 @@ export default function AccountsPage() {
         setFormError(data.error || '오류가 발생했습니다.')
       } else {
         setShowFormFor(null)
-        setFormData({ name: '', description: '', currency: userCurrency, openingBalance: '' })
+        setFormData({ name: '', description: '', currency: userCurrency, openingBalance: '', exchangeRate: '' })
         fetchAccounts()
       }
     } catch {
@@ -291,10 +293,11 @@ editingId === account.id ? (
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">통화</label>
+                      <label htmlFor={`currency-${type}`} className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">통화</label>
                       <select
+                        id={`currency-${type}`}
                         value={formData.currency}
-                        onChange={e => setFormData({ ...formData, currency: e.target.value })}
+                        onChange={e => setFormData({ ...formData, currency: e.target.value, exchangeRate: e.target.value === userCurrency ? '' : formData.exchangeRate })}
                         className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
                       >
                         {SUPPORTED_CURRENCIES.map(c => (
@@ -327,6 +330,23 @@ editingId === account.id ? (
                           placeholder="0"
                         />
                         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">입력하면 개시잔액 자동 분개가 생성됩니다.</p>
+                        {formData.openingBalance !== '' && formData.currency !== userCurrency && (
+                          <div className="mt-3">
+                            <label htmlFor={`exchangeRate-${type}`} className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">초기잔액 환율 (필수)</label>
+                            <input
+                              id={`exchangeRate-${type}`}
+                              type="number"
+                              min="0"
+                              step="any"
+                              required
+                              value={formData.exchangeRate}
+                              onChange={e => setFormData({ ...formData, exchangeRate: e.target.value })}
+                              className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
+                              placeholder={`1 ${formData.currency}당 ${userCurrency} 환율`}
+                            />
+                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">외화 초기잔액은 기준 통화({userCurrency})로 환산할 환율이 필요합니다.</p>
+                          </div>
+                        )}
                       </div>
                     )}
                     <div className="col-span-2 flex gap-2">
@@ -335,7 +355,7 @@ editingId === account.id ? (
                       </button>
                       <button
                         type="button"
-                        onClick={() => { setShowFormFor(null); setFormData({ name: '', description: '', currency: userCurrency, openingBalance: '' }); setFormError('') }}
+                        onClick={() => { setShowFormFor(null); setFormData({ name: '', description: '', currency: userCurrency, openingBalance: '', exchangeRate: '' }); setFormError('') }}
                         className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 text-sm font-medium"
                       >
                         취소
@@ -346,7 +366,7 @@ editingId === account.id ? (
               ) : (
                 <div className="p-3">
                   <button
-onClick={() => { cancelEditing(); setShowFormFor(type); setFormData({ name: '', description: '', currency: userCurrency, openingBalance: '' }); setFormError('') }}
+                    onClick={() => { cancelEditing(); setShowFormFor(type); setFormData({ name: '', description: '', currency: userCurrency, openingBalance: '', exchangeRate: '' }); setFormError('') }}
                     className="w-full py-2 border-2 border-dashed border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-blue-400 hover:text-blue-500 rounded-lg text-sm"
                   >
                     + 계정 추가
