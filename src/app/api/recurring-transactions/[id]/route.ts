@@ -45,11 +45,24 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: 'isActive 값이 필요합니다.' }, { status: 400 })
     }
 
-    const updated = await prisma.recurringTransaction.update({
-      where: { id },
-      data: { isActive },
-      include: RECURRING_TRANSACTION_INCLUDE,
+    const updated = await prisma.$transaction(async tx => {
+      const updateResult = await tx.recurringTransaction.updateMany({
+        where: { id, userId: session.user.id },
+        data: { isActive },
+      })
+      if (updateResult.count === 0) {
+        return null
+      }
+
+      return tx.recurringTransaction.findFirst({
+        where: { id, userId: session.user.id },
+        include: RECURRING_TRANSACTION_INCLUDE,
+      })
     })
+
+    if (!updated) {
+      return NextResponse.json({ error: '반복 거래를 찾을 수 없습니다.' }, { status: 404 })
+    }
 
     return NextResponse.json(serializeData(updated))
   }
@@ -63,18 +76,43 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     ...validation,
     nextRunAt: calculateNextRunAtAfterProgress(validation, existing.nextRunAt),
   })
-  const updated = await prisma.recurringTransaction.update({
-    where: { id },
-    data: {
-      ...transactionData,
-      isActive: typeof body.isActive === 'boolean' ? body.isActive : existing.isActive,
-      entries: {
-        deleteMany: {},
-        create: transactionData.entries.create,
+  const updated = await prisma.$transaction(async tx => {
+    const updateResult = await tx.recurringTransaction.updateMany({
+      where: { id, userId: session.user.id },
+      data: {
+        description: transactionData.description,
+        frequency: transactionData.frequency,
+        dayOfMonth: transactionData.dayOfMonth,
+        monthOfYear: transactionData.monthOfYear,
+        startDate: transactionData.startDate,
+        endDate: transactionData.endDate,
+        nextRunAt: transactionData.nextRunAt,
+        isActive: typeof body.isActive === 'boolean' ? body.isActive : existing.isActive,
       },
-    },
-    include: RECURRING_TRANSACTION_INCLUDE,
+    })
+    if (updateResult.count === 0) {
+      return null
+    }
+
+    await tx.recurringEntry.deleteMany({
+      where: { recurringTransactionId: id },
+    })
+    await tx.recurringEntry.createMany({
+      data: transactionData.entries.create.map(entry => ({
+        ...entry,
+        recurringTransactionId: id,
+      })),
+    })
+
+    return tx.recurringTransaction.findFirst({
+      where: { id, userId: session.user.id },
+      include: RECURRING_TRANSACTION_INCLUDE,
+    })
   })
+
+  if (!updated) {
+    return NextResponse.json({ error: '반복 거래를 찾을 수 없습니다.' }, { status: 404 })
+  }
 
   return NextResponse.json(serializeData(updated))
 }

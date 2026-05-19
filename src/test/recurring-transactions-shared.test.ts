@@ -9,7 +9,7 @@ vi.mock('@/lib/prisma', () => ({
 }))
 
 import { prisma } from '@/lib/prisma'
-import { validateRecurringTransactionInput, unwrapRecurringValidation } from '@/app/api/recurring-transactions/shared'
+import { calculateNextRunAtAfterProgress, validateRecurringTransactionInput, unwrapRecurringValidation } from '@/app/api/recurring-transactions/shared'
 
 describe('recurring-transactions shared validation', () => {
   beforeEach(() => {
@@ -65,6 +65,45 @@ describe('recurring-transactions shared validation', () => {
     expect(validation).not.toBeInstanceOf(Response)
     if (!(validation instanceof Response)) {
       expect(validation.nextRunAt).toEqual(new Date('2025-02-28T15:30:00.000Z'))
+    }
+  })
+
+  it('오래 진행된 일 반복의 다음 실행일을 큰 간격으로 계산한다', async () => {
+    const validation = unwrapRecurringValidation(await validateRecurringTransactionInput({
+      description: '일 반복 거래',
+      frequency: 'DAILY',
+      startDate: '2020-01-01T09:00:00.000Z',
+      entries: [
+        { debitAccountId: 'acc-1', creditAccountId: 'acc-2', amount: '1000' },
+      ],
+    }, 'user-1'))
+
+    expect(validation).not.toBeInstanceOf(Response)
+    if (!(validation instanceof Response)) {
+      expect(calculateNextRunAtAfterProgress(
+        validation,
+        new Date('2025-05-18T09:00:00.000Z'),
+      )).toEqual(new Date('2025-05-18T09:00:00.000Z'))
+    }
+  })
+
+  it('오래 진행된 월 반복의 다음 실행일을 큰 간격으로 계산한다', async () => {
+    const validation = unwrapRecurringValidation(await validateRecurringTransactionInput({
+      description: '월 반복 거래',
+      frequency: 'MONTHLY',
+      dayOfMonth: 31,
+      startDate: '2020-01-31T09:00:00.000Z',
+      entries: [
+        { debitAccountId: 'acc-1', creditAccountId: 'acc-2', amount: '1000' },
+      ],
+    }, 'user-1'))
+
+    expect(validation).not.toBeInstanceOf(Response)
+    if (!(validation instanceof Response)) {
+      expect(calculateNextRunAtAfterProgress(
+        validation,
+        new Date('2025-05-18T09:00:00.000Z'),
+      )).toEqual(new Date('2025-05-31T09:00:00.000Z'))
     }
   })
 })

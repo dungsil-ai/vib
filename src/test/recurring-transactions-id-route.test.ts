@@ -11,10 +11,24 @@ vi.mock('@/lib/auth', () => ({
 
 vi.mock('@/lib/prisma', () => ({
   prisma: {
+    $transaction: vi.fn(async callback => callback({
+      recurringTransaction: {
+        findFirst: vi.fn(),
+        updateMany: vi.fn(),
+      },
+      recurringEntry: {
+        deleteMany: vi.fn(),
+        createMany: vi.fn(),
+      },
+    })),
     recurringTransaction: {
       findFirst: vi.fn(),
-      update: vi.fn(),
+      updateMany: vi.fn(),
       deleteMany: vi.fn(),
+    },
+    recurringEntry: {
+      deleteMany: vi.fn(),
+      createMany: vi.fn(),
     },
     account: {
       findMany: vi.fn(),
@@ -29,7 +43,6 @@ vi.mock('@/lib/serialize', () => ({
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { PUT } from '@/app/api/recurring-transactions/[id]/route'
-import { RECURRING_TRANSACTION_INCLUDE } from '@/app/api/recurring-transactions/shared'
 
 const mockSession = { user: { id: 'user-1', email: 'test@example.com', name: 'Test' } }
 
@@ -63,7 +76,25 @@ describe('recurring-transactions/[id] PUT', () => {
       { id: 'acc-1' },
       { id: 'acc-2' },
     ] as Awaited<ReturnType<typeof prisma.account.findMany>>)
-    vi.mocked(prisma.recurringTransaction.update).mockResolvedValue({
+    vi.mocked(prisma.recurringTransaction.updateMany).mockResolvedValue({ count: 1 } as Awaited<ReturnType<typeof prisma.recurringTransaction.updateMany>>)
+    vi.mocked(prisma.recurringEntry.deleteMany).mockResolvedValue({ count: 1 } as Awaited<ReturnType<typeof prisma.recurringEntry.deleteMany>>)
+    vi.mocked(prisma.recurringEntry.createMany).mockResolvedValue({ count: 1 } as Awaited<ReturnType<typeof prisma.recurringEntry.createMany>>)
+    vi.mocked(prisma.$transaction).mockImplementation(async callback => callback(prisma))
+    vi.mocked(prisma.recurringTransaction.findFirst).mockResolvedValueOnce({
+      id: 'rec-1',
+      userId: 'user-1',
+      description: '기존 반복 거래',
+      frequency: 'MONTHLY',
+      dayOfMonth: 25,
+      monthOfYear: null,
+      startDate: new Date('2024-01-01T00:00:00.000Z'),
+      endDate: null,
+      nextRunAt: new Date('2024-02-25T00:00:00.000Z'),
+      lastRunAt: null,
+      isActive: true,
+      createdAt: new Date('2024-01-01T00:00:00.000Z'),
+    } as NonNullable<Awaited<ReturnType<typeof prisma.recurringTransaction.findFirst>>>)
+    vi.mocked(prisma.recurringTransaction.findFirst).mockResolvedValue({
       id: 'rec-1',
       userId: 'user-1',
       description: '수정된 반복 거래',
@@ -77,7 +108,7 @@ describe('recurring-transactions/[id] PUT', () => {
       isActive: true,
       createdAt: new Date('2024-01-01T00:00:00.000Z'),
       entries: [],
-    } as Awaited<ReturnType<typeof prisma.recurringTransaction.update>>)
+    } as NonNullable<Awaited<ReturnType<typeof prisma.recurringTransaction.findFirst>>>)
   })
 
   it('객체가 아닌 요청 본문은 400으로 거부한다', async () => {
@@ -87,7 +118,7 @@ describe('recurring-transactions/[id] PUT', () => {
     expect(res.status).toBe(400)
     expect(body.error).toContain('객체')
     expect(prisma.account.findMany).not.toHaveBeenCalled()
-    expect(prisma.recurringTransaction.update).not.toHaveBeenCalled()
+    expect(prisma.recurringTransaction.updateMany).not.toHaveBeenCalled()
   })
 
   it('잘못된 JSON 본문은 400으로 거부한다', async () => {
@@ -103,7 +134,7 @@ describe('recurring-transactions/[id] PUT', () => {
     expect(res.status).toBe(400)
     expect(body.error).toContain('JSON')
     expect(prisma.account.findMany).not.toHaveBeenCalled()
-    expect(prisma.recurringTransaction.update).not.toHaveBeenCalled()
+    expect(prisma.recurringTransaction.updateMany).not.toHaveBeenCalled()
   })
 
   it('isActive만 전달하면 활성 상태만 변경한다', async () => {
@@ -111,10 +142,9 @@ describe('recurring-transactions/[id] PUT', () => {
 
     expect(res.status).toBe(200)
     expect(prisma.account.findMany).not.toHaveBeenCalled()
-    expect(prisma.recurringTransaction.update).toHaveBeenCalledWith({
-      where: { id: 'rec-1' },
+    expect(prisma.recurringTransaction.updateMany).toHaveBeenCalledWith({
+      where: { id: 'rec-1', userId: 'user-1' },
       data: { isActive: false },
-      include: RECURRING_TRANSACTION_INCLUDE,
     })
   })
 
@@ -135,31 +165,34 @@ describe('recurring-transactions/[id] PUT', () => {
     }), { params: Promise.resolve({ id: 'rec-1' }) })
 
     expect(res.status).toBe(200)
-    expect(prisma.recurringTransaction.update).toHaveBeenCalledWith(
+    expect(prisma.recurringTransaction.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'rec-1' },
+        where: { id: 'rec-1', userId: 'user-1' },
         data: expect.objectContaining({
           description: '수정된 반복 거래',
           frequency: 'MONTHLY',
           dayOfMonth: 10,
-          entries: {
-            deleteMany: {},
-            create: [
-              {
-                debitAccountId: 'acc-1',
-                creditAccountId: 'acc-2',
-                amount: '99000',
-                description: '수정 메모',
-              },
-            ],
-          },
         }),
-        include: RECURRING_TRANSACTION_INCLUDE,
       }),
     )
+    expect(prisma.recurringEntry.deleteMany).toHaveBeenCalledWith({
+      where: { recurringTransactionId: 'rec-1' },
+    })
+    expect(prisma.recurringEntry.createMany).toHaveBeenCalledWith({
+      data: [
+        {
+          recurringTransactionId: 'rec-1',
+          debitAccountId: 'acc-1',
+          creditAccountId: 'acc-2',
+          amount: '99000',
+          description: '수정 메모',
+        },
+      ],
+    })
   })
 
   it('수정 시 원래 시작일 기준 계산값이 기존 다음 실행일보다 과거이면 진행된 다음 실행일을 보존한다', async () => {
+    vi.mocked(prisma.recurringTransaction.findFirst).mockReset()
     vi.mocked(prisma.recurringTransaction.findFirst).mockResolvedValue({
       id: 'rec-1',
       userId: 'user-1',
@@ -186,7 +219,7 @@ describe('recurring-transactions/[id] PUT', () => {
     }), { params: Promise.resolve({ id: 'rec-1' }) })
 
     expect(res.status).toBe(200)
-    expect(prisma.recurringTransaction.update).toHaveBeenCalledWith(
+    expect(prisma.recurringTransaction.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           nextRunAt: new Date('2024-05-25T00:00:00.000Z'),
@@ -196,6 +229,7 @@ describe('recurring-transactions/[id] PUT', () => {
   })
 
   it('스케줄 수정 시 기존 진행 상태 이후의 새 반복일로 nextRunAt을 재계산한다', async () => {
+    vi.mocked(prisma.recurringTransaction.findFirst).mockReset()
     vi.mocked(prisma.recurringTransaction.findFirst).mockResolvedValue({
       id: 'rec-1',
       userId: 'user-1',
@@ -222,7 +256,7 @@ describe('recurring-transactions/[id] PUT', () => {
     }), { params: Promise.resolve({ id: 'rec-1' }) })
 
     expect(res.status).toBe(200)
-    expect(prisma.recurringTransaction.update).toHaveBeenCalledWith(
+    expect(prisma.recurringTransaction.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           dayOfMonth: 10,
@@ -230,6 +264,40 @@ describe('recurring-transactions/[id] PUT', () => {
         }),
       }),
     )
+  })
+
+  it('활성 토글 중 소유권 조건 업데이트가 실패하면 404를 반환한다', async () => {
+    vi.mocked(prisma.recurringTransaction.updateMany).mockResolvedValue({ count: 0 } as Awaited<ReturnType<typeof prisma.recurringTransaction.updateMany>>)
+
+    const res = await PUT(makePutRequest({ isActive: false }), { params: Promise.resolve({ id: 'rec-1' }) })
+    const body = await res.json()
+
+    expect(res.status).toBe(404)
+    expect(body.error).toContain('찾을 수 없습니다')
+    expect(prisma.recurringTransaction.updateMany).toHaveBeenCalledWith({
+      where: { id: 'rec-1', userId: 'user-1' },
+      data: { isActive: false },
+    })
+  })
+
+  it('전체 수정 중 소유권 조건 업데이트가 실패하면 항목을 교체하지 않고 404를 반환한다', async () => {
+    vi.mocked(prisma.recurringTransaction.updateMany).mockResolvedValue({ count: 0 } as Awaited<ReturnType<typeof prisma.recurringTransaction.updateMany>>)
+
+    const res = await PUT(makePutRequest({
+      description: '수정된 반복 거래',
+      frequency: 'MONTHLY',
+      dayOfMonth: 10,
+      startDate: '2024-01-01',
+      entries: [
+        { debitAccountId: 'acc-1', creditAccountId: 'acc-2', amount: '99000' },
+      ],
+    }), { params: Promise.resolve({ id: 'rec-1' }) })
+    const body = await res.json()
+
+    expect(res.status).toBe(404)
+    expect(body.error).toContain('찾을 수 없습니다')
+    expect(prisma.recurringEntry.deleteMany).not.toHaveBeenCalled()
+    expect(prisma.recurringEntry.createMany).not.toHaveBeenCalled()
   })
 
   it('소유하지 않은 계정이 포함되면 403을 반환한다', async () => {
@@ -248,6 +316,6 @@ describe('recurring-transactions/[id] PUT', () => {
 
     expect(res.status).toBe(403)
     expect(body.error).toContain('잘못된 계정')
-    expect(prisma.recurringTransaction.update).not.toHaveBeenCalled()
+    expect(prisma.recurringTransaction.updateMany).not.toHaveBeenCalled()
   })
 })

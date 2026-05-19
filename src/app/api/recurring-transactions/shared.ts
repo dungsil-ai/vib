@@ -178,23 +178,110 @@ export function unwrapRecurringValidation(
   return isValidationFailure(result) ? result.response : result
 }
 
+const DAY_IN_MS = 24 * 60 * 60 * 1000
+const WEEK_IN_MS = 7 * DAY_IN_MS
+
+function addUtcDays(date: Date, days: number) {
+  const nextDate = new Date(date)
+  nextDate.setUTCDate(nextDate.getUTCDate() + days)
+  return nextDate
+}
+
+function addUtcMonths(date: Date, months: number, dayOfMonth: number | null) {
+  const nextDate = new Date(date)
+  const targetDay = dayOfMonth ?? nextDate.getUTCDate()
+
+  nextDate.setUTCDate(1)
+  nextDate.setUTCMonth(nextDate.getUTCMonth() + months)
+
+  const maxDay = getLastDayOfMonthUtc(nextDate.getUTCFullYear(), nextDate.getUTCMonth())
+  nextDate.setUTCDate(Math.min(targetDay, maxDay))
+
+  return nextDate
+}
+
+function addUtcYears(date: Date, years: number, dayOfMonth: number | null, monthOfYear: number | null) {
+  const nextDate = new Date(date)
+  const targetDay = dayOfMonth ?? nextDate.getUTCDate()
+
+  nextDate.setUTCDate(1)
+  nextDate.setUTCFullYear(nextDate.getUTCFullYear() + years)
+  if (monthOfYear) {
+    nextDate.setUTCMonth(monthOfYear - 1)
+  }
+
+  const maxDay = getLastDayOfMonthUtc(nextDate.getUTCFullYear(), nextDate.getUTCMonth())
+  nextDate.setUTCDate(Math.min(targetDay, maxDay))
+
+  return nextDate
+}
+
+function countUtcMonthBoundaryDistance(from: Date, to: Date) {
+  return (to.getUTCFullYear() - from.getUTCFullYear()) * 12 + to.getUTCMonth() - from.getUTCMonth()
+}
+
+function countUtcYearBoundaryDistance(from: Date, to: Date) {
+  return to.getUTCFullYear() - from.getUTCFullYear()
+}
+
+function advanceWithinCorrectionLimit(
+  nextRunAt: Date,
+  progressBoundary: Date,
+  validated: ValidatedRecurringTransactionInput,
+) {
+  let correctedNextRunAt = nextRunAt
+
+  for (let index = 0; correctedNextRunAt < progressBoundary && index < 24; index += 1) {
+    correctedNextRunAt = computeNextRunAt(
+      validated.frequency as (typeof VALID_RECURRING_FREQUENCIES)[number],
+      validated.dayOfMonth,
+      validated.monthOfYear,
+      correctedNextRunAt,
+    )
+  }
+
+  return correctedNextRunAt
+}
+
 export function calculateNextRunAtAfterProgress(
   validated: ValidatedRecurringTransactionInput,
   currentNextRunAt: Date,
 ) {
-  let nextRunAt = new Date(validated.nextRunAt)
+  const nextRunAt = new Date(validated.nextRunAt)
   const progressBoundary = new Date(currentNextRunAt)
 
-  while (nextRunAt < progressBoundary) {
-    nextRunAt = computeNextRunAt(
-      validated.frequency as (typeof VALID_RECURRING_FREQUENCIES)[number],
-      validated.dayOfMonth,
-      validated.monthOfYear,
-      nextRunAt,
-    )
+  if (nextRunAt >= progressBoundary) {
+    return nextRunAt
   }
 
-  return nextRunAt
+  switch (validated.frequency) {
+    case 'DAILY': {
+      const elapsedDays = Math.floor((progressBoundary.getTime() - nextRunAt.getTime()) / DAY_IN_MS)
+      const jumpedNextRunAt = addUtcDays(nextRunAt, Math.max(0, elapsedDays))
+      return jumpedNextRunAt < progressBoundary ? addUtcDays(jumpedNextRunAt, 1) : jumpedNextRunAt
+    }
+    case 'WEEKLY': {
+      const elapsedWeeks = Math.floor((progressBoundary.getTime() - nextRunAt.getTime()) / WEEK_IN_MS)
+      const jumpedNextRunAt = addUtcDays(nextRunAt, Math.max(0, elapsedWeeks) * 7)
+      return jumpedNextRunAt < progressBoundary ? addUtcDays(jumpedNextRunAt, 7) : jumpedNextRunAt
+    }
+    case 'MONTHLY': {
+      const monthsBehind = countUtcMonthBoundaryDistance(nextRunAt, progressBoundary)
+      const jumpedNextRunAt = monthsBehind > 1
+        ? addUtcMonths(nextRunAt, monthsBehind - 1, validated.dayOfMonth)
+        : nextRunAt
+      return advanceWithinCorrectionLimit(jumpedNextRunAt, progressBoundary, validated)
+    }
+    case 'YEARLY': {
+      const yearsBehind = countUtcYearBoundaryDistance(nextRunAt, progressBoundary)
+      const jumpedNextRunAt = yearsBehind > 1
+        ? addUtcYears(nextRunAt, yearsBehind - 1, validated.dayOfMonth, validated.monthOfYear)
+        : nextRunAt
+      return advanceWithinCorrectionLimit(jumpedNextRunAt, progressBoundary, validated)
+    }
+    default:
+      throw new Error(`알 수 없는 반복 주기: ${validated.frequency}`)
+  }
 }
 
 export function buildRecurringTransactionData(validated: ValidatedRecurringTransactionInput) {
