@@ -148,8 +148,14 @@ describe('GET /api/transactions', () => {
     const countCalls = vi.mocked(prisma.transaction.count).mock.calls
     expect(countCalls.length).toBeGreaterThan(0)
     const where = countCalls[0][0]?.where as Record<string, unknown>
-    expect(where.AND).toBeDefined()
-    expect((where.AND as unknown[]).length).toBeGreaterThan(0)
+    expect(where.entries).toEqual({
+      some: {
+        OR: [
+          { debitAccountId: 'acc-1' },
+          { creditAccountId: 'acc-1' },
+        ],
+      },
+    })
   })
 
   it('minAmount/maxAmount 금액 범위 필터가 where 절에 반영된다', async () => {
@@ -159,8 +165,33 @@ describe('GET /api/transactions', () => {
     const countCalls = vi.mocked(prisma.transaction.count).mock.calls
     expect(countCalls.length).toBeGreaterThan(0)
     const where = countCalls[0][0]?.where as Record<string, unknown>
-    expect(where.AND).toBeDefined()
-    expect((where.AND as unknown[]).length).toBeGreaterThan(0)
+    expect(where.entries).toEqual({
+      some: {
+        amount: { gte: 1000, lte: 50000 },
+      },
+    })
+  })
+
+  it('accountId와 금액 범위 필터는 같은 엔트리에 함께 적용된다', async () => {
+    vi.mocked(prisma.$transaction).mockResolvedValue([0, []])
+    const req = makeRequest('/api/transactions', {
+      accountId: 'acc-1',
+      minAmount: '1000',
+      maxAmount: '50000',
+    })
+    await GET(req)
+    const countCalls = vi.mocked(prisma.transaction.count).mock.calls
+    expect(countCalls.length).toBeGreaterThan(0)
+    const where = countCalls[0][0]?.where as Record<string, unknown>
+    expect(where.entries).toEqual({
+      some: {
+        OR: [
+          { debitAccountId: 'acc-1' },
+          { creditAccountId: 'acc-1' },
+        ],
+        amount: { gte: 1000, lte: 50000 },
+      },
+    })
   })
 
   it('minAmount가 음수이면 400을 반환한다', async () => {

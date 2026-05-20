@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { getBaseCurrencyEntrySumMap } from '@/lib/report-sums'
 import { parseUTCDateOnly, parseUTCEndOfDay } from '@/lib/date-range'
 import { serializeData } from '@/lib/serialize'
 import { accountBalance, isDebitNormalAccount } from '@/lib/accounting'
@@ -56,28 +57,26 @@ export async function GET(request: NextRequest) {
     )
   }
 
-  // Compute opening balance (entries before startDate)
+  // 시작일 이전 분개의 기초 잔액을 계산합니다.
   let openingBalance = 0
   if (startDate) {
-    const [priorDebitSumResult, priorCreditSumResult] = await Promise.all([
-      prisma.entry.aggregate({
-        where: {
-          debitAccountId: accountId,
-          transaction: { userId, date: { lt: startDate } },
-        },
-        _sum: { amount: true },
+    const [priorDebitSumMap, priorCreditSumMap] = await Promise.all([
+      getBaseCurrencyEntrySumMap({
+        accountIds: [accountId],
+        userId,
+        side: 'debit',
+        dateFilter: { lt: startDate },
       }),
-      prisma.entry.aggregate({
-        where: {
-          creditAccountId: accountId,
-          transaction: { userId, date: { lt: startDate } },
-        },
-        _sum: { amount: true },
+      getBaseCurrencyEntrySumMap({
+        accountIds: [accountId],
+        userId,
+        side: 'credit',
+        dateFilter: { lt: startDate },
       }),
     ])
 
-    const priorDebitSum = Number(priorDebitSumResult._sum.amount ?? 0)
-    const priorCreditSum = Number(priorCreditSumResult._sum.amount ?? 0)
+    const priorDebitSum = priorDebitSumMap.get(accountId) ?? 0
+    const priorCreditSum = priorCreditSumMap.get(accountId) ?? 0
 
     openingBalance = accountBalance(account.type, priorDebitSum, priorCreditSum)
   }
@@ -109,7 +108,7 @@ export async function GET(request: NextRequest) {
   let balance = openingBalance
   const entriesWithBalance = entries.map(e => {
     const isDebit = e.debitAccountId === accountId
-    const amount = Number(e.amount)
+    const amount = Number(e.amount) * Number(e.exchangeRate ?? 1)
     let debit = 0
     let credit = 0
 

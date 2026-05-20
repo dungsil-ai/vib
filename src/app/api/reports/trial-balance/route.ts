@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { accountBalance } from '@/lib/accounting'
+import { getBaseCurrencyEntrySumMap } from '@/lib/report-sums'
 import { parseUTCDateOnly, parseUTCEndOfDay } from '@/lib/date-range'
 
 export async function GET(request: NextRequest) {
@@ -45,32 +46,10 @@ export async function GET(request: NextRequest) {
   })
 
   const accountIds = accounts.map(a => a.id)
-  const transactionFilter = {
-    transaction: {
-      userId,
-      ...(dateFilter ? { date: dateFilter } : {}),
-    },
-  }
-
-  const [debitSums, creditSums] = await Promise.all([
-    prisma.entry.groupBy({
-      by: ['debitAccountId'],
-      where: { debitAccountId: { in: accountIds }, ...transactionFilter },
-      _sum: { amount: true },
-    }),
-    prisma.entry.groupBy({
-      by: ['creditAccountId'],
-      where: { creditAccountId: { in: accountIds }, ...transactionFilter },
-      _sum: { amount: true },
-    }),
+  const [debitByAccount, creditByAccount] = await Promise.all([
+    getBaseCurrencyEntrySumMap({ accountIds, userId, side: 'debit', dateFilter }),
+    getBaseCurrencyEntrySumMap({ accountIds, userId, side: 'credit', dateFilter }),
   ])
-
-  const debitByAccount = new Map(
-    debitSums.map(r => [r.debitAccountId, Number(r._sum.amount ?? 0)]),
-  )
-  const creditByAccount = new Map(
-    creditSums.map(r => [r.creditAccountId, Number(r._sum.amount ?? 0)]),
-  )
 
   let totalDebits = 0
   let totalCredits = 0
