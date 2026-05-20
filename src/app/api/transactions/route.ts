@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { serializeData } from '@/lib/serialize'
-import { makeUTCMonthRange, parseUTCDateOnly, parseUTCEndOfDay } from '@/lib/date-range'
+import { parseUTCDateOnly, parseUTCEndOfDay } from '@/lib/date-range'
 import { TRANSACTION_ENTRY_INCLUDE, validateTransactionPayload } from './shared'
 
 export async function GET(request: NextRequest) {
@@ -14,11 +14,7 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url)
 
-  // ── Legacy params (year/month) used by budget page ──
-  const yearParam = searchParams.get('year')
-  const monthParam = searchParams.get('month')
-
-  // ── New filter params ──
+  // ── Filter params ──
   const startDateParam = searchParams.get('startDate')
   const endDateParam = searchParams.get('endDate')
   const accountIdParam = searchParams.get('accountId')
@@ -35,24 +31,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: '키워드는 100자 이하로 입력해주세요.' }, { status: 400 })
   }
 
-  // year/month는 빈 문자열을 제외하고 함께 입력되어야 합니다.
-  const hasYearParam = Boolean(yearParam?.trim())
-  const hasMonthParam = Boolean(monthParam?.trim())
-  if ((hasYearParam && !hasMonthParam) || (!hasYearParam && hasMonthParam)) {
-    return NextResponse.json({ error: 'year와 month를 함께 입력해주세요.' }, { status: 400 })
+  if (searchParams.has('year') || searchParams.has('month')) {
+    return NextResponse.json({ error: 'year/month 파라미터는 더 이상 지원하지 않습니다. startDate/endDate를 사용해주세요.' }, { status: 400 })
   }
 
   // 날짜 필터를 구성합니다.
   let dateWhere: { gte?: Date; lte?: Date } | undefined
 
-  if (hasYearParam && hasMonthParam) {
-    const y = parseInt(yearParam!, 10)
-    const m = parseInt(monthParam!, 10)
-    if (!Number.isFinite(y) || !Number.isFinite(m) || m < 1 || m > 12) {
-      return NextResponse.json({ error: '유효한 year/month를 입력해주세요.' }, { status: 400 })
-    }
-    dateWhere = makeUTCMonthRange(y, m)
-  } else if (startDateParam || endDateParam) {
+  if (startDateParam || endDateParam) {
     dateWhere = {}
     if (startDateParam) {
       const d = parseUTCDateOnly(startDateParam)

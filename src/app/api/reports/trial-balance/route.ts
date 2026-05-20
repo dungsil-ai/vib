@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { accountBalance } from '@/lib/accounting'
 import { getBaseCurrencyEntrySumMap } from '@/lib/report-sums'
 import { parseUTCDateOnly, parseUTCEndOfDay } from '@/lib/date-range'
 
@@ -59,12 +60,7 @@ export async function GET(request: NextRequest) {
     totalDebits += debitTotal
     totalCredits += creditTotal
 
-    let balance = 0
-    if (account.type === 'ASSET' || account.type === 'EXPENSE') {
-      balance = debitTotal - creditTotal
-    } else {
-      balance = creditTotal - debitTotal
-    }
+    const balance = accountBalance(account.type, debitTotal, creditTotal)
 
     return { id: account.id, code: account.code, name: account.name, type: account.type, debitTotal, creditTotal, balance }
   })

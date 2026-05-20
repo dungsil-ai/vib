@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { accountBalance } from '@/lib/accounting'
 import { getBaseCurrencyEntrySumMap } from '@/lib/report-sums'
 
 export async function GET() {
@@ -36,7 +37,7 @@ export async function GET() {
   for (const account of accounts) {
     const debit = debitByAccount.get(account.id) ?? 0
     const credit = creditByAccount.get(account.id) ?? 0
-    const balance = account.type === 'ASSET' ? debit - credit : credit - debit
+    const balance = accountBalance(account.type, debit, credit)
     const row = { id: account.id, code: account.code, name: account.name, balance }
 
     if (account.type === 'ASSET') { assets.push(row); totalAssets += balance }
