@@ -98,10 +98,52 @@ describe('반복 거래 생성 API', () => {
     vi.mocked(getServerSession).mockResolvedValue(mockSession)
   })
 
-  it('만기 반복 거래를 병렬 트랜잭션으로 생성한다', async () => {
+  it('만기 반복 거래를 청크 단위로 나눠 동시성을 제한하며 생성한다', async () => {
     let activeTransactions = 0
     let maxActiveTransactions = 0
 
+    vi.mocked(prisma.recurringTransaction.findMany).mockResolvedValue(Array.from({ length: 12 }, (_, index) => ({
+        id: `rec-${index + 1}`,
+        userId: 'user-1',
+        description: `반복 거래 ${index + 1}`,
+        frequency: 'MONTHLY',
+        dayOfMonth: (index % 28) + 1,
+        monthOfYear: null,
+        startDate: new Date('2024-01-01T00:00:00.000Z'),
+        endDate: null,
+        nextRunAt: new Date(`2024-02-${String((index % 28) + 1).padStart(2, '0')}T00:00:00.000Z`),
+        lastRunAt: null,
+        isActive: true,
+        createdAt: new Date('2024-01-01T00:00:00.000Z'),
+        entries: [],
+      })) as never)
+
+    vi.mocked(prisma.$transaction).mockImplementation(async (callback: unknown) => {
+      if (typeof callback !== 'function') {
+        throw new Error('콜백 트랜잭션만 예상합니다.')
+      }
+      activeTransactions += 1
+      maxActiveTransactions = Math.max(maxActiveTransactions, activeTransactions)
+      await new Promise(resolve => setTimeout(resolve, 5))
+      try {
+        return await callback({
+          recurringTransaction: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+          transaction: { create: vi.fn().mockResolvedValue({ id: `tx-${maxActiveTransactions}` }) },
+        })
+      } finally {
+        activeTransactions -= 1
+      }
+    })
+
+    const res = await generateRecurringPOST()
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(maxActiveTransactions).toBeLessThanOrEqual(10)
+    expect(body.generated).toBe(12)
+  })
+
+  it('일부 트랜잭션이 실패해도 성공한 반복 거래는 응답에 포함한다', async () => {
     vi.mocked(prisma.recurringTransaction.findMany).mockResolvedValue([
       {
         id: 'rec-1',
@@ -135,28 +177,25 @@ describe('반복 거래 생성 API', () => {
       },
     ] as never)
 
-    vi.mocked(prisma.$transaction).mockImplementation(async (callback: unknown) => {
-      if (typeof callback !== 'function') {
-        throw new Error('콜백 트랜잭션만 예상합니다.')
-      }
-      activeTransactions += 1
-      maxActiveTransactions = Math.max(maxActiveTransactions, activeTransactions)
-      await new Promise(resolve => setTimeout(resolve, 5))
-      try {
-        return await callback({
+    vi.mocked(prisma.$transaction)
+      .mockImplementationOnce(async (callback: unknown) => {
+        if (typeof callback !== 'function') {
+          throw new Error('콜백 트랜잭션만 예상합니다.')
+        }
+        return callback({
           recurringTransaction: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
-          transaction: { create: vi.fn().mockResolvedValue({ id: `tx-${maxActiveTransactions}` }) },
+          transaction: { create: vi.fn().mockResolvedValue({ id: 'tx-1' }) },
         })
-      } finally {
-        activeTransactions -= 1
-      }
-    })
+      })
+      .mockRejectedValueOnce(new Error('DB timeout'))
 
     const res = await generateRecurringPOST()
     const body = await res.json()
 
     expect(res.status).toBe(200)
-    expect(maxActiveTransactions).toBeGreaterThan(1)
-    expect(body.generated).toBe(2)
+    expect(body.generated).toBe(1)
+    expect(body.failures).toEqual([
+      { recurringTransactionId: 'rec-2', error: 'DB timeout' },
+    ])
   })
 })

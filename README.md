@@ -87,6 +87,9 @@ DATABASE_URL="<production-db-url>" npm run db:push
 DATABASE_URL="<db-url>" npm run db:migrate
 ```
 
+- `20260518000000_add_performance_indexes` 마이그레이션의 trigram 인덱스를 적용하려면 DBA/인프라 단계에서 `pg_trgm` 확장을 먼저 설치해야 합니다.
+- Prisma의 PostgreSQL 마이그레이션은 트랜잭션 안에서 실행되므로 해당 인덱스들은 `CREATE INDEX CONCURRENTLY`로 생성되지 않습니다. 대용량 운영 DB에는 쓰기 잠금 영향이 있을 수 있어 트래픽이 낮은 시간대에 적용하거나 별도 운영 절차를 사용하세요.
+
 ## 주요 기능
 
 - **사용자 인증** — 이메일/비밀번호 회원가입·로그인

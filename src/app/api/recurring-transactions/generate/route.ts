@@ -5,6 +5,8 @@ import { prisma } from '@/lib/prisma'
 import { serializeData } from '@/lib/serialize'
 import { computeNextRunAt } from '@/lib/recurring'
 
+const GENERATION_BATCH_SIZE = 10
+
 export async function POST() {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) {
@@ -30,7 +32,7 @@ export async function POST() {
     return NextResponse.json({ generated: 0, transactions: [] })
   }
 
-  const transactions = await Promise.all(due.map(async recurring => {
+  const generateTransaction = async (recurring: (typeof due)[number]) => {
     const nextRunAt = computeNextRunAt(
       recurring.frequency,
       recurring.dayOfMonth,
@@ -82,9 +84,33 @@ export async function POST() {
         },
       })
     })
-  }))
+  }
 
-  const created = transactions.filter(transaction => transaction !== null)
+  const transactions: Array<Awaited<ReturnType<typeof generateTransaction>>> = []
+  const failures: Array<{ recurringTransactionId: string, error: string }> = []
 
-  return NextResponse.json({ generated: created.length, transactions: serializeData(created) })
+  for (let index = 0; index < due.length; index += GENERATION_BATCH_SIZE) {
+    const batch = due.slice(index, index + GENERATION_BATCH_SIZE)
+    const settled = await Promise.allSettled(batch.map(generateTransaction))
+
+    settled.forEach((result, batchIndex) => {
+      if (result.status === 'fulfilled') {
+        transactions.push(result.value)
+        return
+      }
+
+      failures.push({
+        recurringTransactionId: batch[batchIndex].id,
+        error: result.reason instanceof Error ? result.reason.message : '반복 거래 생성 중 오류가 발생했습니다.',
+      })
+    })
+  }
+
+  const created = transactions.filter((transaction): transaction is NonNullable<typeof transaction> => transaction !== null)
+
+  return NextResponse.json({
+    generated: created.length,
+    transactions: serializeData(created),
+    ...(failures.length > 0 ? { failures } : {}),
+  })
 }
