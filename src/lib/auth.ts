@@ -1,5 +1,7 @@
 import { NextAuthOptions } from 'next-auth'
+import { getServerSession } from 'next-auth'
 import CredentialsProvider from 'next-auth/providers/credentials'
+import { redirect } from 'next/navigation'
 import { prisma } from './prisma'
 import bcrypt from 'bcryptjs'
 
@@ -69,4 +71,29 @@ export const authOptions: NextAuthOptions = {
   pages: {
     signIn: '/auth/login',
   },
+}
+
+export class AuthenticationError extends Error {
+  constructor(message = '인증이 필요합니다.') {
+    super(message)
+    this.name = 'AuthenticationError'
+  }
+}
+
+interface RequireUserOptions {
+  onUnauthenticated?: 'redirect' | 'throw'
+}
+
+export async function requireUser(options: RequireUserOptions = {}) {
+  const { onUnauthenticated = 'redirect' } = options
+  const session = await getServerSession(authOptions)
+
+  if (!session?.user?.id) {
+    if (onUnauthenticated === 'throw') {
+      throw new AuthenticationError()
+    }
+    redirect('/auth/login')
+  }
+
+  return session.user
 }
