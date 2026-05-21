@@ -6,7 +6,6 @@ import { serializeData } from '@/lib/serialize'
 import { computeNextRunAt } from '@/lib/recurring'
 
 const GENERATION_BATCH_SIZE = 10
-
 export async function POST(request?: NextRequest) {
   void request
   const session = await getServerSession(authOptions)

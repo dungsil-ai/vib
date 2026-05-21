@@ -7,7 +7,6 @@ import { serializeData } from '@/lib/serialize'
 import { normalizeCurrencyInput, parseExchangeRateInput } from '@/app/api/transactions/shared'
 import { computeInitialNextRunAt } from '@/lib/recurring'
 import { RECURRING_TRANSACTION_INCLUDE } from './shared'
-
 type RecurringEntryInput = {
   debitAccountId: string
   creditAccountId: string
