@@ -19,12 +19,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   }
 
   const { id } = await params
-  const existing = await prisma.recurringTransaction.findFirst({
-    where: { id, userId: session.user.id },
-  })
-  if (!existing) {
-    return NextResponse.json({ error: '반복 거래를 찾을 수 없습니다.' }, { status: 404 })
-  }
 
   let body: unknown
   try {
@@ -37,7 +31,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ error: '요청 본문은 객체여야 합니다.' }, { status: 400 })
   }
 
-  const updatesActiveOnly = Object.keys(body).every(key => key === 'isActive')
+  const updatesActiveOnly = Object.keys(body).length === 1 && 'isActive' in body
 
   if (updatesActiveOnly) {
     const { isActive } = body
@@ -69,6 +63,13 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
   if ('isActive' in body && typeof body.isActive !== 'boolean') {
     return NextResponse.json({ error: 'isActive 값은 boolean이어야 합니다.' }, { status: 400 })
+  }
+
+  const existing = await prisma.recurringTransaction.findFirst({
+    where: { id, userId: session.user.id },
+  })
+  if (!existing) {
+    return NextResponse.json({ error: '반복 거래를 찾을 수 없습니다.' }, { status: 404 })
   }
 
   const validation = unwrapRecurringValidation(await validateRecurringTransactionInput(body, session.user.id))

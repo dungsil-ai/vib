@@ -58,28 +58,8 @@ describe('recurring-transactions/[id] PUT', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(getServerSession).mockResolvedValue(mockSession)
-    vi.mocked(prisma.recurringTransaction.findFirst).mockResolvedValue({
-      id: 'rec-1',
-      userId: 'user-1',
-      description: '기존 반복 거래',
-      frequency: 'MONTHLY',
-      dayOfMonth: 25,
-      monthOfYear: null,
-      startDate: new Date('2024-01-01T00:00:00.000Z'),
-      endDate: null,
-      nextRunAt: new Date('2024-02-25T00:00:00.000Z'),
-      lastRunAt: null,
-      isActive: true,
-      createdAt: new Date('2024-01-01T00:00:00.000Z'),
-    } as NonNullable<Awaited<ReturnType<typeof prisma.recurringTransaction.findFirst>>>)
-    vi.mocked(prisma.account.findMany).mockResolvedValue([
-      { id: 'acc-1' },
-      { id: 'acc-2' },
-    ] as Awaited<ReturnType<typeof prisma.account.findMany>>)
-    vi.mocked(prisma.recurringTransaction.updateMany).mockResolvedValue({ count: 1 } as Awaited<ReturnType<typeof prisma.recurringTransaction.updateMany>>)
-    vi.mocked(prisma.recurringEntry.deleteMany).mockResolvedValue({ count: 1 } as Awaited<ReturnType<typeof prisma.recurringEntry.deleteMany>>)
-    vi.mocked(prisma.recurringEntry.createMany).mockResolvedValue({ count: 1 } as Awaited<ReturnType<typeof prisma.recurringEntry.createMany>>)
-    vi.mocked(prisma.$transaction).mockImplementation(async callback => callback(prisma))
+    // mockReset으로 이전 테스트에서 소비되지 않은 mockResolvedValueOnce 큐를 초기화
+    vi.mocked(prisma.recurringTransaction.findFirst).mockReset()
     vi.mocked(prisma.recurringTransaction.findFirst).mockResolvedValueOnce({
       id: 'rec-1',
       userId: 'user-1',
@@ -109,6 +89,23 @@ describe('recurring-transactions/[id] PUT', () => {
       createdAt: new Date('2024-01-01T00:00:00.000Z'),
       entries: [],
     } as NonNullable<Awaited<ReturnType<typeof prisma.recurringTransaction.findFirst>>>)
+    vi.mocked(prisma.account.findMany).mockResolvedValue([
+      { id: 'acc-1' },
+      { id: 'acc-2' },
+    ] as Awaited<ReturnType<typeof prisma.account.findMany>>)
+    vi.mocked(prisma.recurringTransaction.updateMany).mockResolvedValue({ count: 1 } as Awaited<ReturnType<typeof prisma.recurringTransaction.updateMany>>)
+    vi.mocked(prisma.recurringEntry.deleteMany).mockResolvedValue({ count: 1 } as Awaited<ReturnType<typeof prisma.recurringEntry.deleteMany>>)
+    vi.mocked(prisma.recurringEntry.createMany).mockResolvedValue({ count: 1 } as Awaited<ReturnType<typeof prisma.recurringEntry.createMany>>)
+    vi.mocked(prisma.$transaction).mockImplementation(async callback => callback(prisma))
+  })
+
+  it('빈 요청 본문은 isActive 토글 경로로 처리되지 않고 필수 필드 오류를 반환한다', async () => {
+    const res = await PUT(makePutRequest({}), { params: Promise.resolve({ id: 'rec-1' }) })
+    const body = await res.json()
+
+    expect(res.status).toBe(400)
+    expect(body.error).not.toContain('isActive')
+    expect(prisma.recurringTransaction.updateMany).not.toHaveBeenCalled()
   })
 
   it('객체가 아닌 요청 본문은 400으로 거부한다', async () => {
