@@ -2,6 +2,14 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { accountBalance } from '@/lib/accounting'
+import { makeUTCMonthRange } from '@/lib/date-range'
+
+export class AuthRequiredError extends Error {
+  constructor(message = '인증이 필요합니다.') {
+    super(message)
+    this.name = 'AuthRequiredError'
+  }
+}
 
 export interface DashboardData {
   totalAssets: number
@@ -33,15 +41,14 @@ export interface DashboardData {
 export async function getDashboardData(): Promise<DashboardData> {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) {
-    throw new Error('인증이 필요합니다.')
+    throw new AuthRequiredError()
   }
 
   const userId = session.user.id
   const now = new Date()
-  const year = now.getFullYear()
-  const month = now.getMonth() + 1
-  const startOfMonth = new Date(year, month - 1, 1)
-  const endOfMonth = new Date(year, month, 0, 23, 59, 59, 999)
+  const year = now.getUTCFullYear()
+  const month = now.getUTCMonth() + 1
+  const { gte: startOfMonth, lte: endOfMonth } = makeUTCMonthRange(year, month)
 
   const [user, accounts] = await Promise.all([
     prisma.user.findUnique({ where: { id: userId }, select: { currency: true } }),

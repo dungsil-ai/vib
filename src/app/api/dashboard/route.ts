@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server'
 import { serializeData } from '@/lib/serialize'
-import { getDashboardData } from '@/lib/dashboard'
+import { AuthRequiredError, getDashboardData } from '@/lib/dashboard'
 
 export async function GET() {
   try {
     const data = await getDashboardData()
     return NextResponse.json(serializeData(data))
   } catch (error) {
-    if (error instanceof Error && error.message === '인증이 필요합니다.') {
+    if (error instanceof AuthRequiredError) {
       return NextResponse.json({ error: error.message }, { status: 401 })
     }
 

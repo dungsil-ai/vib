@@ -12,10 +12,16 @@ const mockData = {
 
 vi.mock('@/lib/dashboard', () => ({
   getDashboardData: vi.fn(),
+  AuthRequiredError: class AuthRequiredError extends Error {
+    constructor(message = '인증이 필요합니다.') {
+      super(message)
+      this.name = 'AuthRequiredError'
+    }
+  },
 }))
 
 import { GET } from '@/app/api/dashboard/route'
-import { getDashboardData } from '@/lib/dashboard'
+import { AuthRequiredError, getDashboardData } from '@/lib/dashboard'
 
 describe('GET /api/dashboard', () => {
   beforeEach(() => {
@@ -34,7 +40,7 @@ describe('GET /api/dashboard', () => {
   })
 
   it('인증 실패 시 401을 반환한다', async () => {
-    vi.mocked(getDashboardData).mockRejectedValue(new Error('인증이 필요합니다.'))
+    vi.mocked(getDashboardData).mockRejectedValue(new AuthRequiredError())
 
     const res = await GET()
     expect(res.status).toBe(401)
