@@ -85,7 +85,13 @@ interface RequireUserOptions {
   onUnauthenticated?: 'redirect' | 'throw'
 }
 
-const pendingRequireUserRequests = new Map<string, Promise<NonNullable<Awaited<ReturnType<typeof getServerSession>>['user']>>>()
+type AuthenticatedUser = {
+  id: string
+  email?: string | null
+  name?: string | null
+}
+
+const pendingRequireUserRequests = new Map<string, Promise<AuthenticatedUser>>()
 
 export async function requireUser(options: RequireUserOptions = {}) {
   const { onUnauthenticated = 'redirect' } = options
@@ -107,7 +113,7 @@ export async function requireUser(options: RequireUserOptions = {}) {
       redirect('/auth/login')
     }
 
-    return session.user
+    return session.user as AuthenticatedUser
   })()
 
   pendingRequireUserRequests.set(cacheKey, request)

@@ -49,13 +49,18 @@ describe('GET /api/dashboard', () => {
   })
 
   it('예상하지 못한 오류가 발생하면 500을 반환한다', async () => {
-    mockGetDashboardData.mockRejectedValue(new Error('boom'))
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      mockGetDashboardData.mockRejectedValue(new Error('boom'))
 
-    const response = await GET()
-    const body = await response.json()
+      const response = await GET()
+      const body = await response.json()
 
-    expect(response.status).toBe(500)
-    expect(body.error).toBe('대시보드 데이터를 불러오지 못했습니다.')
+      expect(response.status).toBe(500)
+      expect(body.error).toBe('대시보드 데이터를 불러오지 못했습니다.')
+    } finally {
+      consoleErrorSpy.mockRestore()
+    }
   })
 
   it('대시보드 데이터를 직렬화해 반환한다', async () => {
