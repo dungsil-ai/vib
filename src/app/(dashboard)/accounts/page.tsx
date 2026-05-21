@@ -94,7 +94,7 @@ export default function AccountsPage() {
           type: showFormFor,
           currency: formData.currency,
           ...(formData.openingBalance !== '' ? { openingBalance: Number(formData.openingBalance) } : {}),
-          ...(formData.openingBalance !== '' && formData.currency !== userCurrency ? { exchangeRate: formData.exchangeRate } : {}),
+          ...(Number(formData.openingBalance) > 0 && formData.currency !== userCurrency ? { exchangeRate: formData.exchangeRate } : {}),
         }),
       })
       const data = await res.json()
@@ -330,7 +330,7 @@ editingId === account.id ? (
                           placeholder="0"
                         />
                         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">입력하면 개시잔액 자동 분개가 생성됩니다.</p>
-                        {formData.openingBalance !== '' && formData.currency !== userCurrency && (
+                        {Number(formData.openingBalance) > 0 && formData.currency !== userCurrency && (
                           <div className="mt-3">
                             <label htmlFor={`exchangeRate-${type}`} className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">초기잔액 환율 (필수)</label>
                             <input
