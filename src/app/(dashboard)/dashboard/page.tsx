@@ -1,68 +1,10 @@
-'use client'
-
-import { useEffect, useState } from 'react'
 import { formatCurrency } from '@/lib/currencies'
+import { getDashboardData } from '@/lib/dashboard'
+import { requireUser } from '@/lib/auth'
 
-interface DashboardData {
-  totalAssets: number
-  totalLiabilities: number
-  totalEquity: number
-  netWorth: number
-  baseCurrency: string
-  recentTransactions: Array<{
-    id: string
-    date: string
-    description: string
-    entries: Array<{
-      amount: string
-      currency: string
-      exchangeRate: string
-      debitAccount: { name: string; code: string; type: string }
-      creditAccount: { name: string; code: string; type: string }
-    }>
-  }>
-  budgetOverview: Array<{
-    accountId: string
-    name: string
-    code: string
-    budget: number
-    actual: number
-  }>
-}
-
-export default function DashboardPage() {
-  const [data, setData] = useState<DashboardData | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    const loadDashboardData = async () => {
-      try {
-        setError(null)
-        const res = await fetch('/api/dashboard')
-        if (!res.ok) {
-          throw new Error(`대시보드 데이터를 불러오지 못했습니다. (${res.status})`)
-        }
-        const json = await res.json()
-        setData(json)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : '대시보드 데이터를 불러오는 중 오류가 발생했습니다.')
-      } finally {
-        setLoading(false)
-      }
-    }
-    loadDashboardData()
-  }, [])
-
-  if (loading) {
-    return <div className="flex items-center justify-center h-full"><div className="text-gray-500 dark:text-gray-400">로딩 중...</div></div>
-  }
-
-  if (error) {
-    return <div className="flex items-center justify-center h-full"><div className="text-red-500">{error}</div></div>
-  }
-
-  if (!data) return null
+export default async function DashboardPage() {
+  const user = await requireUser()
+  const data = await getDashboardData(user.id)
 
   const baseCurrency = data.baseCurrency ?? 'KRW'
   const fmt = (amount: number) => formatCurrency(amount, baseCurrency)
@@ -74,7 +16,6 @@ export default function DashboardPage() {
         <span className="text-sm text-gray-500 dark:text-gray-400">기준 통화: {baseCurrency}</span>
       </div>
 
-      {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border dark:border-gray-700">
           <p className="text-sm text-gray-500 dark:text-gray-400">총 자산</p>
@@ -97,7 +38,6 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Recent Transactions */}
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border dark:border-gray-700">
           <div className="p-4 border-b dark:border-gray-700">
             <h2 className="font-semibold text-gray-900 dark:text-gray-100">최근 거래</h2>
@@ -122,7 +62,6 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Budget Overview */}
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border dark:border-gray-700">
           <div className="p-4 border-b dark:border-gray-700">
             <h2 className="font-semibold text-gray-900 dark:text-gray-100">이번 달 예산 현황</h2>

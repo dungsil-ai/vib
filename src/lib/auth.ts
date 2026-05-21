@@ -1,5 +1,8 @@
 import { NextAuthOptions } from 'next-auth'
+import { getServerSession } from 'next-auth'
 import CredentialsProvider from 'next-auth/providers/credentials'
+import { headers } from 'next/headers'
+import { redirect } from 'next/navigation'
 import { prisma } from './prisma'
 import bcrypt from 'bcryptjs'
 
@@ -69,4 +72,56 @@ export const authOptions: NextAuthOptions = {
   pages: {
     signIn: '/auth/login',
   },
+}
+
+export class AuthenticationError extends Error {
+  constructor(message = '인증이 필요합니다.') {
+    super(message)
+    this.name = 'AuthenticationError'
+  }
+}
+
+interface RequireUserOptions {
+  onUnauthenticated?: 'redirect' | 'throw'
+}
+
+type AuthenticatedUser = {
+  id: string
+  email?: string | null
+  name?: string | null
+}
+
+const pendingRequireUserRequests = new Map<string, Promise<AuthenticatedUser>>()
+
+export async function requireUser(options: RequireUserOptions = {}) {
+  const { onUnauthenticated = 'redirect' } = options
+  const requestHeaders = await headers()
+  const cacheKey = `${onUnauthenticated}:${requestHeaders.get('cookie') ?? ''}`
+
+  const pendingRequest = pendingRequireUserRequests.get(cacheKey)
+  if (pendingRequest) {
+    return pendingRequest
+  }
+
+  const request = (async () => {
+    const session = await getServerSession(authOptions)
+
+    if (!session?.user?.id) {
+      if (onUnauthenticated === 'throw') {
+        throw new AuthenticationError()
+      }
+      redirect('/auth/login')
+    }
+
+    return session.user as AuthenticatedUser
+  })()
+
+  pendingRequireUserRequests.set(cacheKey, request)
+  void request.finally(() => {
+    if (pendingRequireUserRequests.get(cacheKey) === request) {
+      pendingRequireUserRequests.delete(cacheKey)
+    }
+  })
+
+  return request
 }

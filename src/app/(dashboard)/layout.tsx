@@ -1,6 +1,4 @@
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import { redirect } from 'next/navigation'
+import { requireUser } from '@/lib/auth'
 import { Sidebar } from '@/components/Sidebar'
 
 export default async function DashboardLayout({
@@ -8,15 +6,11 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode
 }) {
-  const session = await getServerSession(authOptions)
-
-  if (!session) {
-    redirect('/auth/login')
-  }
+  const user = await requireUser()
 
   return (
     <div className="flex h-screen bg-gray-100 dark:bg-gray-900">
-      <Sidebar user={session.user} />
+      <Sidebar user={user} />
       <main className="flex-1 overflow-auto p-6">{children}</main>
     </div>
   )
