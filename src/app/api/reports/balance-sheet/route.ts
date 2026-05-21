@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { accountBalance } from '@/lib/accounting'
+import { getBaseCurrencyEntrySumMap } from '@/lib/report-sums'
 
 export async function GET() {
   const session = await getServerSession(authOptions)
@@ -19,25 +21,10 @@ export async function GET() {
 
   const accountIds = accounts.map(a => a.id)
 
-  const [debitSums, creditSums] = await Promise.all([
-    prisma.entry.groupBy({
-      by: ['debitAccountId'],
-      where: { debitAccountId: { in: accountIds }, transaction: { userId } },
-      _sum: { amount: true },
-    }),
-    prisma.entry.groupBy({
-      by: ['creditAccountId'],
-      where: { creditAccountId: { in: accountIds }, transaction: { userId } },
-      _sum: { amount: true },
-    }),
+  const [debitByAccount, creditByAccount] = await Promise.all([
+    getBaseCurrencyEntrySumMap({ accountIds, userId, side: 'debit' }),
+    getBaseCurrencyEntrySumMap({ accountIds, userId, side: 'credit' }),
   ])
-
-  const debitByAccount = new Map(
-    debitSums.map(r => [r.debitAccountId, Number(r._sum.amount ?? 0)]),
-  )
-  const creditByAccount = new Map(
-    creditSums.map(r => [r.creditAccountId, Number(r._sum.amount ?? 0)]),
-  )
 
   let totalAssets = 0
   let totalLiabilities = 0
@@ -50,7 +37,7 @@ export async function GET() {
   for (const account of accounts) {
     const debit = debitByAccount.get(account.id) ?? 0
     const credit = creditByAccount.get(account.id) ?? 0
-    const balance = account.type === 'ASSET' ? debit - credit : credit - debit
+    const balance = accountBalance(account.type, debit, credit)
     const row = { id: account.id, code: account.code, name: account.name, balance }
 
     if (account.type === 'ASSET') { assets.push(row); totalAssets += balance }

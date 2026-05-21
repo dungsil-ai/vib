@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { computeNextRunAt } from '@/lib/recurring'
+import { computeInitialNextRunAt, computeNextRunAt } from '@/lib/recurring'
 
 describe('computeNextRunAt', () => {
   describe('DAILY', () => {
@@ -119,5 +119,78 @@ describe('computeNextRunAt', () => {
         computeNextRunAt('INVALID' as any, null, null, from),
       ).toThrow('알 수 없는 반복 주기: INVALID')
     })
+  })
+})
+
+describe('computeInitialNextRunAt', () => {
+  it('일 반복은 시작일을 최초 실행일로 사용한다', () => {
+    const startDate = new Date('2024-03-15T09:30:00.000Z')
+    const result = computeInitialNextRunAt('DAILY', null, null, startDate)
+
+    expect(result.toISOString()).toBe('2024-03-15T09:30:00.000Z')
+  })
+
+  it('주 반복은 시작일을 최초 실행일로 사용한다', () => {
+    const startDate = new Date('2024-03-15T09:30:00.000Z')
+    const result = computeInitialNextRunAt('WEEKLY', null, null, startDate)
+
+    expect(result.toISOString()).toBe('2024-03-15T09:30:00.000Z')
+  })
+
+  it('월 반복은 UTC 기준으로 같은 달의 지정일을 계산한다', () => {
+    const startDate = new Date('2024-03-30T23:30:00.000Z')
+    const result = computeInitialNextRunAt('MONTHLY', 31, null, startDate)
+
+    expect(result.toISOString()).toBe('2024-03-31T23:30:00.000Z')
+  })
+
+  it('월 반복 지정일이 시작일보다 이전이면 UTC 기준 다음 달로 넘긴다', () => {
+    const startDate = new Date('2024-03-31T23:30:00.000Z')
+    const result = computeInitialNextRunAt('MONTHLY', 30, null, startDate)
+
+    expect(result.toISOString()).toBe('2024-04-30T23:30:00.000Z')
+  })
+
+  it('연 반복은 UTC 기준 지정 월일이 지나지 않았으면 해당 연도를 사용한다', () => {
+    const startDate = new Date('2024-03-30T23:30:00.000Z')
+    const result = computeInitialNextRunAt('YEARLY', 31, 3, startDate)
+
+    expect(result.toISOString()).toBe('2024-03-31T23:30:00.000Z')
+  })
+
+  it('연 반복 지정 월일이 시작일보다 이전이면 UTC 기준 다음 해로 넘긴다', () => {
+    const startDate = new Date('2024-03-31T23:30:00.000Z')
+    const result = computeInitialNextRunAt('YEARLY', 30, 3, startDate)
+
+    expect(result.toISOString()).toBe('2025-03-30T23:30:00.000Z')
+  })
+
+  it('연 반복은 UTC 기준으로 존재하지 않는 날짜를 월말로 보정한다', () => {
+    const startDate = new Date('2023-02-28T12:00:00.000Z')
+    const result = computeInitialNextRunAt('YEARLY', 29, 2, startDate)
+
+    expect(result.toISOString()).toBe('2023-02-28T12:00:00.000Z')
+  })
+
+  it('월 반복 dayOfMonth가 없으면 UTC 시작일의 일자를 사용한다', () => {
+    const startDate = new Date('2024-01-31T23:30:15.250Z')
+    const result = computeInitialNextRunAt('MONTHLY', null, null, startDate)
+
+    expect(result.toISOString()).toBe('2024-01-31T23:30:15.250Z')
+  })
+
+  it('연 반복 monthOfYear와 dayOfMonth가 없으면 UTC 시작일의 월일을 사용한다', () => {
+    const startDate = new Date('2024-06-15T08:45:30.125Z')
+    const result = computeInitialNextRunAt('YEARLY', null, null, startDate)
+
+    expect(result.toISOString()).toBe('2024-06-15T08:45:30.125Z')
+  })
+
+  it('알 수 없는 최초 실행 반복 주기이면 에러를 throw한다', () => {
+    const startDate = new Date('2024-01-01T00:00:00.000Z')
+    expect(() =>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      computeInitialNextRunAt('INVALID' as any, null, null, startDate),
+    ).toThrow('알 수 없는 반복 주기: INVALID')
   })
 })

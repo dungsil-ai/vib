@@ -1,7 +1,8 @@
 'use client'
 
-import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { SUPPORTED_CURRENCIES, formatCurrency } from '@/lib/currencies'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { formatCurrency } from '@/lib/currencies'
+import { EntryEditor, type EditableEntry } from '@/components/EntryEditor'
 
 // ─── Shared types ──────────────────────────────────────────────────────────────
 
@@ -12,20 +13,8 @@ interface Account {
   type: string
 }
 
-interface EntryForm {
-  id: string
-  debitAccountId: string
-  creditAccountId: string
-  amount: string
-  currency: string
-  exchangeRate: string
-  description: string
-}
+type EntryForm = EditableEntry
 
-interface AccountOption {
-  id: string
-  label: string
-}
 
 // ─── Shared utilities ─────────────────────────────────────────────────────────
 
@@ -56,6 +45,43 @@ const isEntryEmpty = (entry?: EntryForm, baseCurrency = 'KRW') => {
     entry.currency === baseCurrency
 }
 
+const isSavedEntryFormPristine = ({
+  description,
+  entryCount,
+  firstEntry,
+  baseCurrency,
+}: {
+  description: string
+  entryCount: number
+  firstEntry?: EntryForm
+  baseCurrency: string
+}) => description === '' && entryCount === 1 && isEntryEmpty(firstEntry, baseCurrency)
+
+const calculateBaseAmount = (
+  entry: { amount: string; currency?: string; exchangeRate?: string },
+  baseCurrency: string,
+) => {
+  const amount = Number(entry.amount) || 0
+  const currency = entry.currency || baseCurrency
+
+  if (currency === baseCurrency) {
+    return amount
+  }
+
+  return amount * (Number(entry.exchangeRate) || 1)
+}
+
+const formatEntryAmount = (entry: { amount: string; currency?: string; exchangeRate?: string }, baseCurrency: string) => {
+  const currency = entry.currency || baseCurrency
+  const amount = Number(entry.amount) || 0
+
+  if (currency === baseCurrency) {
+    return formatCurrency(amount, baseCurrency)
+  }
+
+  return `${formatCurrency(amount, currency)} (${formatCurrency(calculateBaseAmount(entry, baseCurrency), baseCurrency)})`
+}
+
 const isTransactionFormPristine = ({
   date,
   txDescription,
@@ -74,16 +100,6 @@ const isTransactionFormPristine = ({
   entryCount === 1 &&
   isFirstEntryEmpty
 
-const getAccountPickerEmptyStateMessage = ({
-  accountsLoading,
-  accountsError,
-  hasActiveFilter,
-}: Pick<AccountBadgePickerProps, 'accountsLoading' | 'accountsError' | 'hasActiveFilter'>) => {
-  if (accountsLoading) return '계정 목록 로딩 중...'
-  if (accountsError) return '계정 목록을 불러오지 못했습니다.'
-  if (hasActiveFilter) return '검색 결과가 없습니다.'
-  return '등록된 계정이 없습니다.'
-}
 
 const getTransactionSubmitButtonLabel = ({
   submitting,
@@ -99,72 +115,14 @@ const getTransactionSubmitButtonLabel = ({
   return editingTransactionId ? '거래 수정 저장' : '거래 저장'
 }
 
-// ─── Shared component ─────────────────────────────────────────────────────────
-
-interface AccountBadgePickerProps {
-  label: string
-  labelClassName: string
-  accountOptions: AccountOption[]
-  accountsLoading: boolean
-  accountsError: string | null
-  hasActiveFilter: boolean
-  selectedAccountId: string
-  onSelect: (accountId: string) => void
-  activeClassName: string
-  inactiveClassName: string
-}
-
-const AccountBadgePicker = memo(function AccountBadgePicker({
-  label,
-  labelClassName,
-  accountOptions,
-  accountsLoading,
-  accountsError,
-  hasActiveFilter,
-  selectedAccountId,
-  onSelect,
-  activeClassName,
-  inactiveClassName,
-}: AccountBadgePickerProps) {
-  const emptyStateMessage = getAccountPickerEmptyStateMessage({ accountsLoading, accountsError, hasActiveFilter })
-
-  return (
-    <div>
-      <span className={`block text-xs font-medium mb-1.5 ${labelClassName}`}>{label}</span>
-      <div className="flex flex-wrap gap-1.5">
-        {accountOptions.map(option => {
-          const selected = selectedAccountId === option.id
-          return (
-            <button
-              key={option.id}
-              type="button"
-              aria-pressed={selected}
-              onClick={() => onSelect(selected ? '' : option.id)}
-              className={[
-                'px-2.5 py-1 rounded-full text-xs font-medium border transition-colors',
-                selected ? activeClassName : inactiveClassName,
-              ].join(' ')}
-            >
-              {option.label}
-            </button>
-          )
-        })}
-        {accountOptions.length === 0 && (
-          <span className={`text-xs ${accountsError ? 'text-red-500' : 'text-gray-400'}`}>
-            {emptyStateMessage}
-          </span>
-        )}
-      </div>
-    </div>
-  )
-})
-
 // ─── Transactions tab ─────────────────────────────────────────────────────────
 
 interface TemplateSummaryEntry {
   debitAccountId: string
   creditAccountId: string
   amount: string
+  currency: string
+  exchangeRate: string
   description: string | null
 }
 
@@ -273,8 +231,8 @@ function TransactionsTab({ accounts, accountsLoading, accountsError, baseCurrenc
         debitAccountId: e.debitAccountId,
         creditAccountId: e.creditAccountId,
         amount: String(e.amount),
-        currency: baseCurrency,
-        exchangeRate: '1',
+        currency: e.currency ?? baseCurrency,
+        exchangeRate: e.exchangeRate ?? '1',
         description: e.description ?? '',
       })),
     )
@@ -654,116 +612,19 @@ function TransactionsTab({ accounts, accountsLoading, accountsError, baseCurrenc
 
           <div className="space-y-3">
             {entries.map((entry, index) => (
-              <div key={entry.id} className="border dark:border-gray-600 rounded-lg p-4 bg-gray-50 dark:bg-gray-700/50">
-                <div className="flex justify-between items-center mb-3">
-                  <span className="text-sm font-medium text-gray-600 dark:text-gray-300">항목 {index + 1}</span>
-                  {entries.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => removeEntry(index)}
-                      className="text-xs text-red-600 hover:text-red-800"
-                    >
-                      삭제
-                    </button>
-                  )}
-                </div>
-                <div className="space-y-3">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <AccountBadgePicker
-                      label="차변 (Debit)"
-                      labelClassName="text-red-700"
-                      accountOptions={accountOptions}
-                      accountsLoading={accountsLoading}
-                      accountsError={accountsError}
-                      hasActiveFilter={hasActiveFilter}
-                      selectedAccountId={entry.debitAccountId}
-                      onSelect={accountId => updateEntry(index, 'debitAccountId', accountId)}
-                      activeClassName="bg-red-100 text-red-700 border-red-300"
-                      inactiveClassName="bg-white text-gray-600 border-gray-300 hover:border-red-300 hover:text-red-600"
-                    />
-
-                    <AccountBadgePicker
-                      label="대변 (Credit)"
-                      labelClassName="text-green-700"
-                      accountOptions={accountOptions}
-                      accountsLoading={accountsLoading}
-                      accountsError={accountsError}
-                      hasActiveFilter={hasActiveFilter}
-                      selectedAccountId={entry.creditAccountId}
-                      onSelect={accountId => updateEntry(index, 'creditAccountId', accountId)}
-                      activeClassName="bg-green-100 text-green-700 border-green-300"
-                      inactiveClassName="bg-white text-gray-600 border-gray-300 hover:border-green-300 hover:text-green-600"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">금액</label>
-                      <div className="flex gap-1">
-                        <input
-                          type="number"
-                          value={entry.amount}
-                          onChange={e => updateEntry(index, 'amount', e.target.value)}
-                          className="flex-1 min-w-0 px-3 py-2 border dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
-                          placeholder="0"
-                          min="1"
-                          required
-                        />
-                        <select
-                          value={entry.currency}
-                          onChange={e => updateEntry(index, 'currency', e.target.value)}
-                          className="px-2 py-2 border dark:border-gray-600 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
-                          aria-label="통화"
-                        >
-                          {SUPPORTED_CURRENCIES.map(c => (
-                            <option key={c.code} value={c.code}>{c.code}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                    {entry.currency !== baseCurrency ? (
-                      <div>
-                        <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-                          환율 (1 {entry.currency} = ? {baseCurrency})
-                        </label>
-                        <input
-                          type="number"
-                          value={entry.exchangeRate}
-                          onChange={e => updateEntry(index, 'exchangeRate', e.target.value)}
-                          className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
-                          placeholder="1"
-                          min="0.000001"
-                          step="any"
-                          required
-                        />
-                      </div>
-                    ) : (
-                      <div>
-                        <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">메모 (선택)</label>
-                        <input
-                          type="text"
-                          value={entry.description}
-                          onChange={e => updateEntry(index, 'description', e.target.value)}
-                          className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
-                          placeholder="항목 설명"
-                        />
-                      </div>
-                    )}
-                  </div>
-                  {entry.currency !== baseCurrency && (
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">메모 (선택)</label>
-                      <input
-                        type="text"
-                        value={entry.description}
-                        onChange={e => updateEntry(index, 'description', e.target.value)}
-                        className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
-                        placeholder="항목 설명"
-                      />
-                    </div>
-                  )}
-                </div>
-              </div>
+              <EntryEditor
+                key={entry.id}
+                entry={entry}
+                index={index}
+                entryCount={entries.length}
+                accountOptions={accountOptions}
+                accountsLoading={accountsLoading}
+                accountsError={accountsError}
+                hasActiveFilter={hasActiveFilter}
+                baseCurrency={baseCurrency}
+                onUpdate={updateEntry}
+                onRemove={removeEntry}
+              />
             ))}
           </div>
 
@@ -1099,6 +960,8 @@ interface RecurringEntry {
   debitAccountId: string
   creditAccountId: string
   amount: string
+  currency: string
+  exchangeRate: string
   description: string | null
   debitAccount: { name: string; code: string; type: string }
   creditAccount: { name: string; code: string; type: string }
@@ -1186,6 +1049,19 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
     return () => { cancelled = true }
   }, [])
 
+  const prevBaseCurrencyRef = useRef(baseCurrency)
+  useEffect(() => {
+    if (baseCurrency === prevBaseCurrencyRef.current) return
+
+    const previousBaseCurrency = prevBaseCurrencyRef.current
+    prevBaseCurrencyRef.current = baseCurrency
+    setEntries(prev => (
+      isSavedEntryFormPristine({ description, entryCount: prev.length, firstEntry: prev[0], baseCurrency: previousBaseCurrency })
+        ? [defaultEntry(baseCurrency)]
+        : prev
+    ))
+  }, [baseCurrency, description])
+
   const resetForm = () => {
     setFormError('')
     setDescription('')
@@ -1208,12 +1084,16 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
   const updateEntry = (index: number, field: keyof EntryForm, value: string) => {
     setEntries(prev => {
       const updated = [...prev]
-      updated[index] = { ...updated[index], [field]: value }
+      const newEntry = { ...updated[index], [field]: value }
+      if (field === 'currency' && value === baseCurrency) {
+        newEntry.exchangeRate = '1'
+      }
+      updated[index] = newEntry
       return updated
     })
   }
 
-  const formTotal = entries.reduce((sum, e) => sum + (Number(e.amount) || 0), 0)
+  const formTotal = entries.reduce((sum, e) => sum + calculateBaseAmount(e, baseCurrency), 0)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -1248,6 +1128,8 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
             debitAccountId: entry.debitAccountId,
             creditAccountId: entry.creditAccountId,
             amount: entry.amount,
+            currency: entry.currency,
+            exchangeRate: entry.exchangeRate,
             description: entry.description || undefined,
           })),
         }),
@@ -1472,72 +1354,20 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
 
             <div className="space-y-3">
               {entries.map((entry, index) => (
-                <div key={entry.id} className="border dark:border-gray-600 rounded-lg p-4 bg-gray-50 dark:bg-gray-700/50">
-                  <div className="flex justify-between items-center mb-3">
-                    <span className="text-sm font-medium text-gray-600 dark:text-gray-300">항목 {index + 1}</span>
-                    {entries.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeEntry(index)}
-                        className="text-xs text-red-600 hover:text-red-800"
-                      >
-                        삭제
-                      </button>
-                    )}
-                  </div>
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <AccountBadgePicker
-                        label="차변 (Debit)"
-                        labelClassName="text-red-700"
-                        accountOptions={accountOptions}
-                        accountsLoading={accountsLoading}
-                        accountsError={accountsError}
-                        hasActiveFilter={hasActiveFilter}
-                        selectedAccountId={entry.debitAccountId}
-                        onSelect={accountId => updateEntry(index, 'debitAccountId', accountId)}
-                        activeClassName="bg-red-100 text-red-700 border-red-300"
-                        inactiveClassName="bg-white text-gray-600 border-gray-300 hover:border-red-300 hover:text-red-600"
-                      />
-                      <AccountBadgePicker
-                        label="대변 (Credit)"
-                        labelClassName="text-green-700"
-                        accountOptions={accountOptions}
-                        accountsLoading={accountsLoading}
-                        accountsError={accountsError}
-                        hasActiveFilter={hasActiveFilter}
-                        selectedAccountId={entry.creditAccountId}
-                        onSelect={accountId => updateEntry(index, 'creditAccountId', accountId)}
-                        activeClassName="bg-green-100 text-green-700 border-green-300"
-                        inactiveClassName="bg-white text-gray-600 border-gray-300 hover:border-green-300 hover:text-green-600"
-                      />
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">금액 (원)</label>
-                        <input
-                          type="number"
-                          value={entry.amount}
-                          onChange={e => updateEntry(index, 'amount', e.target.value)}
-                          className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
-                          placeholder="0"
-                          min="1"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">메모 (선택)</label>
-                        <input
-                          type="text"
-                          value={entry.description}
-                          onChange={e => updateEntry(index, 'description', e.target.value)}
-                          className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
-                          placeholder="항목 설명"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                <EntryEditor
+                  key={entry.id}
+                  entry={entry}
+                  index={index}
+                  entryCount={entries.length}
+                  accountOptions={accountOptions}
+                  accountsLoading={accountsLoading}
+                  accountsError={accountsError}
+                  hasActiveFilter={hasActiveFilter}
+                  baseCurrency={baseCurrency}
+                  showCurrency
+                  onUpdate={updateEntry}
+                  onRemove={removeEntry}
+                />
               ))}
             </div>
 
@@ -1604,7 +1434,7 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
                 </thead>
                 <tbody className="divide-y dark:divide-gray-700">
                   {recurringList.map(r => {
-                    const total = r.entries.reduce((sum, e) => sum + Number(e.amount), 0)
+                    const total = r.entries.reduce((sum, e) => sum + calculateBaseAmount(e, baseCurrency), 0)
                     const isExpanded = expandedId === r.id
                     return (
                       <React.Fragment key={r.id}>
@@ -1679,7 +1509,7 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
                                       대변: {entry.creditAccount.name}
                                     </span>
                                     <span className="font-medium dark:text-gray-300">
-                                      {formatCurrency(Number(entry.amount), baseCurrency)}
+                                      {formatEntryAmount(entry, baseCurrency)}
                                     </span>
                                     {entry.description && (
                                       <span className="text-gray-500 dark:text-gray-400">{entry.description}</span>
@@ -1708,6 +1538,8 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
 interface TemplateEntry {
   id: string
   amount: string
+  currency: string
+  exchangeRate: string
   description: string | null
   debitAccount: { name: string; code: string; type: string }
   creditAccount: { name: string; code: string; type: string }
@@ -1735,7 +1567,7 @@ function TemplatesTab({ accounts, accountsLoading, accountsError, baseCurrency }
 
   const [accountFilter, setAccountFilter] = useState('')
   const [description, setDescription] = useState('')
-  const [entries, setEntries] = useState<EntryForm[]>([defaultEntry()])
+  const [entries, setEntries] = useState<EntryForm[]>([defaultEntry(baseCurrency)])
   const [formError, setFormError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -1772,13 +1604,26 @@ function TemplatesTab({ accounts, accountsLoading, accountsError, baseCurrency }
     return () => { cancelled = true }
   }, [fetchTemplates])
 
+  const prevBaseCurrencyRef = useRef(baseCurrency)
+  useEffect(() => {
+    if (baseCurrency === prevBaseCurrencyRef.current) return
+
+    const previousBaseCurrency = prevBaseCurrencyRef.current
+    prevBaseCurrencyRef.current = baseCurrency
+    setEntries(prev => (
+      isSavedEntryFormPristine({ description, entryCount: prev.length, firstEntry: prev[0], baseCurrency: previousBaseCurrency })
+        ? [defaultEntry(baseCurrency)]
+        : prev
+    ))
+  }, [baseCurrency, description])
+
   const resetForm = () => {
     setFormError('')
     setDescription('')
-    setEntries([defaultEntry()])
+    setEntries([defaultEntry(baseCurrency)])
   }
 
-  const addEntry = () => setEntries(prev => [...prev, defaultEntry()])
+  const addEntry = () => setEntries(prev => [...prev, defaultEntry(baseCurrency)])
   const removeEntry = (index: number) => {
     setEntries(prev => {
       if (prev.length === 1) return prev
@@ -1788,12 +1633,16 @@ function TemplatesTab({ accounts, accountsLoading, accountsError, baseCurrency }
   const updateEntry = (index: number, field: keyof EntryForm, value: string) => {
     setEntries(prev => {
       const updated = [...prev]
-      updated[index] = { ...updated[index], [field]: value }
+      const newEntry = { ...updated[index], [field]: value }
+      if (field === 'currency' && value === baseCurrency) {
+        newEntry.exchangeRate = '1'
+      }
+      updated[index] = newEntry
       return updated
     })
   }
 
-  const formTotal = entries.reduce((sum, e) => sum + (Number(e.amount) || 0), 0)
+  const formTotal = entries.reduce((sum, e) => sum + calculateBaseAmount(e, baseCurrency), 0)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -1823,6 +1672,8 @@ function TemplatesTab({ accounts, accountsLoading, accountsError, baseCurrency }
             debitAccountId: entry.debitAccountId,
             creditAccountId: entry.creditAccountId,
             amount: entry.amount,
+            currency: entry.currency,
+            exchangeRate: entry.exchangeRate,
             description: entry.description || undefined,
           })),
         }),
@@ -1913,72 +1764,20 @@ function TemplatesTab({ accounts, accountsLoading, accountsError, baseCurrency }
 
             <div className="space-y-3">
               {entries.map((entry, index) => (
-                <div key={entry.id} className="border dark:border-gray-600 rounded-lg p-4 bg-gray-50 dark:bg-gray-700/50">
-                  <div className="flex justify-between items-center mb-3">
-                    <span className="text-sm font-medium text-gray-600 dark:text-gray-300">항목 {index + 1}</span>
-                    {entries.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeEntry(index)}
-                        className="text-xs text-red-600 hover:text-red-800"
-                      >
-                        삭제
-                      </button>
-                    )}
-                  </div>
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <AccountBadgePicker
-                        label="차변 (Debit)"
-                        labelClassName="text-red-700"
-                        accountOptions={accountOptions}
-                        accountsLoading={accountsLoading}
-                        accountsError={accountsError}
-                        hasActiveFilter={hasActiveFilter}
-                        selectedAccountId={entry.debitAccountId}
-                        onSelect={accountId => updateEntry(index, 'debitAccountId', accountId)}
-                        activeClassName="bg-red-100 text-red-700 border-red-300"
-                        inactiveClassName="bg-white text-gray-600 border-gray-300 hover:border-red-300 hover:text-red-600"
-                      />
-                      <AccountBadgePicker
-                        label="대변 (Credit)"
-                        labelClassName="text-green-700"
-                        accountOptions={accountOptions}
-                        accountsLoading={accountsLoading}
-                        accountsError={accountsError}
-                        hasActiveFilter={hasActiveFilter}
-                        selectedAccountId={entry.creditAccountId}
-                        onSelect={accountId => updateEntry(index, 'creditAccountId', accountId)}
-                        activeClassName="bg-green-100 text-green-700 border-green-300"
-                        inactiveClassName="bg-white text-gray-600 border-gray-300 hover:border-green-300 hover:text-green-600"
-                      />
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">금액</label>
-                        <input
-                          type="number"
-                          value={entry.amount}
-                          onChange={e => updateEntry(index, 'amount', e.target.value)}
-                          className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
-                          placeholder="0"
-                          min="1"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">메모 (선택)</label>
-                        <input
-                          type="text"
-                          value={entry.description}
-                          onChange={e => updateEntry(index, 'description', e.target.value)}
-                          className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
-                          placeholder="항목 설명"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                <EntryEditor
+                  key={entry.id}
+                  entry={entry}
+                  index={index}
+                  entryCount={entries.length}
+                  accountOptions={accountOptions}
+                  accountsLoading={accountsLoading}
+                  accountsError={accountsError}
+                  hasActiveFilter={hasActiveFilter}
+                  baseCurrency={baseCurrency}
+                  showCurrency
+                  onUpdate={updateEntry}
+                  onRemove={removeEntry}
+                />
               ))}
             </div>
 
@@ -2043,7 +1842,7 @@ function TemplatesTab({ accounts, accountsLoading, accountsError, baseCurrency }
                 </thead>
                 <tbody className="divide-y dark:divide-gray-700">
                   {templateList.map(t => {
-                    const total = t.entries.reduce((sum, e) => sum + Number(e.amount), 0)
+                    const total = t.entries.reduce((sum, e) => sum + calculateBaseAmount(e, baseCurrency), 0)
                     const isExpanded = expandedId === t.id
                     return (
                       <React.Fragment key={t.id}>
@@ -2099,7 +1898,7 @@ function TemplatesTab({ accounts, accountsLoading, accountsError, baseCurrency }
                                       대변: {entry.creditAccount.name}
                                     </span>
                                     <span className="font-medium dark:text-gray-300">
-                                      {formatCurrency(Number(entry.amount), baseCurrency)}
+                                      {formatEntryAmount(entry, baseCurrency)}
                                     </span>
                                     {entry.description && (
                                       <span className="text-gray-500 dark:text-gray-400">{entry.description}</span>

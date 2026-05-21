@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { getBaseCurrencyEntrySumMap } from '@/lib/report-sums'
 
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -64,62 +65,12 @@ export async function GET(request: NextRequest) {
   const revenueIds = accounts.filter(a => a.type === 'REVENUE').map(a => a.id)
   const expenseIds = accounts.filter(a => a.type === 'EXPENSE').map(a => a.id)
 
-  const txFilter = { transaction: { userId, date: dateFilter } }
-
-  const [revDebitSums, revCreditSums, expDebitSums, expCreditSums] = await Promise.all([
-    revenueIds.length === 0
-      ? Promise.resolve([])
-      : prisma.entry.groupBy({
-          by: ['debitAccountId'],
-          where: { debitAccountId: { in: revenueIds }, ...txFilter },
-          _sum: { amount: true },
-        }),
-    revenueIds.length === 0
-      ? Promise.resolve([])
-      : prisma.entry.groupBy({
-          by: ['creditAccountId'],
-          where: { creditAccountId: { in: revenueIds }, ...txFilter },
-          _sum: { amount: true },
-        }),
-    expenseIds.length === 0
-      ? Promise.resolve([])
-      : prisma.entry.groupBy({
-          by: ['debitAccountId'],
-          where: { debitAccountId: { in: expenseIds }, ...txFilter },
-          _sum: { amount: true },
-        }),
-    expenseIds.length === 0
-      ? Promise.resolve([])
-      : prisma.entry.groupBy({
-          by: ['creditAccountId'],
-          where: { creditAccountId: { in: expenseIds }, ...txFilter },
-          _sum: { amount: true },
-        }),
+  const [revDebitMap, revCreditMap, expDebitMap, expCreditMap] = await Promise.all([
+    getBaseCurrencyEntrySumMap({ accountIds: revenueIds, userId, side: 'debit', dateFilter }),
+    getBaseCurrencyEntrySumMap({ accountIds: revenueIds, userId, side: 'credit', dateFilter }),
+    getBaseCurrencyEntrySumMap({ accountIds: expenseIds, userId, side: 'debit', dateFilter }),
+    getBaseCurrencyEntrySumMap({ accountIds: expenseIds, userId, side: 'credit', dateFilter }),
   ])
-
-  function toAmountMap<T extends { _sum: { amount: unknown } }>(
-    sums: T[],
-    getId: (item: T) => string,
-  ): Map<string, number> {
-    return new Map((sums as T[]).map(r => [getId(r), Number(r._sum.amount ?? 0)]))
-  }
-
-  const revDebitMap = toAmountMap(
-    revDebitSums as Array<{ debitAccountId: string; _sum: { amount: unknown } }>,
-    r => r.debitAccountId,
-  )
-  const revCreditMap = toAmountMap(
-    revCreditSums as Array<{ creditAccountId: string; _sum: { amount: unknown } }>,
-    r => r.creditAccountId,
-  )
-  const expDebitMap = toAmountMap(
-    expDebitSums as Array<{ debitAccountId: string; _sum: { amount: unknown } }>,
-    r => r.debitAccountId,
-  )
-  const expCreditMap = toAmountMap(
-    expCreditSums as Array<{ creditAccountId: string; _sum: { amount: unknown } }>,
-    r => r.creditAccountId,
-  )
 
   let totalRevenue = 0
   let totalExpense = 0
