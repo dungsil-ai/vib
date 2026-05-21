@@ -126,7 +126,7 @@ export async function validateTransactionPayload(userId: string, body: unknown) 
     normalizedEntries.push({
       debitAccountId: String(candidate.debitAccountId),
       creditAccountId: String(candidate.creditAccountId),
-      amount: String(candidate.amount),
+      amount: String(parsedAmount.value),
       currency: normalizedCurrency.value,
       exchangeRate: normalizedExchangeRate.exchangeRate,
       description: typeof candidate.description === 'string' ? candidate.description : undefined,
