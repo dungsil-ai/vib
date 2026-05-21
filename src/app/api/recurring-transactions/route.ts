@@ -64,6 +64,7 @@ export const POST = withAuth(async (request: NextRequest, userId: string) => {
     }
   }
 
+  const normalizedAmounts: number[] = []
   for (const entry of entries) {
     if (!entry.debitAccountId || !entry.creditAccountId || entry.amount == null) {
       return apiError('각 항목의 차변·대변 계정과 금액을 입력해주세요.')
@@ -75,6 +76,7 @@ export const POST = withAuth(async (request: NextRequest, userId: string) => {
     if (entry.debitAccountId === entry.creditAccountId) {
       return apiError('차변 계정과 대변 계정은 달라야 합니다.')
     }
+    normalizedAmounts.push(parsedAmount.value)
   }
 
   const accountIds = [
@@ -131,10 +133,10 @@ export const POST = withAuth(async (request: NextRequest, userId: string) => {
             creditAccountId: string
             amount: string
             description?: string
-          }) => ({
+          }, index: number) => ({
             debitAccountId: entry.debitAccountId,
             creditAccountId: entry.creditAccountId,
-            amount: entry.amount,
+            amount: String(normalizedAmounts[index]),
             description: entry.description,
           })),
         },
