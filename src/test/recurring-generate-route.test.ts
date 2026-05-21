@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { NextRequest } from 'next/server'
 
 vi.mock('next-auth', () => ({
   getServerSession: vi.fn(),
@@ -26,6 +27,10 @@ import { prisma } from '@/lib/prisma'
 import { POST } from '@/app/api/recurring-transactions/generate/route'
 
 const mockSession = { user: { id: 'user-1', email: 'test@example.com', name: 'Test' } }
+
+function makePostRequest() {
+  return new NextRequest('http://localhost/api/recurring-transactions/generate', { method: 'POST' })
+}
 
 describe('recurring-transactions/generate POST', () => {
   beforeEach(() => {
@@ -73,7 +78,7 @@ describe('recurring-transactions/generate POST', () => {
     }
     vi.mocked(prisma.$transaction).mockImplementation(async (callback) => callback(tx as never))
 
-    const res = await POST()
+    const res = await POST(makePostRequest())
     const body = await res.json()
 
     expect(res.status).toBe(200)
@@ -93,7 +98,7 @@ describe('recurring-transactions/generate POST', () => {
   it('대상 반복 거래가 없으면 빈 결과를 반환한다', async () => {
     vi.mocked(prisma.recurringTransaction.findMany).mockResolvedValue([])
 
-    const res = await POST()
+    const res = await POST(makePostRequest())
     const body = await res.json()
 
     expect(res.status).toBe(200)

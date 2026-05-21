@@ -1,11 +1,12 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { serializeData } from '@/lib/serialize'
 import { computeNextRunAt } from '@/lib/recurring'
 
-export async function POST() {
+export async function POST(request?: NextRequest) {
+  void request
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) {
     return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
