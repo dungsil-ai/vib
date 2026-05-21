@@ -24,6 +24,8 @@ interface Budget {
 interface TransactionEntry {
   debitAccountId: string
   amount: string
+  exchangeRate?: string | number
+  currency?: string
   debitAccount: { type: string }
 }
 
