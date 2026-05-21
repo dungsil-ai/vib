@@ -324,6 +324,52 @@ describe('RecurringTransactionsPage (반복 거래 탭)', () => {
     )
   })
 
+  it('반복 거래 수정 폼으로 기존 값을 불러오고 PUT으로 저장한다', async () => {
+    setupFetchMock()
+    const user = userEvent.setup()
+
+    render(<TransactionsPage />)
+
+    await user.click(screen.getByRole('button', { name: '반복 거래' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('월세')).toBeInTheDocument()
+    })
+
+    const row = screen.getByText('월세').closest('tr')!
+    await user.click(within(row).getByRole('button', { name: '수정' }))
+
+    expect(screen.getByRole('heading', { name: '반복 거래 수정' })).toBeInTheDocument()
+    const descriptionInput = screen.getByDisplayValue('월세')
+    expect(descriptionInput).toHaveValue('월세')
+
+    await user.clear(descriptionInput)
+    await user.type(descriptionInput, '사무실 월세')
+
+    const amountInput = screen.getByDisplayValue('500000')
+    await user.clear(amountInput)
+    await user.type(amountInput, '650000')
+
+    await user.click(screen.getByRole('button', { name: '반복 거래 수정 저장' }))
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/recurring-transactions/rec-1',
+        expect.objectContaining({ method: 'PUT' }),
+      )
+    })
+
+    const updateCall = vi.mocked(global.fetch).mock.calls.find(
+      ([url, opts]) => url === '/api/recurring-transactions/rec-1' && (opts as RequestInit | undefined)?.method === 'PUT'
+        && (opts as RequestInit | undefined)?.body?.toString().includes('사무실 월세'),
+    )
+    expect(updateCall).toBeTruthy()
+    expect(JSON.parse((updateCall?.[1] as RequestInit).body as string)).toMatchObject({
+      description: '사무실 월세',
+      entries: [expect.objectContaining({ amount: '650000' })],
+    })
+  })
+
   it('반복 거래 삭제가 동작한다', async () => {
     setupFetchMock()
     window.confirm = vi.fn(() => true)
