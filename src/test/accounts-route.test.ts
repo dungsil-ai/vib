@@ -18,6 +18,7 @@ vi.mock('@/lib/prisma', () => ({
     user: {
       findUnique: vi.fn(),
     },
+    $queryRaw: vi.fn(),
     $transaction: vi.fn(),
   },
 }))
@@ -151,7 +152,7 @@ describe('POST /api/accounts', () => {
     })
   })
 
-  it('초기잔액이 있는 계정 생성 시 선택한 통화를 저장한다', async () => {
+  it('개시잔액이 있는 계정을 생성할 때 선택한 통화를 저장한다', async () => {
     const existingOpeningEquityAccount = {
       id: 'opening-equity-1',
       userId: 'user-1',
@@ -186,7 +187,10 @@ describe('POST /api/accounts', () => {
     }
 
     vi.mocked(prisma.user.findUnique).mockResolvedValue({ currency: 'KRW' } as never)
-    vi.mocked(prisma.$transaction).mockImplementation(async (callback) => callback(tx as never))
+    vi.mocked(prisma.$transaction).mockImplementation(async (callback: unknown) => {
+      const transactionCallback = callback as (transactionClient: typeof tx) => Promise<unknown>
+      return transactionCallback(tx)
+    })
 
     const res = await POST(makePostRequest({
       name: '달러 현금',
@@ -200,6 +204,7 @@ describe('POST /api/accounts', () => {
     expect(tx.account.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
         name: '달러 현금',
+        type: 'ASSET',
         currency: 'USD',
       }),
     }))
