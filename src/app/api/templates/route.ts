@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { serializeData } from '@/lib/serialize'
 import { normalizeCurrencyInput, parseExchangeRateInput } from '@/app/api/transactions/shared'
+import { AccountOwnershipError, assertAccountsOwned } from '@/lib/accounting'
 
 interface TemplateEntryInput {
   debitAccountId: string
@@ -87,20 +88,19 @@ export async function POST(request: NextRequest) {
       ...normalizedEntries.map(e => e.creditAccountId),
     ]),
   ]
-  const [ownedAccounts, userRecord] = await Promise.all([
-    prisma.account.findMany({
-      where: { id: { in: accountIds }, userId: session.user.id },
-      select: { id: true },
-    }),
-    prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { currency: true },
-    }),
-  ])
-  if (ownedAccounts.length !== accountIds.length) {
-    return NextResponse.json({ error: '잘못된 계정이 포함되어 있습니다.' }, { status: 403 })
+  try {
+    await assertAccountsOwned(session.user.id, accountIds)
+  } catch (error) {
+    if (error instanceof AccountOwnershipError) {
+      return NextResponse.json({ error: error.message }, { status: 403 })
+    }
+    throw error
   }
 
+  const userRecord = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { currency: true },
+  })
   const baseCurrency = userRecord?.currency ?? 'KRW'
   const persistedEntries: TemplateEntryInput[] = []
   for (const entry of normalizedEntries) {

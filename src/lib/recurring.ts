@@ -4,6 +4,18 @@ function getLastDayOfMonthUtc(year: number, monthIndex: number) {
   return new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate()
 }
 
+function createUtcDateLike(source: Date, year: number, monthIndex: number, day: number) {
+  return new Date(Date.UTC(
+    year,
+    monthIndex,
+    day,
+    source.getUTCHours(),
+    source.getUTCMinutes(),
+    source.getUTCSeconds(),
+    source.getUTCMilliseconds(),
+  ))
+}
+
 function clampToUtcMonth(date: Date, monthOffset: number, dayOfMonth?: number | null) {
   const nextDate = new Date(date)
   const targetDay = dayOfMonth ?? nextDate.getUTCDate()
@@ -54,6 +66,57 @@ export function computeNextRunAt(
       nextDate.setUTCDate(Math.min(targetDay, maxDay))
 
       return nextDate
+    }
+    default: {
+      const _exhaustive: never = frequency
+      throw new Error(`알 수 없는 반복 주기: ${_exhaustive}`)
+    }
+  }
+}
+
+/**
+ * 시작일과 반복 설정을 기준으로 최초 실행일을 UTC 기준으로 계산합니다.
+ */
+export function computeInitialNextRunAt(
+  frequency: RecurringFrequency,
+  dayOfMonth: number | null,
+  monthOfYear: number | null,
+  startDate: Date,
+): Date {
+  switch (frequency) {
+    case 'DAILY':
+    case 'WEEKLY':
+      return new Date(startDate)
+    case 'MONTHLY': {
+      const targetDay = dayOfMonth ?? startDate.getUTCDate()
+      const maxDay = getLastDayOfMonthUtc(startDate.getUTCFullYear(), startDate.getUTCMonth())
+      const candidate = createUtcDateLike(
+        startDate,
+        startDate.getUTCFullYear(),
+        startDate.getUTCMonth(),
+        Math.min(targetDay, maxDay),
+      )
+
+      if (candidate < startDate) {
+        return computeNextRunAt('MONTHLY', targetDay, null, candidate)
+      }
+
+      return candidate
+    }
+    case 'YEARLY': {
+      const targetMonthIndex = (monthOfYear ?? startDate.getUTCMonth() + 1) - 1
+      const targetDay = dayOfMonth ?? startDate.getUTCDate()
+      let targetYear = startDate.getUTCFullYear()
+      let maxDay = getLastDayOfMonthUtc(targetYear, targetMonthIndex)
+      let candidate = createUtcDateLike(startDate, targetYear, targetMonthIndex, Math.min(targetDay, maxDay))
+
+      if (candidate < startDate) {
+        targetYear += 1
+        maxDay = getLastDayOfMonthUtc(targetYear, targetMonthIndex)
+        candidate = createUtcDateLike(startDate, targetYear, targetMonthIndex, Math.min(targetDay, maxDay))
+      }
+
+      return candidate
     }
     default: {
       const _exhaustive: never = frequency

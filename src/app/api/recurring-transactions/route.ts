@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { AccountOwnershipError, assertAccountsOwned } from '@/lib/accounting'
 import { serializeData } from '@/lib/serialize'
-import { computeNextRunAt } from '@/lib/recurring'
 import { normalizeCurrencyInput, parseExchangeRateInput } from '@/app/api/transactions/shared'
+import { computeInitialNextRunAt } from '@/lib/recurring'
 
 
 type RecurringEntryInput = {
@@ -123,20 +124,22 @@ export async function POST(request: NextRequest) {
       ...normalizedEntries.map(e => e.creditAccountId),
     ]),
   ]
-  const [ownedAccounts, userRecord] = await Promise.all([
-    prisma.account.findMany({
-      where: { id: { in: accountIds }, userId: session.user.id },
-      select: { id: true },
-    }),
-    prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { currency: true },
-    }),
-  ])
-  if (ownedAccounts.length !== accountIds.length) {
-    return NextResponse.json({ error: '잘못된 계정이 포함되어 있습니다.' }, { status: 403 })
+  try {
+    await assertAccountsOwned(session.user.id, accountIds)
+  } catch (error) {
+    if (error instanceof AccountOwnershipError) {
+      return NextResponse.json({ error: error.message }, { status: 403 })
+    }
+    throw error
   }
 
+  const numericDayOfMonth = dayOfMonth ? Number(dayOfMonth) : null
+  const numericMonthOfYear = monthOfYear ? Number(monthOfYear) : null
+  const nextRunAt = computeInitialNextRunAt(frequency, numericDayOfMonth, numericMonthOfYear, parsedStart)
+  const userRecord = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { currency: true },
+  })
   const baseCurrency = userRecord?.currency ?? 'KRW'
   const persistedEntries: RecurringEntryInput[] = []
   for (const entry of normalizedEntries) {
@@ -151,37 +154,14 @@ export async function POST(request: NextRequest) {
     })
   }
 
-  // Compute initial nextRunAt: first occurrence on or after startDate with the given day settings
-  let nextRunAt = new Date(parsedStart)
-  if ((frequency === 'MONTHLY' || frequency === 'YEARLY') && dayOfMonth) {
-    const maxDay = new Date(nextRunAt.getFullYear(), nextRunAt.getMonth() + 1, 0).getDate()
-    nextRunAt.setDate(Math.min(Number(dayOfMonth), maxDay))
-    if (nextRunAt < parsedStart) {
-      nextRunAt = computeNextRunAt(frequency, Number(dayOfMonth), monthOfYear ? Number(monthOfYear) : null, nextRunAt)
-    }
-  }
-  if (frequency === 'YEARLY' && monthOfYear) {
-    const targetMonthIndex = Number(monthOfYear) - 1
-    let targetYear = nextRunAt.getFullYear()
-    const maxDayOfTargetMonth = new Date(targetYear, targetMonthIndex + 1, 0).getDate()
-    const targetDay = dayOfMonth ? Math.min(Number(dayOfMonth), maxDayOfTargetMonth) : 1
-    nextRunAt = new Date(targetYear, targetMonthIndex, targetDay)
-    if (nextRunAt < parsedStart) {
-      targetYear += 1
-      const maxDayOfNextYear = new Date(targetYear, targetMonthIndex + 1, 0).getDate()
-      const clampedDay = dayOfMonth ? Math.min(Number(dayOfMonth), maxDayOfNextYear) : 1
-      nextRunAt = new Date(targetYear, targetMonthIndex, clampedDay)
-    }
-  }
-
   try {
     const recurring = await prisma.recurringTransaction.create({
       data: {
         userId: session.user.id,
         description,
         frequency,
-        dayOfMonth: dayOfMonth ? Number(dayOfMonth) : null,
-        monthOfYear: monthOfYear ? Number(monthOfYear) : null,
+        dayOfMonth: numericDayOfMonth,
+        monthOfYear: numericMonthOfYear,
         startDate: parsedStart,
         endDate: endDate ? new Date(endDate) : null,
         nextRunAt,
