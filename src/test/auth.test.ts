@@ -1,5 +1,23 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
+const { mockGetServerSession, mockHeaders, mockRedirect } = vi.hoisted(() => ({
+  mockGetServerSession: vi.fn(),
+  mockHeaders: vi.fn(),
+  mockRedirect: vi.fn(),
+}))
+
+vi.mock('next-auth', () => ({
+  getServerSession: mockGetServerSession,
+}))
+
+vi.mock('next/headers', () => ({
+  headers: mockHeaders,
+}))
+
+vi.mock('next/navigation', () => ({
+  redirect: mockRedirect,
+}))
+
 // Mock prisma
 vi.mock('@/lib/prisma', () => ({
   prisma: {
@@ -17,6 +35,7 @@ vi.mock('bcryptjs', () => ({
 }))
 
 import { authOptions } from '@/lib/auth'
+import { AuthenticationError, requireUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 
@@ -161,5 +180,33 @@ describe('auth - configuration', () => {
 
   it('로그인 페이지를 /auth/login으로 설정한다', () => {
     expect(authOptions.pages?.signIn).toBe('/auth/login')
+  })
+})
+
+describe('auth - requireUser', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('동일한 인증 옵션으로 두 번 호출해도 세션 조회는 한 번만 수행한다', async () => {
+    mockHeaders.mockResolvedValue(new Headers({ cookie: 'session=1' }))
+    mockGetServerSession.mockResolvedValue({
+      user: { id: 'user-1', email: 'test@example.com', name: '테스트' },
+    })
+
+    const [firstUser, secondUser] = await Promise.all([
+      requireUser({ onUnauthenticated: 'throw' }),
+      requireUser({ onUnauthenticated: 'throw' }),
+    ])
+
+    expect(firstUser).toEqual(secondUser)
+    expect(mockGetServerSession).toHaveBeenCalledTimes(1)
+  })
+
+  it('throw 모드에서 인증되지 않으면 AuthenticationError를 던진다', async () => {
+    mockHeaders.mockResolvedValue(new Headers({ cookie: 'session=2' }))
+    mockGetServerSession.mockResolvedValue(null)
+
+    await expect(requireUser({ onUnauthenticated: 'throw' })).rejects.toBeInstanceOf(AuthenticationError)
   })
 })

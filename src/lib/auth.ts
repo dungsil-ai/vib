@@ -91,14 +91,14 @@ type AuthenticatedUser = {
   name?: string | null
 }
 
-const pendingRequireUserRequests = new Map<string, Promise<AuthenticatedUser>>()
+const pendingRequireUserRequests = new WeakMap<object, Map<'redirect' | 'throw', Promise<AuthenticatedUser>>>()
 
 export async function requireUser(options: RequireUserOptions = {}) {
   const { onUnauthenticated = 'redirect' } = options
   const requestHeaders = await headers()
-  const cacheKey = `${onUnauthenticated}:${requestHeaders.get('cookie') ?? ''}`
+  const cachedRequests = pendingRequireUserRequests.get(requestHeaders) ?? new Map()
+  const pendingRequest = cachedRequests.get(onUnauthenticated)
 
-  const pendingRequest = pendingRequireUserRequests.get(cacheKey)
   if (pendingRequest) {
     return pendingRequest
   }
@@ -116,12 +116,20 @@ export async function requireUser(options: RequireUserOptions = {}) {
     return session.user as AuthenticatedUser
   })()
 
-  pendingRequireUserRequests.set(cacheKey, request)
-  void request.finally(() => {
-    if (pendingRequireUserRequests.get(cacheKey) === request) {
-      pendingRequireUserRequests.delete(cacheKey)
-    }
-  })
+  cachedRequests.set(onUnauthenticated, request)
+  pendingRequireUserRequests.set(requestHeaders, cachedRequests)
+
+  void request
+    .finally(() => {
+      const activeRequests = pendingRequireUserRequests.get(requestHeaders)
+      if (activeRequests?.get(onUnauthenticated) === request) {
+        activeRequests.delete(onUnauthenticated)
+        if (activeRequests.size === 0) {
+          pendingRequireUserRequests.delete(requestHeaders)
+        }
+      }
+    })
+    .catch(() => {})
 
   return request
 }
