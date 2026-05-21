@@ -45,6 +45,43 @@ const isEntryEmpty = (entry?: EntryForm, baseCurrency = 'KRW') => {
     entry.currency === baseCurrency
 }
 
+const isSavedEntryFormPristine = ({
+  description,
+  entryCount,
+  firstEntry,
+  baseCurrency,
+}: {
+  description: string
+  entryCount: number
+  firstEntry?: EntryForm
+  baseCurrency: string
+}) => description === '' && entryCount === 1 && isEntryEmpty(firstEntry, baseCurrency)
+
+const calculateBaseAmount = (
+  entry: { amount: string; currency?: string; exchangeRate?: string },
+  baseCurrency: string,
+) => {
+  const amount = Number(entry.amount) || 0
+  const currency = entry.currency || baseCurrency
+
+  if (currency === baseCurrency) {
+    return amount
+  }
+
+  return amount * (Number(entry.exchangeRate) || 1)
+}
+
+const formatEntryAmount = (entry: { amount: string; currency?: string; exchangeRate?: string }, baseCurrency: string) => {
+  const currency = entry.currency || baseCurrency
+  const amount = Number(entry.amount) || 0
+
+  if (currency === baseCurrency) {
+    return formatCurrency(amount, baseCurrency)
+  }
+
+  return `${formatCurrency(amount, currency)} (${formatCurrency(calculateBaseAmount(entry, baseCurrency), baseCurrency)})`
+}
+
 const isTransactionFormPristine = ({
   date,
   txDescription,
@@ -84,6 +121,8 @@ interface TemplateSummaryEntry {
   debitAccountId: string
   creditAccountId: string
   amount: string
+  currency: string
+  exchangeRate: string
   description: string | null
 }
 
@@ -192,8 +231,8 @@ function TransactionsTab({ accounts, accountsLoading, accountsError, baseCurrenc
         debitAccountId: e.debitAccountId,
         creditAccountId: e.creditAccountId,
         amount: String(e.amount),
-        currency: baseCurrency,
-        exchangeRate: '1',
+        currency: e.currency ?? baseCurrency,
+        exchangeRate: e.exchangeRate ?? '1',
         description: e.description ?? '',
       })),
     )
@@ -919,6 +958,8 @@ function TransactionsTab({ accounts, accountsLoading, accountsError, baseCurrenc
 interface RecurringEntry {
   id: string
   amount: string
+  currency: string
+  exchangeRate: string
   description: string | null
   debitAccount: { name: string; code: string; type: string }
   creditAccount: { name: string; code: string; type: string }
@@ -968,7 +1009,7 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
   const [monthOfYear, setMonthOfYear] = useState('1')
   const [startDate, setStartDate] = useState(todayDate())
   const [endDate, setEndDate] = useState('')
-  const [entries, setEntries] = useState<EntryForm[]>([defaultEntry()])
+  const [entries, setEntries] = useState<EntryForm[]>([defaultEntry(baseCurrency)])
   const [formError, setFormError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -1005,6 +1046,19 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
     return () => { cancelled = true }
   }, [])
 
+  const prevBaseCurrencyRef = useRef(baseCurrency)
+  useEffect(() => {
+    if (baseCurrency === prevBaseCurrencyRef.current) return
+
+    const previousBaseCurrency = prevBaseCurrencyRef.current
+    prevBaseCurrencyRef.current = baseCurrency
+    setEntries(prev => (
+      isSavedEntryFormPristine({ description, entryCount: prev.length, firstEntry: prev[0], baseCurrency: previousBaseCurrency })
+        ? [defaultEntry(baseCurrency)]
+        : prev
+    ))
+  }, [baseCurrency, description])
+
   const resetForm = () => {
     setFormError('')
     setDescription('')
@@ -1013,10 +1067,10 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
     setMonthOfYear('1')
     setStartDate(todayDate())
     setEndDate('')
-    setEntries([defaultEntry()])
+    setEntries([defaultEntry(baseCurrency)])
   }
 
-  const addEntry = () => setEntries(prev => [...prev, defaultEntry()])
+  const addEntry = () => setEntries(prev => [...prev, defaultEntry(baseCurrency)])
   const removeEntry = (index: number) => {
     setEntries(prev => {
       if (prev.length === 1) return prev
@@ -1026,12 +1080,16 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
   const updateEntry = (index: number, field: keyof EntryForm, value: string) => {
     setEntries(prev => {
       const updated = [...prev]
-      updated[index] = { ...updated[index], [field]: value }
+      const newEntry = { ...updated[index], [field]: value }
+      if (field === 'currency' && value === baseCurrency) {
+        newEntry.exchangeRate = '1'
+      }
+      updated[index] = newEntry
       return updated
     })
   }
 
-  const formTotal = entries.reduce((sum, e) => sum + (Number(e.amount) || 0), 0)
+  const formTotal = entries.reduce((sum, e) => sum + calculateBaseAmount(e, baseCurrency), 0)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -1066,6 +1124,8 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
             debitAccountId: entry.debitAccountId,
             creditAccountId: entry.creditAccountId,
             amount: entry.amount,
+            currency: entry.currency,
+            exchangeRate: entry.exchangeRate,
             description: entry.description || undefined,
           })),
         }),
@@ -1280,8 +1340,7 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
                   accountsError={accountsError}
                   hasActiveFilter={hasActiveFilter}
                   baseCurrency={baseCurrency}
-                  showCurrency={false}
-                  amountLabel="금액 (원)"
+                  showCurrency
                   onUpdate={updateEntry}
                   onRemove={removeEntry}
                 />
@@ -1351,7 +1410,7 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
                 </thead>
                 <tbody className="divide-y dark:divide-gray-700">
                   {recurringList.map(r => {
-                    const total = r.entries.reduce((sum, e) => sum + Number(e.amount), 0)
+                    const total = r.entries.reduce((sum, e) => sum + calculateBaseAmount(e, baseCurrency), 0)
                     const isExpanded = expandedId === r.id
                     return (
                       <React.Fragment key={r.id}>
@@ -1418,7 +1477,7 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
                                       대변: {entry.creditAccount.name}
                                     </span>
                                     <span className="font-medium dark:text-gray-300">
-                                      {formatCurrency(Number(entry.amount), baseCurrency)}
+                                      {formatEntryAmount(entry, baseCurrency)}
                                     </span>
                                     {entry.description && (
                                       <span className="text-gray-500 dark:text-gray-400">{entry.description}</span>
@@ -1447,6 +1506,8 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
 interface TemplateEntry {
   id: string
   amount: string
+  currency: string
+  exchangeRate: string
   description: string | null
   debitAccount: { name: string; code: string; type: string }
   creditAccount: { name: string; code: string; type: string }
@@ -1474,7 +1535,7 @@ function TemplatesTab({ accounts, accountsLoading, accountsError, baseCurrency }
 
   const [accountFilter, setAccountFilter] = useState('')
   const [description, setDescription] = useState('')
-  const [entries, setEntries] = useState<EntryForm[]>([defaultEntry()])
+  const [entries, setEntries] = useState<EntryForm[]>([defaultEntry(baseCurrency)])
   const [formError, setFormError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -1511,13 +1572,26 @@ function TemplatesTab({ accounts, accountsLoading, accountsError, baseCurrency }
     return () => { cancelled = true }
   }, [fetchTemplates])
 
+  const prevBaseCurrencyRef = useRef(baseCurrency)
+  useEffect(() => {
+    if (baseCurrency === prevBaseCurrencyRef.current) return
+
+    const previousBaseCurrency = prevBaseCurrencyRef.current
+    prevBaseCurrencyRef.current = baseCurrency
+    setEntries(prev => (
+      isSavedEntryFormPristine({ description, entryCount: prev.length, firstEntry: prev[0], baseCurrency: previousBaseCurrency })
+        ? [defaultEntry(baseCurrency)]
+        : prev
+    ))
+  }, [baseCurrency, description])
+
   const resetForm = () => {
     setFormError('')
     setDescription('')
-    setEntries([defaultEntry()])
+    setEntries([defaultEntry(baseCurrency)])
   }
 
-  const addEntry = () => setEntries(prev => [...prev, defaultEntry()])
+  const addEntry = () => setEntries(prev => [...prev, defaultEntry(baseCurrency)])
   const removeEntry = (index: number) => {
     setEntries(prev => {
       if (prev.length === 1) return prev
@@ -1527,12 +1601,16 @@ function TemplatesTab({ accounts, accountsLoading, accountsError, baseCurrency }
   const updateEntry = (index: number, field: keyof EntryForm, value: string) => {
     setEntries(prev => {
       const updated = [...prev]
-      updated[index] = { ...updated[index], [field]: value }
+      const newEntry = { ...updated[index], [field]: value }
+      if (field === 'currency' && value === baseCurrency) {
+        newEntry.exchangeRate = '1'
+      }
+      updated[index] = newEntry
       return updated
     })
   }
 
-  const formTotal = entries.reduce((sum, e) => sum + (Number(e.amount) || 0), 0)
+  const formTotal = entries.reduce((sum, e) => sum + calculateBaseAmount(e, baseCurrency), 0)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -1562,6 +1640,8 @@ function TemplatesTab({ accounts, accountsLoading, accountsError, baseCurrency }
             debitAccountId: entry.debitAccountId,
             creditAccountId: entry.creditAccountId,
             amount: entry.amount,
+            currency: entry.currency,
+            exchangeRate: entry.exchangeRate,
             description: entry.description || undefined,
           })),
         }),
@@ -1662,7 +1742,7 @@ function TemplatesTab({ accounts, accountsLoading, accountsError, baseCurrency }
                   accountsError={accountsError}
                   hasActiveFilter={hasActiveFilter}
                   baseCurrency={baseCurrency}
-                  showCurrency={false}
+                  showCurrency
                   onUpdate={updateEntry}
                   onRemove={removeEntry}
                 />
@@ -1730,7 +1810,7 @@ function TemplatesTab({ accounts, accountsLoading, accountsError, baseCurrency }
                 </thead>
                 <tbody className="divide-y dark:divide-gray-700">
                   {templateList.map(t => {
-                    const total = t.entries.reduce((sum, e) => sum + Number(e.amount), 0)
+                    const total = t.entries.reduce((sum, e) => sum + calculateBaseAmount(e, baseCurrency), 0)
                     const isExpanded = expandedId === t.id
                     return (
                       <React.Fragment key={t.id}>
@@ -1786,7 +1866,7 @@ function TemplatesTab({ accounts, accountsLoading, accountsError, baseCurrency }
                                       대변: {entry.creditAccount.name}
                                     </span>
                                     <span className="font-medium dark:text-gray-300">
-                                      {formatCurrency(Number(entry.amount), baseCurrency)}
+                                      {formatEntryAmount(entry, baseCurrency)}
                                     </span>
                                     {entry.description && (
                                       <span className="text-gray-500 dark:text-gray-400">{entry.description}</span>

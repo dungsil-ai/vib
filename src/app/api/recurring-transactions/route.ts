@@ -4,9 +4,20 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { AccountOwnershipError, assertAccountsOwned } from '@/lib/accounting'
 import { serializeData } from '@/lib/serialize'
+import { normalizeCurrencyInput, parseExchangeRateInput } from '@/app/api/transactions/shared'
 import { computeInitialNextRunAt } from '@/lib/recurring'
 
-export async function GET(_request: NextRequest) {
+
+type RecurringEntryInput = {
+  debitAccountId: string
+  creditAccountId: string
+  amount: string | number
+  currency?: string
+  exchangeRate?: string
+  description?: string
+}
+
+export async function GET() {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) {
     return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
@@ -74,6 +85,7 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  const normalizedEntries: RecurringEntryInput[] = []
   for (const entry of entries) {
     if (!entry.debitAccountId || !entry.creditAccountId || entry.amount == null) {
       return NextResponse.json({ error: '각 항목의 차변·대변 계정과 금액을 입력해주세요.' }, { status: 400 })
@@ -85,12 +97,31 @@ export async function POST(request: NextRequest) {
     if (entry.debitAccountId === entry.creditAccountId) {
       return NextResponse.json({ error: '차변 계정과 대변 계정은 달라야 합니다.' }, { status: 400 })
     }
+
+    const normalizedCurrency = normalizeCurrencyInput(entry.currency)
+    if (!normalizedCurrency.ok) {
+      return NextResponse.json({ error: normalizedCurrency.error }, { status: 400 })
+    }
+
+    const normalizedExchangeRate = parseExchangeRateInput(entry.exchangeRate)
+    if (!normalizedExchangeRate.ok) {
+      return NextResponse.json({ error: normalizedExchangeRate.error }, { status: 400 })
+    }
+
+    normalizedEntries.push({
+      debitAccountId: String(entry.debitAccountId),
+      creditAccountId: String(entry.creditAccountId),
+      amount: String(entry.amount),
+      currency: normalizedCurrency.currency,
+      exchangeRate: normalizedExchangeRate.exchangeRate,
+      description: typeof entry.description === 'string' ? entry.description : undefined,
+    })
   }
 
   const accountIds = [
     ...new Set([
-      ...entries.map((e: { debitAccountId: string }) => e.debitAccountId),
-      ...entries.map((e: { creditAccountId: string }) => e.creditAccountId),
+      ...normalizedEntries.map(e => e.debitAccountId),
+      ...normalizedEntries.map(e => e.creditAccountId),
     ]),
   ]
   try {
@@ -105,6 +136,23 @@ export async function POST(request: NextRequest) {
   const numericDayOfMonth = dayOfMonth ? Number(dayOfMonth) : null
   const numericMonthOfYear = monthOfYear ? Number(monthOfYear) : null
   const nextRunAt = computeInitialNextRunAt(frequency, numericDayOfMonth, numericMonthOfYear, parsedStart)
+  const userRecord = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { currency: true },
+  })
+  const baseCurrency = userRecord?.currency ?? 'KRW'
+  const persistedEntries: RecurringEntryInput[] = []
+  for (const entry of normalizedEntries) {
+    const entryCurrency = entry.currency ?? baseCurrency
+    if (entryCurrency !== baseCurrency && (entry.exchangeRate === undefined || entry.exchangeRate === null)) {
+      return NextResponse.json({ error: `외화(${entryCurrency}) 분개에는 환율(exchangeRate)이 필요합니다.` }, { status: 400 })
+    }
+    persistedEntries.push({
+      ...entry,
+      currency: entryCurrency,
+      exchangeRate: entryCurrency === baseCurrency ? '1' : (entry.exchangeRate ?? '1'),
+    })
+  }
 
   try {
     const recurring = await prisma.recurringTransaction.create({
@@ -118,15 +166,12 @@ export async function POST(request: NextRequest) {
         endDate: endDate ? new Date(endDate) : null,
         nextRunAt,
         entries: {
-          create: entries.map((entry: {
-            debitAccountId: string
-            creditAccountId: string
-            amount: string
-            description?: string
-          }) => ({
+          create: persistedEntries.map(entry => ({
             debitAccountId: entry.debitAccountId,
             creditAccountId: entry.creditAccountId,
-            amount: entry.amount,
+            amount: String(entry.amount),
+            currency: entry.currency,
+            exchangeRate: entry.exchangeRate,
             description: entry.description,
           })),
         },
