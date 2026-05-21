@@ -329,11 +329,6 @@ function TransactionsTab({ accounts, accountsLoading, accountsError, baseCurrenc
     entries.length,
     editingTransactionId,
     isFirstEntryEmpty,
-    firstEntryDebitAccountId,
-    firstEntryCreditAccountId,
-    firstEntryAmount,
-    firstEntryDescription,
-    firstEntryExchangeRate,
   ])
 
   useEffect(() => {
