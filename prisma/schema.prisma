@@ -127,6 +127,8 @@ model RecurringEntry {
   creditAccountId        String
   creditAccount          Account              @relation("RecurringCreditAccount", fields: [creditAccountId], references: [id])
   amount                 Decimal
+  currency               String               @default("KRW")
+  exchangeRate           Decimal              @default(1)
   description            String?
   createdAt              DateTime             @default(now())
 
@@ -153,6 +155,8 @@ model TemplateEntry {
   creditAccountId String
   creditAccount   Account             @relation("TemplateCreditAccount", fields: [creditAccountId], references: [id])
   amount          Decimal
+  currency        String              @default("KRW")
+  exchangeRate    Decimal             @default(1)
   description     String?
   createdAt       DateTime            @default(now())
 

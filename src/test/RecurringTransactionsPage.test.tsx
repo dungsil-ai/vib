@@ -183,6 +183,46 @@ describe('RecurringTransactionsPage (반복 거래 탭)', () => {
     expect(screen.getByText('통신비')).toBeInTheDocument()
   })
 
+  it('반복 거래 목록과 상세에서 외화 금액을 기준 통화로 환산해 표시한다', async () => {
+    setupFetchMock({
+      recurring: {
+        ok: true,
+        json: () => Promise.resolve([{ ...mockRecurring[0], entries: [{ ...mockRecurring[0].entries[0], amount: '10', currency: 'USD', exchangeRate: '1300.50' }] }]),
+      } as Response,
+    })
+    const user = userEvent.setup()
+    render(<TransactionsPage />)
+
+    await user.click(screen.getByRole('button', { name: '반복 거래' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('₩13,005')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByText('월세').closest('tr')!)
+
+    await waitFor(() => {
+      expect(screen.getByText('US$10.00 (₩13,005)')).toBeInTheDocument()
+    })
+  })
+
+  it('반복 거래 목록은 기준 통화 분개의 잘못된 환율을 무시하고 표시한다', async () => {
+    setupFetchMock({
+      recurring: {
+        ok: true,
+        json: () => Promise.resolve([{ ...mockRecurring[0], entries: [{ ...mockRecurring[0].entries[0], amount: '10', currency: 'KRW', exchangeRate: '1300.50' }] }]),
+      } as Response,
+    })
+    const user = userEvent.setup()
+    render(<TransactionsPage />)
+
+    await user.click(screen.getByRole('button', { name: '반복 거래' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('₩10')).toBeInTheDocument()
+    })
+  })
+
   it('다중 항목 거래에 항목 수 배지를 표시한다', async () => {
     setupFetchMock()
     const user = userEvent.setup()
@@ -282,6 +322,52 @@ describe('RecurringTransactionsPage (반복 거래 탭)', () => {
       '/api/recurring-transactions/rec-1',
       expect.objectContaining({ method: 'PUT' }),
     )
+  })
+
+  it('반복 거래 수정 폼으로 기존 값을 불러오고 PUT으로 저장한다', async () => {
+    setupFetchMock()
+    const user = userEvent.setup()
+
+    render(<TransactionsPage />)
+
+    await user.click(screen.getByRole('button', { name: '반복 거래' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('월세')).toBeInTheDocument()
+    })
+
+    const row = screen.getByText('월세').closest('tr')!
+    await user.click(within(row).getByRole('button', { name: '수정' }))
+
+    expect(screen.getByRole('heading', { name: '반복 거래 수정' })).toBeInTheDocument()
+    const descriptionInput = screen.getByDisplayValue('월세')
+    expect(descriptionInput).toHaveValue('월세')
+
+    await user.clear(descriptionInput)
+    await user.type(descriptionInput, '사무실 월세')
+
+    const amountInput = screen.getByDisplayValue('500000')
+    await user.clear(amountInput)
+    await user.type(amountInput, '650000')
+
+    await user.click(screen.getByRole('button', { name: '반복 거래 수정 저장' }))
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/recurring-transactions/rec-1',
+        expect.objectContaining({ method: 'PUT' }),
+      )
+    })
+
+    const updateCall = vi.mocked(global.fetch).mock.calls.find(
+      ([url, opts]) => url === '/api/recurring-transactions/rec-1' && (opts as RequestInit | undefined)?.method === 'PUT'
+        && (opts as RequestInit | undefined)?.body?.toString().includes('사무실 월세'),
+    )
+    expect(updateCall).toBeTruthy()
+    expect(JSON.parse((updateCall?.[1] as RequestInit).body as string)).toMatchObject({
+      description: '사무실 월세',
+      entries: [expect.objectContaining({ amount: '650000' })],
+    })
   })
 
   it('반복 거래 삭제가 동작한다', async () => {
@@ -469,6 +555,43 @@ describe('RecurringTransactionsPage (반복 거래 탭)', () => {
 
     await waitFor(() => {
       expect(within(recurringForm).getByPlaceholderText('예: 월세, 통신비, 월급')).toHaveValue('')
+    })
+  })
+
+  it('반복 거래 저장 시 선택한 통화와 환율을 전송한다', async () => {
+    setupFetchMock()
+    const user = userEvent.setup()
+
+    render(<TransactionsPage />)
+
+    await user.click(screen.getByRole('button', { name: '반복 거래' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('반복 거래 추가')).toBeInTheDocument()
+    })
+
+    const recurringForm = screen.getByRole('button', { name: '반복 거래 저장' }).closest('form') as HTMLElement
+    const debitSection = within(recurringForm).getByText('차변 (Debit)').closest('div')!
+    const creditSection = within(recurringForm).getByText('대변 (Credit)').closest('div')!
+
+    await user.click(await within(debitSection).findByRole('button', { name: '501 식비' }))
+    await user.click(within(creditSection).getByRole('button', { name: '101 현금' }))
+    await user.type(within(recurringForm).getByPlaceholderText('0'), '10')
+    await user.selectOptions(within(recurringForm).getByLabelText('통화'), 'USD')
+    await user.clear(within(recurringForm).getByPlaceholderText('1'))
+    await user.type(within(recurringForm).getByPlaceholderText('1'), '1300.50')
+    await user.type(within(recurringForm).getByPlaceholderText('예: 월세, 통신비, 월급'), '외화 반복')
+
+    await user.click(screen.getByRole('button', { name: '반복 거래 저장' }))
+
+    await waitFor(() => {
+      const postCall = vi.mocked(global.fetch).mock.calls.find(
+        ([url, opts]) => url === '/api/recurring-transactions' && (opts as RequestInit | undefined)?.method === 'POST',
+      )
+      expect(postCall).toBeDefined()
+      expect(JSON.parse(String((postCall?.[1] as RequestInit).body))).toMatchObject({
+        entries: [expect.objectContaining({ currency: 'USD', exchangeRate: '1300.5' })],
+      })
     })
   })
 

@@ -45,6 +45,43 @@ const isEntryEmpty = (entry?: EntryForm, baseCurrency = 'KRW') => {
     entry.currency === baseCurrency
 }
 
+const isSavedEntryFormPristine = ({
+  description,
+  entryCount,
+  firstEntry,
+  baseCurrency,
+}: {
+  description: string
+  entryCount: number
+  firstEntry?: EntryForm
+  baseCurrency: string
+}) => description === '' && entryCount === 1 && isEntryEmpty(firstEntry, baseCurrency)
+
+const calculateBaseAmount = (
+  entry: { amount: string; currency?: string; exchangeRate?: string },
+  baseCurrency: string,
+) => {
+  const amount = Number(entry.amount) || 0
+  const currency = entry.currency || baseCurrency
+
+  if (currency === baseCurrency) {
+    return amount
+  }
+
+  return amount * (Number(entry.exchangeRate) || 1)
+}
+
+const formatEntryAmount = (entry: { amount: string; currency?: string; exchangeRate?: string }, baseCurrency: string) => {
+  const currency = entry.currency || baseCurrency
+  const amount = Number(entry.amount) || 0
+
+  if (currency === baseCurrency) {
+    return formatCurrency(amount, baseCurrency)
+  }
+
+  return `${formatCurrency(amount, currency)} (${formatCurrency(calculateBaseAmount(entry, baseCurrency), baseCurrency)})`
+}
+
 const isTransactionFormPristine = ({
   date,
   txDescription,
@@ -84,6 +121,8 @@ interface TemplateSummaryEntry {
   debitAccountId: string
   creditAccountId: string
   amount: string
+  currency: string
+  exchangeRate: string
   description: string | null
 }
 
@@ -198,8 +237,8 @@ function TransactionsTab({ accounts, accountsLoading, accountsError, baseCurrenc
         debitAccountId: e.debitAccountId,
         creditAccountId: e.creditAccountId,
         amount: String(e.amount),
-        currency: baseCurrency,
-        exchangeRate: '1',
+        currency: e.currency ?? baseCurrency,
+        exchangeRate: e.exchangeRate ?? '1',
         description: e.description ?? '',
       })),
     )
@@ -932,7 +971,11 @@ function TransactionsTab({ accounts, accountsLoading, accountsError, baseCurrenc
 
 interface RecurringEntry {
   id: string
+  debitAccountId: string
+  creditAccountId: string
   amount: string
+  currency: string
+  exchangeRate: string
   description: string | null
   debitAccount: { name: string; code: string; type: string }
   creditAccount: { name: string; code: string; type: string }
@@ -982,7 +1025,8 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
   const [monthOfYear, setMonthOfYear] = useState('1')
   const [startDate, setStartDate] = useState(todayDate())
   const [endDate, setEndDate] = useState('')
-  const [entries, setEntries] = useState<EntryForm[]>([defaultEntry()])
+  const [entries, setEntries] = useState<EntryForm[]>([defaultEntry(baseCurrency)])
+  const [editingRecurringId, setEditingRecurringId] = useState<string | null>(null)
   const [formError, setFormError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -1021,6 +1065,19 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
     }
   }, [])
 
+  const prevBaseCurrencyRef = useRef(baseCurrency)
+  useEffect(() => {
+    if (baseCurrency === prevBaseCurrencyRef.current) return
+
+    const previousBaseCurrency = prevBaseCurrencyRef.current
+    prevBaseCurrencyRef.current = baseCurrency
+    setEntries(prev => (
+      isSavedEntryFormPristine({ description, entryCount: prev.length, firstEntry: prev[0], baseCurrency: previousBaseCurrency })
+        ? [defaultEntry(baseCurrency)]
+        : prev
+    ))
+  }, [baseCurrency, description])
+
   const resetForm = () => {
     setFormError('')
     setDescription('')
@@ -1029,10 +1086,11 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
     setMonthOfYear('1')
     setStartDate(todayDate())
     setEndDate('')
-    setEntries([defaultEntry()])
+    setEntries([defaultEntry(baseCurrency)])
+    setEditingRecurringId(null)
   }
 
-  const addEntry = () => setEntries(prev => [...prev, defaultEntry()])
+  const addEntry = () => setEntries(prev => [...prev, defaultEntry(baseCurrency)])
   const removeEntry = (index: number) => {
     setEntries(prev => {
       if (prev.length === 1) return prev
@@ -1042,12 +1100,16 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
   const updateEntry = (index: number, field: keyof EntryForm, value: string) => {
     setEntries(prev => {
       const updated = [...prev]
-      updated[index] = { ...updated[index], [field]: value }
+      const newEntry = { ...updated[index], [field]: value }
+      if (field === 'currency' && value === baseCurrency) {
+        newEntry.exchangeRate = '1'
+      }
+      updated[index] = newEntry
       return updated
     })
   }
 
-  const formTotal = entries.reduce((sum, e) => sum + (Number(e.amount) || 0), 0)
+  const formTotal = entries.reduce((sum, e) => sum + calculateBaseAmount(e, baseCurrency), 0)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -1068,8 +1130,8 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
     }
 
     try {
-      const res = await fetch('/api/recurring-transactions', {
-        method: 'POST',
+      const res = await fetch(editingRecurringId ? `/api/recurring-transactions/${editingRecurringId}` : '/api/recurring-transactions', {
+        method: editingRecurringId ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           description,
@@ -1082,6 +1144,8 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
             debitAccountId: entry.debitAccountId,
             creditAccountId: entry.creditAccountId,
             amount: entry.amount,
+            currency: entry.currency,
+            exchangeRate: entry.exchangeRate,
             description: entry.description || undefined,
           })),
         }),
@@ -1097,7 +1161,7 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
       setListLoading(true)
       fetchRecurring()
     } catch {
-      setFormError('반복 거래 저장 중 오류가 발생했습니다.')
+      setFormError(editingRecurringId ? '반복 거래 수정 중 오류가 발생했습니다.' : '반복 거래 저장 중 오류가 발생했습니다.')
     } finally {
       setSubmitting(false)
     }
@@ -1118,6 +1182,26 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
     } catch (err) {
       setListError(err instanceof Error ? err.message : '상태 변경 중 오류가 발생했습니다.')
     }
+  }
+
+  const handleEdit = (recurring: RecurringTransaction) => {
+    setFormError('')
+    setEditingRecurringId(recurring.id)
+    setDescription(recurring.description)
+    setFrequency(recurring.frequency)
+    setDayOfMonth(recurring.dayOfMonth ? String(recurring.dayOfMonth) : '25')
+    setMonthOfYear(recurring.monthOfYear ? String(recurring.monthOfYear) : '1')
+    setStartDate(recurring.startDate.split('T')[0])
+    setEndDate(recurring.endDate ? recurring.endDate.split('T')[0] : '')
+    setEntries(recurring.entries.map(entry => ({
+      id: crypto.randomUUID(),
+      debitAccountId: entry.debitAccountId,
+      creditAccountId: entry.creditAccountId,
+      amount: String(entry.amount),
+      currency: baseCurrency,
+      exchangeRate: '1',
+      description: entry.description ?? '',
+    })))
   }
 
   const handleDelete = async (id: string) => {
@@ -1168,7 +1252,7 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
 
       {/* ── Add recurring transaction form ── */}
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border dark:border-gray-700 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">반복 거래 추가</h2>
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">{editingRecurringId ? '반복 거래 수정' : '반복 거래 추가'}</h2>
 
         {formError && (
           <div className="mb-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded text-sm">
@@ -1296,8 +1380,7 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
                   accountsError={accountsError}
                   hasActiveFilter={hasActiveFilter}
                   baseCurrency={baseCurrency}
-                  showCurrency={false}
-                  amountLabel="금액 (원)"
+                  showCurrency
                   onUpdate={updateEntry}
                   onRemove={removeEntry}
                 />
@@ -1319,14 +1402,14 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
               disabled={submitting}
               className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium disabled:opacity-50"
             >
-              {submitting ? '저장 중...' : '반복 거래 저장'}
+              {submitting ? (editingRecurringId ? '수정 중...' : '저장 중...') : (editingRecurringId ? '반복 거래 수정 저장' : '반복 거래 저장')}
             </button>
             <button
               type="button"
               onClick={resetForm}
               className="px-6 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 text-sm font-medium"
             >
-              초기화
+              {editingRecurringId ? '수정 취소' : '초기화'}
             </button>
           </div>
         </form>
@@ -1367,7 +1450,7 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
                 </thead>
                 <tbody className="divide-y dark:divide-gray-700">
                   {recurringList.map(r => {
-                    const total = r.entries.reduce((sum, e) => sum + Number(e.amount), 0)
+                    const total = r.entries.reduce((sum, e) => sum + calculateBaseAmount(e, baseCurrency), 0)
                     const isExpanded = expandedId === r.id
                     return (
                       <React.Fragment key={r.id}>
@@ -1413,12 +1496,20 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
                             </button>
                           </td>
                           <td className="px-4 py-3 text-center">
-                            <button
-                              onClick={e => { e.stopPropagation(); handleDelete(r.id) }}
-                              className="text-xs text-red-600 hover:text-red-800"
-                            >
-                              삭제
-                            </button>
+                            <div className="flex justify-center gap-2">
+                              <button
+                                onClick={e => { e.stopPropagation(); handleEdit(r) }}
+                                className="text-xs text-blue-600 hover:text-blue-800"
+                              >
+                                수정
+                              </button>
+                              <button
+                                onClick={e => { e.stopPropagation(); handleDelete(r.id) }}
+                                className="text-xs text-red-600 hover:text-red-800"
+                              >
+                                삭제
+                              </button>
+                            </div>
                           </td>
                         </tr>
                         {isExpanded && r.entries.length > 0 && (
@@ -1434,7 +1525,7 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
                                       대변: {entry.creditAccount.name}
                                     </span>
                                     <span className="font-medium dark:text-gray-300">
-                                      {formatCurrency(Number(entry.amount), baseCurrency)}
+                                      {formatEntryAmount(entry, baseCurrency)}
                                     </span>
                                     {entry.description && (
                                       <span className="text-gray-500 dark:text-gray-400">{entry.description}</span>
@@ -1463,6 +1554,8 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
 interface TemplateEntry {
   id: string
   amount: string
+  currency: string
+  exchangeRate: string
   description: string | null
   debitAccount: { name: string; code: string; type: string }
   creditAccount: { name: string; code: string; type: string }
@@ -1490,7 +1583,7 @@ function TemplatesTab({ accounts, accountsLoading, accountsError, baseCurrency }
 
   const [accountFilter, setAccountFilter] = useState('')
   const [description, setDescription] = useState('')
-  const [entries, setEntries] = useState<EntryForm[]>([defaultEntry()])
+  const [entries, setEntries] = useState<EntryForm[]>([defaultEntry(baseCurrency)])
   const [formError, setFormError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -1529,13 +1622,26 @@ function TemplatesTab({ accounts, accountsLoading, accountsError, baseCurrency }
     }
   }, [fetchTemplates])
 
+  const prevBaseCurrencyRef = useRef(baseCurrency)
+  useEffect(() => {
+    if (baseCurrency === prevBaseCurrencyRef.current) return
+
+    const previousBaseCurrency = prevBaseCurrencyRef.current
+    prevBaseCurrencyRef.current = baseCurrency
+    setEntries(prev => (
+      isSavedEntryFormPristine({ description, entryCount: prev.length, firstEntry: prev[0], baseCurrency: previousBaseCurrency })
+        ? [defaultEntry(baseCurrency)]
+        : prev
+    ))
+  }, [baseCurrency, description])
+
   const resetForm = () => {
     setFormError('')
     setDescription('')
-    setEntries([defaultEntry()])
+    setEntries([defaultEntry(baseCurrency)])
   }
 
-  const addEntry = () => setEntries(prev => [...prev, defaultEntry()])
+  const addEntry = () => setEntries(prev => [...prev, defaultEntry(baseCurrency)])
   const removeEntry = (index: number) => {
     setEntries(prev => {
       if (prev.length === 1) return prev
@@ -1545,12 +1651,16 @@ function TemplatesTab({ accounts, accountsLoading, accountsError, baseCurrency }
   const updateEntry = (index: number, field: keyof EntryForm, value: string) => {
     setEntries(prev => {
       const updated = [...prev]
-      updated[index] = { ...updated[index], [field]: value }
+      const newEntry = { ...updated[index], [field]: value }
+      if (field === 'currency' && value === baseCurrency) {
+        newEntry.exchangeRate = '1'
+      }
+      updated[index] = newEntry
       return updated
     })
   }
 
-  const formTotal = entries.reduce((sum, e) => sum + (Number(e.amount) || 0), 0)
+  const formTotal = entries.reduce((sum, e) => sum + calculateBaseAmount(e, baseCurrency), 0)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -1580,6 +1690,8 @@ function TemplatesTab({ accounts, accountsLoading, accountsError, baseCurrency }
             debitAccountId: entry.debitAccountId,
             creditAccountId: entry.creditAccountId,
             amount: entry.amount,
+            currency: entry.currency,
+            exchangeRate: entry.exchangeRate,
             description: entry.description || undefined,
           })),
         }),
@@ -1680,7 +1792,7 @@ function TemplatesTab({ accounts, accountsLoading, accountsError, baseCurrency }
                   accountsError={accountsError}
                   hasActiveFilter={hasActiveFilter}
                   baseCurrency={baseCurrency}
-                  showCurrency={false}
+                  showCurrency
                   onUpdate={updateEntry}
                   onRemove={removeEntry}
                 />
@@ -1748,7 +1860,7 @@ function TemplatesTab({ accounts, accountsLoading, accountsError, baseCurrency }
                 </thead>
                 <tbody className="divide-y dark:divide-gray-700">
                   {templateList.map(t => {
-                    const total = t.entries.reduce((sum, e) => sum + Number(e.amount), 0)
+                    const total = t.entries.reduce((sum, e) => sum + calculateBaseAmount(e, baseCurrency), 0)
                     const isExpanded = expandedId === t.id
                     return (
                       <React.Fragment key={t.id}>
@@ -1804,7 +1916,7 @@ function TemplatesTab({ accounts, accountsLoading, accountsError, baseCurrency }
                                       대변: {entry.creditAccount.name}
                                     </span>
                                     <span className="font-medium dark:text-gray-300">
-                                      {formatCurrency(Number(entry.amount), baseCurrency)}
+                                      {formatEntryAmount(entry, baseCurrency)}
                                     </span>
                                     {entry.description && (
                                       <span className="text-gray-500 dark:text-gray-400">{entry.description}</span>
