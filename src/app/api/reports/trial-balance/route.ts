@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { accountBalance } from '@/lib/accounting'
+import { getBaseCurrencyEntrySumMap } from '@/lib/report-sums'
+import { parseUTCDateOnly, parseUTCEndOfDay } from '@/lib/date-range'
 
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -18,18 +21,17 @@ export async function GET(request: NextRequest) {
   if (startDateParam || endDateParam) {
     dateFilter = {}
     if (startDateParam) {
-      const d = new Date(startDateParam)
-      if (isNaN(d.getTime())) {
+      const d = parseUTCDateOnly(startDateParam)
+      if (!d) {
         return NextResponse.json({ error: '유효한 startDate를 입력해주세요.' }, { status: 400 })
       }
       dateFilter.gte = d
     }
     if (endDateParam) {
-      const d = new Date(endDateParam)
-      if (isNaN(d.getTime())) {
+      const d = parseUTCEndOfDay(endDateParam)
+      if (!d) {
         return NextResponse.json({ error: '유효한 endDate를 입력해주세요.' }, { status: 400 })
       }
-      d.setHours(23, 59, 59, 999)
       dateFilter.lte = d
     }
     if (dateFilter.gte && dateFilter.lte && dateFilter.gte > dateFilter.lte) {
@@ -44,32 +46,10 @@ export async function GET(request: NextRequest) {
   })
 
   const accountIds = accounts.map(a => a.id)
-  const transactionFilter = {
-    transaction: {
-      userId,
-      ...(dateFilter ? { date: dateFilter } : {}),
-    },
-  }
-
-  const [debitSums, creditSums] = await Promise.all([
-    prisma.entry.groupBy({
-      by: ['debitAccountId'],
-      where: { debitAccountId: { in: accountIds }, ...transactionFilter },
-      _sum: { amount: true },
-    }),
-    prisma.entry.groupBy({
-      by: ['creditAccountId'],
-      where: { creditAccountId: { in: accountIds }, ...transactionFilter },
-      _sum: { amount: true },
-    }),
+  const [debitByAccount, creditByAccount] = await Promise.all([
+    getBaseCurrencyEntrySumMap({ accountIds, userId, side: 'debit', dateFilter }),
+    getBaseCurrencyEntrySumMap({ accountIds, userId, side: 'credit', dateFilter }),
   ])
-
-  const debitByAccount = new Map(
-    debitSums.map(r => [r.debitAccountId, Number(r._sum.amount ?? 0)]),
-  )
-  const creditByAccount = new Map(
-    creditSums.map(r => [r.creditAccountId, Number(r._sum.amount ?? 0)]),
-  )
 
   let totalDebits = 0
   let totalCredits = 0
@@ -80,12 +60,7 @@ export async function GET(request: NextRequest) {
     totalDebits += debitTotal
     totalCredits += creditTotal
 
-    let balance = 0
-    if (account.type === 'ASSET' || account.type === 'EXPENSE') {
-      balance = debitTotal - creditTotal
-    } else {
-      balance = creditTotal - debitTotal
-    }
+    const balance = accountBalance(account.type, debitTotal, creditTotal)
 
     return { id: account.id, code: account.code, name: account.name, type: account.type, debitTotal, creditTotal, balance }
   })

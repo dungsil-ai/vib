@@ -76,6 +76,8 @@ describe('POST /api/accounts', () => {
         create: vi.fn().mockResolvedValue({ id: 'transaction-1' }),
       },
     }
+
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ currency: 'KRW' } as never)
     vi.mocked(prisma.$transaction).mockImplementation(async (callback: unknown) => {
       const transactionCallback = callback as (transactionClient: typeof tx) => Promise<unknown>
       return transactionCallback(tx)
@@ -86,6 +88,7 @@ describe('POST /api/accounts', () => {
       type: 'ASSET',
       currency: 'USD',
       openingBalance: 100,
+      exchangeRate: '1300.5',
     }))
 
     expect(res.status).toBe(201)
@@ -96,5 +99,32 @@ describe('POST /api/accounts', () => {
         currency: 'USD',
       }),
     }))
+    expect(tx.transaction.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        entries: {
+          create: [expect.objectContaining({
+            amount: 100,
+            currency: 'USD',
+            exchangeRate: '1300.5',
+          })],
+        },
+      }),
+    }))
+  })
+
+  it('외화 초기잔액 생성 시 환율이 없으면 거부한다', async () => {
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ currency: 'KRW' } as never)
+
+    const res = await POST(makePostRequest({
+      name: '달러 현금',
+      type: 'ASSET',
+      currency: 'USD',
+      openingBalance: 100,
+    }))
+    const data = await res.json()
+
+    expect(res.status).toBe(400)
+    expect(data.error).toBe('외화(USD) 초기잔액에는 환율(exchangeRate)이 필요합니다.')
+    expect(prisma.$transaction).not.toHaveBeenCalled()
   })
 })
