@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { serializeData } from '@/lib/serialize'
 import { accountBalance } from '@/lib/accounting'
+import { getUtcMonthRange } from '@/lib/date-range'
 
 export async function GET() {
   const session = await getServerSession(authOptions)
@@ -13,11 +14,7 @@ export async function GET() {
 
   try {
     const userId = session.user.id
-    const now = new Date()
-    const year = now.getFullYear()
-    const month = now.getMonth() + 1
-    const startOfMonth = new Date(year, month - 1, 1)
-    const endOfMonth = new Date(year, month, 0, 23, 59, 59, 999)
+    const { year, month, startOfMonth, nextMonthStart } = getUtcMonthRange(new Date())
 
     const [user, accounts] = await Promise.all([
       prisma.user.findUnique({ where: { id: userId }, select: { currency: true } }),
@@ -116,13 +113,17 @@ export async function GET() {
             JOIN "Transaction" t ON e."transactionId" = t.id
             WHERE t."userId" = ${userId}
               AND t.date >= ${startOfMonth}
-              AND t.date <= ${endOfMonth}
+              AND t.date < ${nextMonthStart}
               AND e."debitAccountId" = ANY(${expenseAccountIds}::text[])
             GROUP BY e."debitAccountId"
           `,
       prisma.budget.findMany({
         where: { userId, year, month },
-        include: { account: { select: { name: true, code: true } } },
+        select: {
+          accountId: true,
+          amount: true,
+          account: { select: { name: true, code: true } },
+        },
       }),
     ])
 

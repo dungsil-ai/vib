@@ -49,3 +49,22 @@ export function parseUTCEndOfDay(value: string): Date | null {
   date.setUTCHours(23, 59, 59, 999)
   return date
 }
+
+export type UtcMonthRange = {
+  year: number
+  month: number
+  startOfMonth: Date
+  nextMonthStart: Date
+}
+
+export function getUtcMonthRange(now: Date): UtcMonthRange {
+  const year = now.getUTCFullYear()
+  const zeroBasedMonth = now.getUTCMonth()
+
+  return {
+    year,
+    month: zeroBasedMonth + 1,
+    startOfMonth: new Date(Date.UTC(year, zeroBasedMonth, 1)),
+    nextMonthStart: new Date(Date.UTC(year, zeroBasedMonth + 1, 1)),
+  }
+}
