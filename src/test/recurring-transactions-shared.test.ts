@@ -68,6 +68,45 @@ describe('recurring-transactions shared validation', () => {
     }
   })
 
+  it('주기에서 사용하지 않는 dayOfMonth/monthOfYear는 null로 정규화한다', async () => {
+    const validation = unwrapRecurringValidation(await validateRecurringTransactionInput({
+      description: '일 반복 거래',
+      frequency: 'DAILY',
+      dayOfMonth: 10,
+      monthOfYear: 2,
+      startDate: '2024-01-01',
+      entries: [
+        { debitAccountId: 'acc-1', creditAccountId: 'acc-2', amount: '1000' },
+      ],
+    }, 'user-1'))
+
+    expect(validation).not.toBeInstanceOf(Response)
+    if (!(validation instanceof Response)) {
+      expect(validation.dayOfMonth).toBeNull()
+      expect(validation.monthOfYear).toBeNull()
+    }
+  })
+
+  it('전달된 dayOfMonth가 정수가 아니면 400으로 거부한다', async () => {
+    const validation = unwrapRecurringValidation(await validateRecurringTransactionInput({
+      description: '일 반복 거래',
+      frequency: 'DAILY',
+      dayOfMonth: '10.5',
+      startDate: '2024-01-01',
+      entries: [
+        { debitAccountId: 'acc-1', creditAccountId: 'acc-2', amount: '1000' },
+      ],
+    }, 'user-1'))
+
+    expect(validation).toBeInstanceOf(Response)
+    if (validation instanceof Response) {
+      const body = await validation.json()
+      expect(validation.status).toBe(400)
+      expect(body.error).toContain('정수')
+    }
+    expect(prisma.account.findMany).not.toHaveBeenCalled()
+  })
+
   it('오래 진행된 일 반복의 다음 실행일을 큰 간격으로 계산한다', async () => {
     const validation = unwrapRecurringValidation(await validateRecurringTransactionInput({
       description: '일 반복 거래',

@@ -67,6 +67,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json(serializeData(updated))
   }
 
+  if ('isActive' in body && typeof body.isActive !== 'boolean') {
+    return NextResponse.json({ error: 'isActive 값은 boolean이어야 합니다.' }, { status: 400 })
+  }
+
   const validation = unwrapRecurringValidation(await validateRecurringTransactionInput(body, session.user.id))
   if (validation instanceof NextResponse) {
     return validation

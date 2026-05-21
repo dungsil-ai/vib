@@ -58,6 +58,22 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
+function parseOptionalIntegerField(value: unknown, fieldName: string) {
+  if (value == null || value === '') {
+    return { ok: true as const, value: null as number | null }
+  }
+
+  const parsedValue = Number(value)
+  if (!Number.isFinite(parsedValue) || !Number.isInteger(parsedValue)) {
+    return {
+      ok: false as const,
+      response: NextResponse.json({ error: `${fieldName}는 정수여야 합니다.` }, { status: 400 }),
+    }
+  }
+
+  return { ok: true as const, value: parsedValue }
+}
+
 export async function validateRecurringTransactionInput(
   input: unknown,
   userId: string,
@@ -96,21 +112,32 @@ export async function validateRecurringTransactionInput(
     }
   }
 
-  const parsedDayOfMonth = dayOfMonth ? Number(dayOfMonth) : null
-  const parsedMonthOfYear = monthOfYear ? Number(monthOfYear) : null
+  const parsedDayOfMonthResult = parseOptionalIntegerField(dayOfMonth, '반복 날짜')
+  if (!parsedDayOfMonthResult.ok) {
+    return { response: parsedDayOfMonthResult.response }
+  }
+  const parsedMonthOfYearResult = parseOptionalIntegerField(monthOfYear, '반복 월')
+  if (!parsedMonthOfYearResult.ok) {
+    return { response: parsedMonthOfYearResult.response }
+  }
+  const parsedDayOfMonth = parsedDayOfMonthResult.value
+  const parsedMonthOfYear = parsedMonthOfYearResult.value
 
   if (frequency === 'MONTHLY' || frequency === 'YEARLY') {
     const rangeLabel = frequency === 'MONTHLY' ? '월' : '연'
-    if (!parsedDayOfMonth || !Number.isFinite(parsedDayOfMonth) || parsedDayOfMonth < 1 || parsedDayOfMonth > 31) {
+    if (parsedDayOfMonth == null || parsedDayOfMonth < 1 || parsedDayOfMonth > 31) {
       return { response: NextResponse.json({ error: `${rangeLabel} 반복의 경우 1~31 사이의 날짜를 입력해주세요.` }, { status: 400 }) }
     }
   }
 
   if (frequency === 'YEARLY') {
-    if (!parsedMonthOfYear || !Number.isFinite(parsedMonthOfYear) || parsedMonthOfYear < 1 || parsedMonthOfYear > 12) {
+    if (parsedMonthOfYear == null || parsedMonthOfYear < 1 || parsedMonthOfYear > 12) {
       return { response: NextResponse.json({ error: '연 반복의 경우 1~12 사이의 월을 입력해주세요.' }, { status: 400 }) }
     }
   }
+
+  const normalizedDayOfMonth = frequency === 'MONTHLY' || frequency === 'YEARLY' ? parsedDayOfMonth : null
+  const normalizedMonthOfYear = frequency === 'YEARLY' ? parsedMonthOfYear : null
 
   const normalizedEntries: Array<{
     debitAccountId: string
@@ -163,11 +190,11 @@ export async function validateRecurringTransactionInput(
   return {
     description,
     frequency,
-    dayOfMonth: parsedDayOfMonth,
-    monthOfYear: parsedMonthOfYear,
+    dayOfMonth: normalizedDayOfMonth,
+    monthOfYear: normalizedMonthOfYear,
     startDate: parsedStart,
     endDate: parsedEnd,
-    nextRunAt: computeInitialNextRunAt(parsedStart, frequency, parsedDayOfMonth, parsedMonthOfYear),
+    nextRunAt: computeInitialNextRunAt(parsedStart, frequency, normalizedDayOfMonth, normalizedMonthOfYear),
     entries: normalizedEntries,
   }
 }

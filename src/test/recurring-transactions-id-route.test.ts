@@ -137,6 +137,25 @@ describe('recurring-transactions/[id] PUT', () => {
     expect(prisma.recurringTransaction.updateMany).not.toHaveBeenCalled()
   })
 
+  it('전체 수정에서 isActive가 boolean이 아니면 400을 반환한다', async () => {
+    const res = await PUT(makePutRequest({
+      description: '수정된 반복 거래',
+      frequency: 'MONTHLY',
+      dayOfMonth: 10,
+      startDate: '2024-01-01',
+      isActive: 'false',
+      entries: [
+        { debitAccountId: 'acc-1', creditAccountId: 'acc-2', amount: '99000' },
+      ],
+    }), { params: Promise.resolve({ id: 'rec-1' }) })
+    const body = await res.json()
+
+    expect(res.status).toBe(400)
+    expect(body.error).toContain('boolean')
+    expect(prisma.account.findMany).not.toHaveBeenCalled()
+    expect(prisma.recurringTransaction.updateMany).not.toHaveBeenCalled()
+  })
+
   it('isActive만 전달하면 활성 상태만 변경한다', async () => {
     const res = await PUT(makePutRequest({ isActive: false }), { params: Promise.resolve({ id: 'rec-1' }) })
 
