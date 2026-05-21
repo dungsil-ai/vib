@@ -59,7 +59,7 @@ model Transaction {
   entries     Entry[]
   createdAt   DateTime @default(now())
 
-  @@index([userId, date(sort: Desc)])
+  @@index([userId, date])
 }
 
 model Entry {
@@ -79,6 +79,8 @@ model Entry {
   @@index([transactionId])
   @@index([debitAccountId])
   @@index([creditAccountId])
+  @@index([debitAccountId, transactionId])
+  @@index([creditAccountId, transactionId])
 }
 
 model Budget {
