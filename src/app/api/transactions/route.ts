@@ -111,17 +111,6 @@ export async function GET(request: NextRequest) {
     ...(entriesWhere ? entriesWhere : {}),
   }
 
-  // ── 레거시 모드: year+month는 하위 호환성을 위해 배열을 직접 반환합니다. ──
-  const hasLegacyYearMonth = Boolean(yearParam?.trim()) && Boolean(monthParam?.trim())
-  if (hasLegacyYearMonth) {
-    const transactions = await prisma.transaction.findMany({
-      where,
-      orderBy,
-      include: TRANSACTION_ENTRY_INCLUDE,
-    })
-    return NextResponse.json(serializeData(transactions))
-  }
-
   // ── 페이지네이션 모드 ──
   const DEFAULT_PAGE_SIZE = 20
   const MAX_PAGE_SIZE = 100
