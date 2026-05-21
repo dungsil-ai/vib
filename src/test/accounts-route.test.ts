@@ -33,7 +33,7 @@ function makePostRequest(body: Record<string, unknown>) {
   return new NextRequest('http://localhost/api/accounts', {
     method: 'POST',
     body: JSON.stringify(body),
-    headers: { 'content-type': 'application/json' },
+    headers: { 'Content-Type': 'application/json' },
   })
 }
 
@@ -41,6 +41,115 @@ describe('POST /api/accounts', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(getServerSession).mockResolvedValue(mockSession)
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      id: 'user-1',
+      email: 'test@example.com',
+      password: 'hashed',
+      name: 'Test',
+      currency: 'USD',
+      createdAt: new Date('2024-01-01T00:00:00.000Z'),
+    } as never)
+    vi.mocked(prisma.account.findMany).mockResolvedValue([])
+  })
+
+  it('초기잔액이 있으면 사용자 기본 통화로 계정과 개시잔액 분개를 생성한다', async () => {
+    const tx = {
+      account: {
+        findFirst: vi.fn().mockResolvedValue(null),
+        findMany: vi.fn()
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([]),
+        create: vi.fn()
+          .mockResolvedValueOnce({
+            id: 'opening-equity-1',
+            userId: 'user-1',
+            name: '개시잔액',
+            code: '3000',
+            type: 'EQUITY',
+            currency: 'USD',
+            description: '초기잔액 자동 분개용 계정',
+            createdAt: new Date('2024-01-01T00:00:00.000Z'),
+          })
+          .mockResolvedValueOnce({
+            id: 'asset-1',
+            userId: 'user-1',
+            name: '달러 예금',
+            code: '1000',
+            type: 'ASSET',
+            currency: 'USD',
+            description: undefined,
+            createdAt: new Date('2024-01-01T00:00:00.000Z'),
+          }),
+      },
+      transaction: {
+        create: vi.fn().mockResolvedValue({ id: 'tx-1' }),
+      },
+    }
+
+    vi.mocked(prisma.$transaction).mockImplementation(async (callback) => callback(tx as never))
+
+    const res = await POST(makePostRequest({
+      name: '달러 예금',
+      type: 'ASSET',
+      openingBalance: 100,
+    }))
+    const body = await res.json()
+
+    expect(res.status).toBe(201)
+    expect(body.currency).toBe('USD')
+    expect(tx.account.create).toHaveBeenNthCalledWith(1, {
+      data: expect.objectContaining({
+        name: '개시잔액',
+        type: 'EQUITY',
+        currency: 'USD',
+      }),
+    })
+    expect(tx.account.create).toHaveBeenNthCalledWith(2, {
+      data: expect.objectContaining({
+        name: '달러 예금',
+        type: 'ASSET',
+        currency: 'USD',
+      }),
+    })
+    expect(tx.transaction.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        entries: {
+          create: [expect.objectContaining({
+            debitAccountId: 'asset-1',
+            creditAccountId: 'opening-equity-1',
+            amount: 100,
+            currency: 'USD',
+            exchangeRate: '1',
+          })],
+        },
+      }),
+    })
+  })
+
+  it('초기잔액 없는 계정도 사용자 기본 통화를 사용한다', async () => {
+    vi.mocked(prisma.account.create).mockResolvedValue({
+      id: 'expense-1',
+      userId: 'user-1',
+      name: '식비',
+      code: '5000',
+      type: 'EXPENSE',
+      currency: 'USD',
+      description: null,
+      createdAt: new Date('2024-01-01T00:00:00.000Z'),
+    } as never)
+
+    const res = await POST(makePostRequest({ name: '식비', type: 'EXPENSE' }))
+    const body = await res.json()
+
+    expect(res.status).toBe(201)
+    expect(body.currency).toBe('USD')
+    expect(prisma.account.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        name: '식비',
+        type: 'EXPENSE',
+        currency: 'USD',
+      }),
+    })
   })
 
   it('개시잔액이 있는 계정을 생성할 때 선택한 통화를 저장한다', async () => {

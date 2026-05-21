@@ -427,6 +427,44 @@ describe('POST /api/transactions', () => {
     expect(res.status).toBe(201)
   })
 
+  it('기준 통화 항목에 입력된 환율은 1로 저장한다', async () => {
+    const createdTx = {
+      id: 'new-tx',
+      date: new Date('2024-01-15'),
+      description: '점심',
+      createdAt: new Date(),
+      entries: [],
+    }
+    vi.mocked(prisma.account.findMany).mockResolvedValue([
+      { id: 'acc-1' },
+      { id: 'acc-2' },
+    ] as never)
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ currency: 'KRW' } as never)
+    vi.mocked(prisma.transaction.create).mockResolvedValue(createdTx as never)
+
+    const req = new NextRequest('http://localhost/api/transactions', {
+      method: 'POST',
+      body: JSON.stringify({
+        date: '2024-01-15',
+        description: '점심',
+        entries: [{ debitAccountId: 'acc-1', creditAccountId: 'acc-2', amount: '15000', currency: 'KRW', exchangeRate: '1300' }],
+      }),
+    })
+    const res = await POST(req)
+
+    expect(res.status).toBe(201)
+    expect(prisma.transaction.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        entries: {
+          create: [expect.objectContaining({
+            currency: 'KRW',
+            exchangeRate: '1',
+          })],
+        },
+      }),
+    }))
+  })
+
   it('지원하지 않는 통화 코드에 400을 반환한다', async () => {
     const req = new NextRequest('http://localhost/api/transactions', {
       method: 'POST',

@@ -96,7 +96,7 @@ export default function AccountsPage() {
           ...(formData.openingBalance !== ''
             ? {
                 openingBalance: Number(formData.openingBalance),
-                ...(formData.currency !== userCurrency ? { exchangeRate: formData.exchangeRate } : {}),
+                ...(Number(formData.openingBalance) > 0 && formData.currency !== userCurrency ? { exchangeRate: formData.exchangeRate } : {}),
               }
             : {}),
         }),
@@ -336,7 +336,7 @@ editingId === account.id ? (
                         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">입력하면 개시잔액 자동 분개가 생성됩니다.</p>
                       </div>
                     )}
-                    {(type === 'ASSET' || type === 'LIABILITY' || type === 'EQUITY') && formData.openingBalance !== '' && formData.currency !== userCurrency && (
+                    {(type === 'ASSET' || type === 'LIABILITY' || type === 'EQUITY') && Number(formData.openingBalance) > 0 && formData.currency !== userCurrency && (
                       <div className="col-span-2">
                         <label htmlFor={`openingBalanceExchangeRate-${type}`} className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">환율 (1 {formData.currency} = ? {userCurrency})</label>
                         <input

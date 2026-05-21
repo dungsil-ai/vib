@@ -104,7 +104,7 @@ export async function POST(request: NextRequest) {
 
   const userId = session.user.id
 
-  let body: { name?: unknown; type?: unknown; description?: unknown; currency?: unknown; exchangeRate?: unknown }
+  let body: { name?: unknown; type?: unknown; description?: unknown; currency?: unknown; openingBalance?: unknown; exchangeRate?: unknown }
   try {
     body = await request.json()
   } catch {
@@ -250,6 +250,7 @@ export async function POST(request: NextRequest) {
               name: OPENING_BALANCE_ACCOUNT_NAME,
               code: String(firstFree),
               type: 'EQUITY',
+              currency: finalCurrency,
               description: OPENING_BALANCE_ACCOUNT_DESCRIPTION,
             },
           })
@@ -280,6 +281,7 @@ export async function POST(request: NextRequest) {
               name: OPENING_BALANCE_ACCOUNT_NAME,
               code: String(firstFreeEquity),
               type: 'EQUITY',
+              currency: finalCurrency,
               description: OPENING_BALANCE_ACCOUNT_DESCRIPTION,
             },
           })

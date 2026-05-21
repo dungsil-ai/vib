@@ -31,7 +31,7 @@ vi.mock('@/lib/serialize', () => ({
 
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
-import { PUT } from '@/app/api/transactions/[id]/route'
+import { DELETE, PUT } from '@/app/api/transactions/[id]/route'
 import { TRANSACTION_ENTRY_INCLUDE } from '@/app/api/transactions/shared'
 
 const mockSession = { user: { id: 'user-1', email: 'test@example.com', name: 'Test' } }
@@ -177,5 +177,48 @@ describe('transactions/[id] PUT', () => {
     expect(res.status).toBe(400)
     expect(body.error).toContain('통화')
     expect(prisma.transaction.update).not.toHaveBeenCalled()
+  })
+})
+
+
+describe('transactions/[id] DELETE', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(getServerSession).mockResolvedValue(mockSession)
+  })
+
+  it('소유한 거래를 삭제한다', async () => {
+    vi.mocked(prisma.transaction.deleteMany).mockResolvedValue({ count: 1 })
+
+    const req = new NextRequest('http://localhost/api/transactions/tx-1', { method: 'DELETE' })
+    const res = await DELETE(req, { params: Promise.resolve({ id: 'tx-1' }) })
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.message).toBe('삭제되었습니다.')
+    expect(prisma.transaction.deleteMany).toHaveBeenCalledWith({
+      where: { id: 'tx-1', userId: 'user-1' },
+    })
+  })
+
+  it('삭제할 거래가 없으면 404를 반환한다', async () => {
+    vi.mocked(prisma.transaction.deleteMany).mockResolvedValue({ count: 0 })
+
+    const req = new NextRequest('http://localhost/api/transactions/missing', { method: 'DELETE' })
+    const res = await DELETE(req, { params: Promise.resolve({ id: 'missing' }) })
+    const body = await res.json()
+
+    expect(res.status).toBe(404)
+    expect(body.error).toContain('거래를 찾을 수 없습니다')
+  })
+
+  it('미인증 요청에 401을 반환한다', async () => {
+    vi.mocked(getServerSession).mockResolvedValue(null)
+
+    const req = new NextRequest('http://localhost/api/transactions/tx-1', { method: 'DELETE' })
+    const res = await DELETE(req, { params: Promise.resolve({ id: 'tx-1' }) })
+
+    expect(res.status).toBe(401)
+    expect(prisma.transaction.deleteMany).not.toHaveBeenCalled()
   })
 })

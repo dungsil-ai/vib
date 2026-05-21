@@ -16,6 +16,9 @@ vi.mock('@/lib/prisma', () => ({
       findMany: vi.fn(),
       findFirst: vi.fn(),
     },
+    user: {
+      findUnique: vi.fn(),
+    },
     entry: {
       groupBy: vi.fn(),
       aggregate: vi.fn(),
@@ -59,6 +62,7 @@ describe('trial-balance GET', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(getServerSession).mockResolvedValue(mockSession)
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ currency: 'KRW' } as never)
     vi.mocked(prisma.account.findMany).mockResolvedValue([])
     vi.mocked(prisma.$queryRaw).mockResolvedValue([])
   })
@@ -299,6 +303,7 @@ describe('monthly-summary GET', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(getServerSession).mockResolvedValue(mockSession)
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ currency: 'KRW' } as never)
     vi.mocked(prisma.account.findMany).mockResolvedValue([])
     vi.mocked(prisma.$queryRaw).mockResolvedValue([])
   })
@@ -401,5 +406,142 @@ describe('monthly-summary GET', () => {
     expect(body.totalCashIn).toBe(1000000)
     expect(body.totalCashOut).toBe(300000)
     expect(body.totalNetCashFlow).toBe(700000)
+  })
+
+  it('월별 수익/비용/현금흐름 집계 SQL이 기준 통화 조건과 외화 환율을 반영한다', async () => {
+    vi.mocked(prisma.account.findMany).mockResolvedValue([
+      { id: 'rev-1', type: 'REVENUE', userId: 'user-1', name: '외화 매출', code: '4001', currency: 'USD', description: null, createdAt: new Date() },
+      { id: 'exp-1', type: 'EXPENSE', userId: 'user-1', name: '외화 비용', code: '5001', currency: 'USD', description: null, createdAt: new Date() },
+      { id: 'asset-1', type: 'ASSET', userId: 'user-1', name: '달러 예금', code: '1001', currency: 'USD', description: null, createdAt: new Date() },
+    ])
+    vi.mocked(prisma.$queryRaw)
+      .mockResolvedValueOnce([{ month: 2, total: '130000' }])
+      .mockResolvedValueOnce([{ month: 2, total: '13000' }])
+      .mockResolvedValueOnce([{ month: 2, total: '26000' }])
+      .mockResolvedValueOnce([{ month: 2, total: '6000' }])
+      .mockResolvedValueOnce([{ month: 2, total: '39000' }])
+      .mockResolvedValueOnce([{ month: 2, total: '9000' }])
+
+    const req = makeRequest('/api/reports/monthly-summary', { year: '2024' })
+    const res = await monthlySummaryGET(req)
+    expect(res.status).toBe(200)
+    const body = await res.json()
+
+    const feb = body.months[1]
+    expect(feb.revenue).toBe(117000)
+    expect(feb.expense).toBe(20000)
+    expect(feb.netIncome).toBe(97000)
+    expect(feb.cashIn).toBe(39000)
+    expect(feb.cashOut).toBe(9000)
+    expect(feb.netCashFlow).toBe(30000)
+    expect(body.totalRevenue).toBe(117000)
+    expect(body.totalExpense).toBe(20000)
+    expect(body.totalCashIn).toBe(39000)
+    expect(body.totalCashOut).toBe(9000)
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(6)
+
+    for (const call of vi.mocked(prisma.$queryRaw).mock.calls) {
+      const sql = (call[0] as TemplateStringsArray).join('?')
+      expect(sql).toContain('CASE WHEN e.currency IS NULL OR e.currency =')
+      expect(sql).toContain('THEN e.amount ELSE e.amount * e."exchangeRate" END')
+    }
+  })
+})
+
+
+// ─── balance-sheet 테스트 ─────────────────────────────────────────────────
+
+describe('balance-sheet GET', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(getServerSession).mockResolvedValue(mockSession)
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ currency: 'KRW' } as never)
+    vi.mocked(prisma.account.findMany).mockResolvedValue([
+      { id: 'asset-1', type: 'ASSET', userId: 'user-1', name: '달러 예금', code: '1001', currency: 'USD', description: null, createdAt: new Date() },
+      { id: 'liability-1', type: 'LIABILITY', userId: 'user-1', name: '외화 차입금', code: '2001', currency: 'USD', description: null, createdAt: new Date() },
+      { id: 'equity-1', type: 'EQUITY', userId: 'user-1', name: '자본금', code: '3001', currency: 'KRW', description: null, createdAt: new Date() },
+    ])
+    vi.mocked(prisma.$queryRaw).mockResolvedValue([])
+  })
+
+  it('외화 분개를 환율 반영 금액으로 재무상태표에 집계한다', async () => {
+    vi.mocked(prisma.$queryRaw)
+      .mockResolvedValueOnce([{ accountId: 'asset-1', total: '130000' }])
+      .mockResolvedValueOnce([
+        { accountId: 'liability-1', total: '65000' },
+        { accountId: 'equity-1', total: '65000' },
+      ])
+
+    const res = await balanceSheetGET()
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.assets[0].balance).toBe(130000)
+    expect(body.liabilities[0].balance).toBe(65000)
+    expect(body.equity[0].balance).toBe(65000)
+    expect(body.totalAssets).toBe(130000)
+    expect(body.totalLiabilities).toBe(65000)
+    expect(body.totalEquity).toBe(65000)
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(2)
+    const debitSql = (vi.mocked(prisma.$queryRaw).mock.calls[0][0] as TemplateStringsArray).join('?')
+    expect(debitSql).toContain('e.amount * e."exchangeRate"')
+    expect(prisma.entry.groupBy).not.toHaveBeenCalled()
+  })
+
+  it('미인증 요청에 401을 반환한다', async () => {
+    vi.mocked(getServerSession).mockResolvedValue(null)
+    const res = await balanceSheetGET()
+    expect(res.status).toBe(401)
+  })
+})
+
+// ─── income-statement 테스트 ───────────────────────────────────────────────
+
+describe('income-statement GET', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(getServerSession).mockResolvedValue(mockSession)
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ currency: 'KRW' } as never)
+    vi.mocked(prisma.account.findMany).mockResolvedValue([
+      { id: 'rev-1', type: 'REVENUE', userId: 'user-1', name: '외화 매출', code: '4001', currency: 'USD', description: null, createdAt: new Date() },
+      { id: 'exp-1', type: 'EXPENSE', userId: 'user-1', name: '외화 비용', code: '5001', currency: 'USD', description: null, createdAt: new Date() },
+    ])
+    vi.mocked(prisma.$queryRaw).mockResolvedValue([])
+  })
+
+  it('외화 수익과 비용을 환율 반영 금액으로 손익계산서에 집계한다', async () => {
+    vi.mocked(prisma.$queryRaw)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ accountId: 'rev-1', total: '130000' }])
+      .mockResolvedValueOnce([{ accountId: 'exp-1', total: '26000' }])
+      .mockResolvedValueOnce([])
+
+    const req = makeRequest('/api/reports/income-statement', { year: '2024', month: '1' })
+    const res = await incomeStatementGET(req)
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.revenues[0].balance).toBe(130000)
+    expect(body.expenses[0].balance).toBe(26000)
+    expect(body.totalRevenue).toBe(130000)
+    expect(body.totalExpense).toBe(26000)
+    expect(body.netIncome).toBe(104000)
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(4)
+    const revenueSql = (vi.mocked(prisma.$queryRaw).mock.calls[1][0] as TemplateStringsArray).join('?')
+    expect(revenueSql).toContain('e.amount * e."exchangeRate"')
+    expect(prisma.entry.groupBy).not.toHaveBeenCalled()
+  })
+
+  it('year 없으면 400을 반환한다', async () => {
+    const req = makeRequest('/api/reports/income-statement')
+    const res = await incomeStatementGET(req)
+    expect(res.status).toBe(400)
+  })
+
+  it('미인증 요청에 401을 반환한다', async () => {
+    vi.mocked(getServerSession).mockResolvedValue(null)
+    const req = makeRequest('/api/reports/income-statement', { year: '2024' })
+    const res = await incomeStatementGET(req)
+    expect(res.status).toBe(401)
   })
 })
