@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { serializeData } from '@/lib/serialize'
 import { computeNextRunAt } from '@/lib/recurring'
 
+const GENERATION_BATCH_SIZE = 10
 export async function POST(request?: NextRequest) {
   void request
   const session = await getServerSession(authOptions)
@@ -14,7 +15,7 @@ export async function POST(request?: NextRequest) {
 
   const now = new Date()
 
-  // Find all active recurring transactions due for this user
+  // 현재 사용자에게 실행 기한이 도래한 활성 반복 거래를 조회
   const due = await prisma.recurringTransaction.findMany({
     where: {
       userId: session.user.id,
@@ -31,9 +32,7 @@ export async function POST(request?: NextRequest) {
     return NextResponse.json({ generated: 0, transactions: [] })
   }
 
-  const created = []
-
-  for (const recurring of due) {
+  const generateTransaction = async (recurring: (typeof due)[number]) => {
     const nextRunAt = computeNextRunAt(
       recurring.frequency,
       recurring.dayOfMonth,
@@ -41,7 +40,7 @@ export async function POST(request?: NextRequest) {
       recurring.nextRunAt,
     )
 
-    const transaction = await prisma.$transaction(async tx => {
+    return prisma.$transaction(async tx => {
       // nextRunAt 일치 조건으로 낙관적 동시성 제어 - 중복 생성 방지
       const updateResult = await tx.recurringTransaction.updateMany({
         where: {
@@ -87,11 +86,33 @@ export async function POST(request?: NextRequest) {
         },
       })
     })
-
-    if (transaction) {
-      created.push(transaction)
-    }
   }
 
-  return NextResponse.json({ generated: created.length, transactions: serializeData(created) })
+  const transactions: Array<Awaited<ReturnType<typeof generateTransaction>>> = []
+  const failures: Array<{ recurringTransactionId: string, error: string }> = []
+
+  for (let index = 0; index < due.length; index += GENERATION_BATCH_SIZE) {
+    const batch = due.slice(index, index + GENERATION_BATCH_SIZE)
+    const settled = await Promise.allSettled(batch.map(generateTransaction))
+
+    settled.forEach((result, batchIndex) => {
+      if (result.status === 'fulfilled') {
+        transactions.push(result.value)
+        return
+      }
+
+      failures.push({
+        recurringTransactionId: batch[batchIndex].id,
+        error: result.reason instanceof Error ? result.reason.message : '반복 거래 생성 중 오류가 발생했습니다.',
+      })
+    })
+  }
+
+  const created = transactions.filter((transaction): transaction is NonNullable<typeof transaction> => transaction !== null)
+
+  return NextResponse.json({
+    generated: created.length,
+    transactions: serializeData(created),
+    ...(failures.length > 0 ? { failures } : {}),
+  })
 }

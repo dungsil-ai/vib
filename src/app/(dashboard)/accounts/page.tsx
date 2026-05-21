@@ -73,8 +73,10 @@ export default function AccountsPage() {
         }
       })
       .catch(() => {})
-    fetchAccounts()
-    return () => { cancelled = true }
+    queueMicrotask(() => { void fetchAccounts() })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -384,4 +386,3 @@ editingId === account.id ? (
     </div>
   )
 }
-

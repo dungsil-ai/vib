@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 import TransactionsPage from '@/app/(dashboard)/transactions/page'
@@ -408,15 +408,18 @@ describe('TransactionsPage', () => {
     const row = screen.getByText('점심 식사').closest('tr')!
     await user.click(row)
 
-    const descriptionInput = screen.getByPlaceholderText('거래 내용을 입력하세요')
+    const editForm = screen.getByRole('button', { name: '거래 수정 저장' }).closest('form')
+    expect(editForm).not.toBeNull()
+
+    const descriptionInput = within(editForm as HTMLFormElement).getByPlaceholderText('거래 내용을 입력하세요')
     await user.clear(descriptionInput)
     await user.type(descriptionInput, '점심 식사 수정')
 
-    const amountInput = screen.getByPlaceholderText('0')
+    const amountInput = within(editForm as HTMLFormElement).getByDisplayValue('15000')
     await user.clear(amountInput)
     await user.type(amountInput, '20000')
 
-    await user.click(screen.getByRole('button', { name: '거래 수정 저장' }))
+    fireEvent.submit(editForm as HTMLFormElement)
 
     await waitFor(() => {
       expect(vi.mocked(global.fetch)).toHaveBeenCalledWith(

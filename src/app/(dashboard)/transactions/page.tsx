@@ -174,6 +174,12 @@ function TransactionsTab({ accounts, accountsLoading, accountsError, baseCurrenc
   const [listEndDate, setListEndDate] = useState('')
   const [listMinAmount, setListMinAmount] = useState('')
   const [listMaxAmount, setListMaxAmount] = useState('')
+  const [debouncedRangeFilters, setDebouncedRangeFilters] = useState({
+    startDate: '',
+    endDate: '',
+    minAmount: '',
+    maxAmount: '',
+  })
   const [listSortBy, setListSortBy] = useState('date')
   const [listSortOrder, setListSortOrder] = useState('desc')
 
@@ -260,14 +266,14 @@ function TransactionsTab({ accounts, accountsLoading, accountsError, baseCurrenc
     qs.set('pageSize', String(LIST_PAGE_SIZE))
     if (debouncedKeyword.trim()) qs.set('keyword', debouncedKeyword.trim())
     if (listAccountId) qs.set('accountId', listAccountId)
-    if (listStartDate) qs.set('startDate', listStartDate)
-    if (listEndDate) qs.set('endDate', listEndDate)
-    if (listMinAmount) qs.set('minAmount', listMinAmount)
-    if (listMaxAmount) qs.set('maxAmount', listMaxAmount)
+    if (debouncedRangeFilters.startDate) qs.set('startDate', debouncedRangeFilters.startDate)
+    if (debouncedRangeFilters.endDate) qs.set('endDate', debouncedRangeFilters.endDate)
+    if (debouncedRangeFilters.minAmount) qs.set('minAmount', debouncedRangeFilters.minAmount)
+    if (debouncedRangeFilters.maxAmount) qs.set('maxAmount', debouncedRangeFilters.maxAmount)
     if (listSortBy !== 'date') qs.set('sortBy', listSortBy)
     if (listSortOrder !== 'desc') qs.set('sortOrder', listSortOrder)
     return `/api/transactions?${qs.toString()}`
-  }, [debouncedKeyword, listAccountId, listStartDate, listEndDate, listMinAmount, listMaxAmount, listSortBy, listSortOrder])
+  }, [debouncedKeyword, debouncedRangeFilters, listAccountId, listSortBy, listSortOrder])
 
   const fetchTransactions = useCallback(async (page: number, isCancelled: () => boolean = () => false) => {
     try {
@@ -295,7 +301,7 @@ function TransactionsTab({ accounts, accountsLoading, accountsError, baseCurrenc
     }
   }, [buildListUrl])
 
-  // Debounce keyword input (300ms)
+  // 키워드 입력을 300ms 디바운스
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedKeyword(listKeyword)
@@ -303,17 +309,25 @@ function TransactionsTab({ accounts, accountsLoading, accountsError, baseCurrenc
     return () => clearTimeout(timer)
   }, [listKeyword])
 
+  // 날짜와 금액 필터 입력을 300ms 디바운스
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedRangeFilters({
+        startDate: listStartDate,
+        endDate: listEndDate,
+        minAmount: listMinAmount,
+        maxAmount: listMaxAmount,
+      })
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [listStartDate, listEndDate, listMinAmount, listMaxAmount])
+
 
   useEffect(() => {
     editingTransactionIdRef.current = editingTransactionId
   }, [editingTransactionId])
 
   const firstEntry = entries[0]
-  const firstEntryDebitAccountId = firstEntry?.debitAccountId
-  const firstEntryCreditAccountId = firstEntry?.creditAccountId
-  const firstEntryAmount = firstEntry?.amount
-  const firstEntryDescription = firstEntry?.description
-  const firstEntryExchangeRate = firstEntry?.exchangeRate
   const isFirstEntryEmpty = isEntryEmpty(firstEntry)
   const isFormPristine = useMemo(() => (
     isTransactionFormPristine({
@@ -339,9 +353,13 @@ function TransactionsTab({ accounts, accountsLoading, accountsError, baseCurrenc
   // Re-fetch when filters change (reset to page 1)
   useEffect(() => {
     let cancelled = false
-    setListLoading(true)
-    fetchTransactions(1, () => cancelled)
-    return () => { cancelled = true }
+    queueMicrotask(() => {
+      setListLoading(true)
+      void fetchTransactions(1, () => cancelled)
+    })
+    return () => {
+      cancelled = true
+    }
   }, [fetchTransactions])
 
 
@@ -794,6 +812,7 @@ function TransactionsTab({ accounts, accountsLoading, accountsError, baseCurrenc
                 setListEndDate('')
                 setListMinAmount('')
                 setListMaxAmount('')
+                setDebouncedRangeFilters({ startDate: '', endDate: '', minAmount: '', maxAmount: '' })
                 setListSortBy('date')
                 setListSortOrder('desc')
               }}
@@ -1040,8 +1059,10 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
 
   useEffect(() => {
     let cancelled = false
-    fetchRecurring(() => cancelled)
-    return () => { cancelled = true }
+    queueMicrotask(() => { void fetchRecurring(() => cancelled) })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   const prevBaseCurrencyRef = useRef(baseCurrency)
@@ -1595,8 +1616,10 @@ function TemplatesTab({ accounts, accountsLoading, accountsError, baseCurrency }
 
   useEffect(() => {
     let cancelled = false
-    fetchTemplates(() => cancelled)
-    return () => { cancelled = true }
+    queueMicrotask(() => { void fetchTemplates(() => cancelled) })
+    return () => {
+      cancelled = true
+    }
   }, [fetchTemplates])
 
   const prevBaseCurrencyRef = useRef(baseCurrency)

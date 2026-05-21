@@ -6,8 +6,7 @@ import { AccountOwnershipError, assertAccountsOwned } from '@/lib/accounting'
 import { serializeData } from '@/lib/serialize'
 import { normalizeCurrencyInput, parseExchangeRateInput } from '@/app/api/transactions/shared'
 import { computeInitialNextRunAt } from '@/lib/recurring'
-
-
+import { RECURRING_TRANSACTION_INCLUDE } from './shared'
 type RecurringEntryInput = {
   debitAccountId: string
   creditAccountId: string
@@ -17,23 +16,47 @@ type RecurringEntryInput = {
   description?: string
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) {
     return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
   }
 
+  const { searchParams } = new URL(request.url)
+  const pageParam = searchParams.get('page')
+  const pageSizeParam = searchParams.get('pageSize')
+  const usesPagination = pageParam !== null || pageSizeParam !== null
+
+  if (usesPagination) {
+    const page = pageParam ? Number(pageParam) : 1
+    const pageSize = pageSizeParam ? Number(pageSizeParam) : 20
+
+    if (!Number.isInteger(page) || page < 1) {
+      return NextResponse.json({ error: '유효한 page 값을 입력해주세요.' }, { status: 400 })
+    }
+    if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100) {
+      return NextResponse.json({ error: 'pageSize는 1 이상 100 이하로 입력해주세요.' }, { status: 400 })
+    }
+
+    const where = { userId: session.user.id }
+    const [total, data] = await prisma.$transaction([
+      prisma.recurringTransaction.count({ where }),
+      prisma.recurringTransaction.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: RECURRING_TRANSACTION_INCLUDE,
+      }),
+    ])
+
+    return NextResponse.json({ data: serializeData(data), total, page, pageSize })
+  }
+
   const recurringTransactions = await prisma.recurringTransaction.findMany({
     where: { userId: session.user.id },
     orderBy: { createdAt: 'desc' },
-    include: {
-      entries: {
-        include: {
-          debitAccount: { select: { name: true, code: true, type: true } },
-          creditAccount: { select: { name: true, code: true, type: true } },
-        },
-      },
-    },
+    include: RECURRING_TRANSACTION_INCLUDE,
   })
 
   return NextResponse.json(serializeData(recurringTransactions))
@@ -176,14 +199,7 @@ export async function POST(request: NextRequest) {
           })),
         },
       },
-      include: {
-        entries: {
-          include: {
-            debitAccount: { select: { name: true, code: true } },
-            creditAccount: { select: { name: true, code: true } },
-          },
-        },
-      },
+      include: RECURRING_TRANSACTION_INCLUDE,
     })
     return NextResponse.json(serializeData(recurring), { status: 201 })
   } catch (error) {
