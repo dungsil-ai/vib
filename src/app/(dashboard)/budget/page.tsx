@@ -71,7 +71,7 @@ async function loadBudgetData(year: number, month: number) {
   const { total, pageSize } = firstPage
   const totalPages = pageSize > 0 ? Math.ceil(total / pageSize) : 1
   for (let page = 2; page <= totalPages; page++) {
-    const res = await fetch(`/api/transactions?year=${year}&month=${month}&page=${page}&pageSize=100`)
+    const res = await fetch(`/api/transactions?year=${year}&month=${month}&page=${page}&pageSize=${pageSize}`)
     if (!res.ok) throw new Error(`거래 데이터를 불러오지 못했습니다. (${res.status})`)
     const body: PaginatedApiData<Transaction[]> = await res.json()
     if (Array.isArray(body.data)) transactions.push(...body.data)

@@ -158,6 +158,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '초기잔액은 0 이상의 숫자여야 합니다.' }, { status: 400 })
     }
     const openingBalance = parsedOpeningBalance.value
+    if (openingBalance < 0) {
+      return NextResponse.json({ error: '초기잔액은 0 이상의 숫자여야 합니다.' }, { status: 400 })
+    }
 
     if (openingBalance > 0 && !OPENING_BALANCE_ALLOWED_TYPES.has(accountType)) {
       return NextResponse.json(

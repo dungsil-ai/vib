@@ -51,6 +51,9 @@ export const POST = withAuth(async (request: NextRequest, userId: string) => {
   const parsedYear = parsedYearResult.value
   const parsedMonth = parsedMonthResult.value
   const parsedAmount = parsedAmountResult.value
+  if (parsedAmount < 0) {
+    return apiError('유효한 금액을 입력해주세요.')
+  }
 
   // 인증된 사용자의 계정인지 확인합니다.
   const account = await prisma.account.findFirst({
