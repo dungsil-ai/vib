@@ -27,6 +27,11 @@ interface BudgetRow {
   editing: boolean
 }
 
+export function getMonthEndDateString(year: number, month: number) {
+  const lastDay = new Date(year, month, 0).getDate()
+  return `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+}
+
 async function loadBudgetData(year: number, month: number) {
   const [accRes, budRes] = await Promise.all([
     fetch('/api/accounts'),
@@ -40,9 +45,20 @@ async function loadBudgetData(year: number, month: number) {
   const expenseAccounts = accs.filter(a => a.type === 'EXPENSE')
   const budgetMap = new Map(buds.map(b => [b.accountId, b]))
 
-  const txRes = await fetch(`/api/transactions?year=${year}&month=${month}`)
-  if (!txRes.ok) throw new Error(`거래 데이터를 불러오지 못했습니다. (${txRes.status})`)
-  const transactions = await txRes.json()
+  const startDate = `${year}-${String(month).padStart(2, '0')}-01`
+  const endDate = getMonthEndDateString(year, month)
+  const transactions = []
+  let page = 1
+  let total = 0
+  do {
+    const params = new URLSearchParams({ startDate, endDate, page: String(page), pageSize: '100' })
+    const txRes = await fetch(`/api/transactions?${params}`)
+    if (!txRes.ok) throw new Error(`거래 데이터를 불러오지 못했습니다. (${txRes.status})`)
+    const result = await txRes.json()
+    transactions.push(...result.data)
+    total = result.total
+    page += 1
+  } while (transactions.length < total)
 
   const actuals: Record<string, number> = {}
   for (const tx of transactions) {

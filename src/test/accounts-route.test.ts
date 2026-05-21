@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
 
 vi.mock('next-auth', () => ({
@@ -18,9 +18,6 @@ vi.mock('@/lib/prisma', () => ({
     user: {
       findUnique: vi.fn(),
     },
-    transaction: {
-      create: vi.fn(),
-    },
     $transaction: vi.fn(),
   },
 }))
@@ -31,7 +28,7 @@ import { POST } from '@/app/api/accounts/route'
 
 const mockSession = { user: { id: 'user-1', email: 'test@example.com', name: 'Test' } }
 
-function makePostRequest(body: unknown) {
+function makePostRequest(body: Record<string, unknown>) {
   return new NextRequest('http://localhost/api/accounts', {
     method: 'POST',
     body: JSON.stringify(body),
@@ -39,7 +36,7 @@ function makePostRequest(body: unknown) {
   })
 }
 
-describe('accounts POST', () => {
+describe('POST /api/accounts', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(getServerSession).mockResolvedValue(mockSession)
@@ -50,7 +47,7 @@ describe('accounts POST', () => {
       name: 'Test',
       currency: 'USD',
       createdAt: new Date('2024-01-01T00:00:00.000Z'),
-    })
+    } as never)
     vi.mocked(prisma.account.findMany).mockResolvedValue([])
   })
 
@@ -93,7 +90,7 @@ describe('accounts POST', () => {
     const res = await POST(makePostRequest({
       name: '달러 예금',
       type: 'ASSET',
-      openingBalance: '100',
+      openingBalance: 100,
     }))
     const body = await res.json()
 
@@ -129,7 +126,6 @@ describe('accounts POST', () => {
   })
 
   it('초기잔액 없는 계정도 사용자 기본 통화를 사용한다', async () => {
-    vi.mocked(prisma.account.findMany).mockResolvedValue([])
     vi.mocked(prisma.account.create).mockResolvedValue({
       id: 'expense-1',
       userId: 'user-1',
@@ -139,7 +135,7 @@ describe('accounts POST', () => {
       currency: 'USD',
       description: null,
       createdAt: new Date('2024-01-01T00:00:00.000Z'),
-    })
+    } as never)
 
     const res = await POST(makePostRequest({ name: '식비', type: 'EXPENSE' }))
     const body = await res.json()
@@ -155,78 +151,84 @@ describe('accounts POST', () => {
     })
   })
 
-  it('기준 통화와 다른 초기잔액 계정에 환율이 없으면 400을 반환한다', async () => {
-    vi.mocked(prisma.user.findUnique).mockResolvedValue({ currency: 'KRW' } as never)
-
-    const res = await POST(makePostRequest({
-      name: '달러 예금',
+  it('초기잔액이 있는 계정 생성 시 선택한 통화를 저장한다', async () => {
+    const existingOpeningEquityAccount = {
+      id: 'opening-equity-1',
+      userId: 'user-1',
+      name: '개시잔액',
+      code: '3000',
+      type: 'EQUITY',
+      currency: 'KRW',
+      description: '초기잔액 자동 분개용 계정',
+      createdAt: new Date('2024-01-01T00:00:00Z'),
+      updatedAt: new Date('2024-01-01T00:00:00Z'),
+    }
+    const createdAccount = {
+      id: 'account-1',
+      userId: 'user-1',
+      name: '달러 현금',
+      code: '1000',
       type: 'ASSET',
       currency: 'USD',
-      openingBalance: '100',
-    }))
-    const body = await res.json()
-
-    expect(res.status).toBe(400)
-    expect(body.error).toMatch(/환율/)
-    expect(prisma.$transaction).not.toHaveBeenCalled()
-  })
-
-  it('기준 통화와 다른 초기잔액 계정에는 입력받은 환율을 저장한다', async () => {
-    vi.mocked(prisma.user.findUnique).mockResolvedValue({ currency: 'KRW' } as never)
+      description: null,
+      createdAt: new Date('2024-01-02T00:00:00Z'),
+      updatedAt: new Date('2024-01-02T00:00:00Z'),
+    }
     const tx = {
       account: {
-        findFirst: vi.fn().mockResolvedValue(null),
-        findMany: vi.fn()
-          .mockResolvedValueOnce([])
-          .mockResolvedValueOnce([]),
-        create: vi.fn()
-          .mockResolvedValueOnce({
-            id: 'opening-equity-1',
-            userId: 'user-1',
-            name: '개시잔액',
-            code: '3000',
-            type: 'EQUITY',
-            currency: 'USD',
-            description: '초기잔액 자동 분개용 계정',
-            createdAt: new Date('2024-01-01T00:00:00.000Z'),
-          })
-          .mockResolvedValueOnce({
-            id: 'asset-1',
-            userId: 'user-1',
-            name: '달러 예금',
-            code: '1000',
-            type: 'ASSET',
-            currency: 'USD',
-            description: undefined,
-            createdAt: new Date('2024-01-01T00:00:00.000Z'),
-          }),
+        findFirst: vi.fn().mockResolvedValue(existingOpeningEquityAccount),
+        findMany: vi.fn().mockResolvedValue([]),
+        create: vi.fn().mockResolvedValue(createdAccount),
       },
       transaction: {
-        create: vi.fn().mockResolvedValue({ id: 'tx-1' }),
+        create: vi.fn().mockResolvedValue({ id: 'transaction-1' }),
       },
     }
 
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ currency: 'KRW' } as never)
     vi.mocked(prisma.$transaction).mockImplementation(async (callback) => callback(tx as never))
 
     const res = await POST(makePostRequest({
-      name: '달러 예금',
+      name: '달러 현금',
       type: 'ASSET',
       currency: 'USD',
-      openingBalance: '100',
-      exchangeRate: '1300',
+      openingBalance: 100,
+      exchangeRate: '1300.5',
     }))
 
     expect(res.status).toBe(201)
-    expect(tx.transaction.create).toHaveBeenCalledWith({
+    expect(tx.account.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        name: '달러 현금',
+        currency: 'USD',
+      }),
+    }))
+    expect(tx.transaction.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
         entries: {
           create: [expect.objectContaining({
             amount: 100,
             currency: 'USD',
-            exchangeRate: '1300',
+            exchangeRate: '1300.5',
           })],
         },
       }),
-    })
+    }))
+  })
+
+  it('외화 초기잔액 생성 시 환율이 없으면 거부한다', async () => {
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ currency: 'KRW' } as never)
+
+    const res = await POST(makePostRequest({
+      name: '달러 현금',
+      type: 'ASSET',
+      currency: 'USD',
+      openingBalance: 100,
+    }))
+    const data = await res.json()
+
+    expect(res.status).toBe(400)
+    expect(data.error).toBe('외화(USD) 초기잔액에는 환율(exchangeRate)이 필요합니다.')
+    expect(prisma.$transaction).not.toHaveBeenCalled()
   })
 })

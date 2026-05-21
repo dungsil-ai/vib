@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { getBaseCurrencyEntrySumMap } from '@/lib/report-sums'
 
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -10,11 +11,6 @@ export async function GET(request: NextRequest) {
   }
 
   const userId = session.user.id
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { currency: true },
-  })
-  const baseCurrency = user?.currency ?? 'KRW'
   const { searchParams } = new URL(request.url)
   const yearParam = searchParams.get('year')
   const monthParam = searchParams.get('month')
@@ -69,80 +65,12 @@ export async function GET(request: NextRequest) {
   const revenueIds = accounts.filter(a => a.type === 'REVENUE').map(a => a.id)
   const expenseIds = accounts.filter(a => a.type === 'EXPENSE').map(a => a.id)
 
-  const [revDebitSums, revCreditSums, expDebitSums, expCreditSums] = await Promise.all([
-    revenueIds.length === 0
-      ? Promise.resolve([])
-      : prisma.$queryRaw<Array<{ debitAccountId: string; total: string }>>`
-          SELECT e."debitAccountId", SUM(CASE WHEN e.currency IS NULL OR e.currency = ${baseCurrency} THEN e.amount ELSE e.amount * e."exchangeRate" END)::text AS total
-          FROM "Entry" e
-          JOIN "Transaction" t ON t.id = e."transactionId"
-          WHERE t."userId" = ${userId}
-            AND t."date" >= ${dateFilter.gte}
-            AND t."date" <= ${dateFilter.lte}
-            AND e."debitAccountId" = ANY(${revenueIds}::text[])
-          GROUP BY e."debitAccountId"
-        `,
-    revenueIds.length === 0
-      ? Promise.resolve([])
-      : prisma.$queryRaw<Array<{ creditAccountId: string; total: string }>>`
-          SELECT e."creditAccountId", SUM(CASE WHEN e.currency IS NULL OR e.currency = ${baseCurrency} THEN e.amount ELSE e.amount * e."exchangeRate" END)::text AS total
-          FROM "Entry" e
-          JOIN "Transaction" t ON t.id = e."transactionId"
-          WHERE t."userId" = ${userId}
-            AND t."date" >= ${dateFilter.gte}
-            AND t."date" <= ${dateFilter.lte}
-            AND e."creditAccountId" = ANY(${revenueIds}::text[])
-          GROUP BY e."creditAccountId"
-        `,
-    expenseIds.length === 0
-      ? Promise.resolve([])
-      : prisma.$queryRaw<Array<{ debitAccountId: string; total: string }>>`
-          SELECT e."debitAccountId", SUM(CASE WHEN e.currency IS NULL OR e.currency = ${baseCurrency} THEN e.amount ELSE e.amount * e."exchangeRate" END)::text AS total
-          FROM "Entry" e
-          JOIN "Transaction" t ON t.id = e."transactionId"
-          WHERE t."userId" = ${userId}
-            AND t."date" >= ${dateFilter.gte}
-            AND t."date" <= ${dateFilter.lte}
-            AND e."debitAccountId" = ANY(${expenseIds}::text[])
-          GROUP BY e."debitAccountId"
-        `,
-    expenseIds.length === 0
-      ? Promise.resolve([])
-      : prisma.$queryRaw<Array<{ creditAccountId: string; total: string }>>`
-          SELECT e."creditAccountId", SUM(CASE WHEN e.currency IS NULL OR e.currency = ${baseCurrency} THEN e.amount ELSE e.amount * e."exchangeRate" END)::text AS total
-          FROM "Entry" e
-          JOIN "Transaction" t ON t.id = e."transactionId"
-          WHERE t."userId" = ${userId}
-            AND t."date" >= ${dateFilter.gte}
-            AND t."date" <= ${dateFilter.lte}
-            AND e."creditAccountId" = ANY(${expenseIds}::text[])
-          GROUP BY e."creditAccountId"
-        `,
+  const [revDebitMap, revCreditMap, expDebitMap, expCreditMap] = await Promise.all([
+    getBaseCurrencyEntrySumMap({ accountIds: revenueIds, userId, side: 'debit', dateFilter }),
+    getBaseCurrencyEntrySumMap({ accountIds: revenueIds, userId, side: 'credit', dateFilter }),
+    getBaseCurrencyEntrySumMap({ accountIds: expenseIds, userId, side: 'debit', dateFilter }),
+    getBaseCurrencyEntrySumMap({ accountIds: expenseIds, userId, side: 'credit', dateFilter }),
   ])
-
-  function toAmountMap<T>(
-    sums: T[],
-    getId: (item: T) => string,
-  ): Map<string, number> {
-    return new Map(sums.map(r => [getId(r), Number((r as { total?: unknown }).total ?? 0)]))
-  }
-
-  const revDebitMap = toAmountMap(
-    revDebitSums as Array<{ debitAccountId: string; total: string }>,
-    r => r.debitAccountId,
-  )
-  const revCreditMap = toAmountMap(
-    revCreditSums as Array<{ creditAccountId: string; total: string }>,
-    r => r.creditAccountId,
-  )
-  const expDebitMap = toAmountMap(
-    expDebitSums as Array<{ debitAccountId: string; total: string }>,
-    r => r.debitAccountId,
-  )
-  const expCreditMap = toAmountMap(
-    expCreditSums as Array<{ creditAccountId: string; total: string }>,
-    r => r.creditAccountId,
-  )
 
   let totalRevenue = 0
   let totalExpense = 0

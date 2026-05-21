@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
         data: { name, email: normalizedEmail, password: hashedPassword, currency: userCurrency },
       })
       await tx.account.createMany({
-        data: defaultAccounts.map(acc => ({ ...acc, userId: user.id })),
+        data: defaultAccounts.map(acc => ({ ...acc, userId: user.id, currency: userCurrency })),
       })
     })
 

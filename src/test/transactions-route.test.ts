@@ -100,7 +100,7 @@ describe('GET /api/transactions', () => {
     expect(body.error).toMatch(/키워드/)
   })
 
-  it('startDate/endDate 기간 필터가 where 절에 반영된다', async () => {
+  it('startDate/endDate 기간 필터를 UTC 일자 경계로 반영한다', async () => {
     vi.mocked(prisma.$transaction).mockResolvedValue([0, []])
     const req = makeRequest('/api/transactions', {
       startDate: '2024-01-01',
@@ -109,14 +109,12 @@ describe('GET /api/transactions', () => {
     await GET(req)
     const countCalls = vi.mocked(prisma.transaction.count).mock.calls
     expect(countCalls.length).toBeGreaterThan(0)
-    const where = countCalls[0][0]?.where as Record<string, unknown>
-    expect(where.date).toMatchObject({
-      gte: expect.any(Date),
-      lte: expect.any(Date),
-    })
+    const where = countCalls[0][0]?.where as Record<string, { gte?: Date; lte?: Date }>
+    expect(where.date?.gte?.toISOString()).toBe('2024-01-01T00:00:00.000Z')
+    expect(where.date?.lte?.toISOString()).toBe('2024-01-31T23:59:59.999Z')
   })
 
-  it('endDate의 시간은 23:59:59.999로 설정된다', async () => {
+  it('endDate의 시간은 UTC 23:59:59.999로 설정된다', async () => {
     vi.mocked(prisma.$transaction).mockResolvedValue([0, []])
     const req = makeRequest('/api/transactions', { endDate: '2024-01-15' })
     await GET(req)
@@ -124,10 +122,7 @@ describe('GET /api/transactions', () => {
     const where = countCalls[0][0]?.where as Record<string, { lte?: Date }>
     const lte = where.date?.lte
     expect(lte).toBeDefined()
-    expect(lte!.getHours()).toBe(23)
-    expect(lte!.getMinutes()).toBe(59)
-    expect(lte!.getSeconds()).toBe(59)
-    expect(lte!.getMilliseconds()).toBe(999)
+    expect(lte!.toISOString()).toBe('2024-01-15T23:59:59.999Z')
   })
 
   it('유효하지 않은 startDate에 400을 반환한다', async () => {
@@ -153,8 +148,14 @@ describe('GET /api/transactions', () => {
     const countCalls = vi.mocked(prisma.transaction.count).mock.calls
     expect(countCalls.length).toBeGreaterThan(0)
     const where = countCalls[0][0]?.where as Record<string, unknown>
-    expect(where.AND).toBeDefined()
-    expect((where.AND as unknown[]).length).toBeGreaterThan(0)
+    expect(where.entries).toEqual({
+      some: {
+        OR: [
+          { debitAccountId: 'acc-1' },
+          { creditAccountId: 'acc-1' },
+        ],
+      },
+    })
   })
 
   it('minAmount/maxAmount 금액 범위 필터가 where 절에 반영된다', async () => {
@@ -164,8 +165,33 @@ describe('GET /api/transactions', () => {
     const countCalls = vi.mocked(prisma.transaction.count).mock.calls
     expect(countCalls.length).toBeGreaterThan(0)
     const where = countCalls[0][0]?.where as Record<string, unknown>
-    expect(where.AND).toBeDefined()
-    expect((where.AND as unknown[]).length).toBeGreaterThan(0)
+    expect(where.entries).toEqual({
+      some: {
+        amount: { gte: 1000, lte: 50000 },
+      },
+    })
+  })
+
+  it('accountId와 금액 범위 필터는 같은 엔트리에 함께 적용된다', async () => {
+    vi.mocked(prisma.$transaction).mockResolvedValue([0, []])
+    const req = makeRequest('/api/transactions', {
+      accountId: 'acc-1',
+      minAmount: '1000',
+      maxAmount: '50000',
+    })
+    await GET(req)
+    const countCalls = vi.mocked(prisma.transaction.count).mock.calls
+    expect(countCalls.length).toBeGreaterThan(0)
+    const where = countCalls[0][0]?.where as Record<string, unknown>
+    expect(where.entries).toEqual({
+      some: {
+        OR: [
+          { debitAccountId: 'acc-1' },
+          { creditAccountId: 'acc-1' },
+        ],
+        amount: { gte: 1000, lte: 50000 },
+      },
+    })
   })
 
   it('minAmount가 음수이면 400을 반환한다', async () => {
@@ -229,37 +255,25 @@ describe('GET /api/transactions', () => {
     expect(findManyCalls[0][0]?.take).toBe(100)
   })
 
-  it('year/month 레거시 파라미터로 배열을 직접 반환한다', async () => {
-    vi.mocked(prisma.transaction.findMany).mockResolvedValue(mockTransactions)
+  it('year/month 레거시 파라미터를 더 이상 지원하지 않는다', async () => {
     const req = makeRequest('/api/transactions', { year: '2024', month: '1' })
     const res = await GET(req)
-    expect(res.status).toBe(200)
-    const body = await res.json()
-    expect(Array.isArray(body)).toBe(true)
-  })
-
-  it('year만 있고 month가 없으면 400을 반환한다', async () => {
-    const req = makeRequest('/api/transactions', { year: '2024' })
-    const res = await GET(req)
     expect(res.status).toBe(400)
     const body = await res.json()
-    expect(body.error).toMatch(/year.*month|month.*year/)
+    expect(body.error).toMatch(/year\/month.*startDate\/endDate/)
+    expect(prisma.transaction.findMany).not.toHaveBeenCalled()
   })
 
-  it('month만 있고 year가 없으면 400을 반환한다', async () => {
-    const req = makeRequest('/api/transactions', { month: '1' })
-    const res = await GET(req)
-    expect(res.status).toBe(400)
-    const body = await res.json()
-    expect(body.error).toMatch(/year.*month|month.*year/)
-  })
+  it('year 또는 month 중 하나만 있어도 레거시 파라미터 오류를 반환한다', async () => {
+    const yearReq = makeRequest('/api/transactions', { year: '2024' })
+    const yearRes = await GET(yearReq)
+    expect(yearRes.status).toBe(400)
+    expect((await yearRes.json()).error).toMatch(/year\/month.*startDate\/endDate/)
 
-  it('유효하지 않은 month(13)에 400을 반환한다', async () => {
-    const req = makeRequest('/api/transactions', { year: '2024', month: '13' })
-    const res = await GET(req)
-    expect(res.status).toBe(400)
-    const body = await res.json()
-    expect(body.error).toMatch(/year.*month|month.*year|유효/)
+    const monthReq = makeRequest('/api/transactions', { month: '1' })
+    const monthRes = await GET(monthReq)
+    expect(monthRes.status).toBe(400)
+    expect((await monthRes.json()).error).toMatch(/year\/month.*startDate\/endDate/)
   })
 
   it('여러 필터를 동시에 적용할 수 있다', async () => {
@@ -368,6 +382,23 @@ describe('POST /api/transactions', () => {
     })
     const res = await POST(req)
     expect(res.status).toBe(403)
+  })
+
+
+  it('계정 조회 실패는 403으로 숨기지 않고 전파한다', async () => {
+    const dbError = new Error('계정 조회 실패')
+    vi.mocked(prisma.account.findMany).mockRejectedValue(dbError as never)
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ currency: 'KRW' } as never)
+    const req = new NextRequest('http://localhost/api/transactions', {
+      method: 'POST',
+      body: JSON.stringify({
+        date: '2024-01-15',
+        description: '테스트',
+        entries: [{ debitAccountId: 'acc-1', creditAccountId: 'acc-2', amount: '1000' }],
+      }),
+    })
+
+    await expect(POST(req)).rejects.toBe(dbError)
   })
 
   it('거래 생성 성공 시 201을 반환한다', async () => {

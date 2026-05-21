@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { serializeData } from '@/lib/serialize'
+import { accountBalance } from '@/lib/accounting'
 
 export async function GET() {
   const session = await getServerSession(authOptions)
@@ -64,12 +65,7 @@ export async function GET() {
     for (const account of accounts) {
       const totalDebits = debitByAccount.get(account.id) ?? 0
       const totalCredits = creditByAccount.get(account.id) ?? 0
-      let balance = 0
-      if (account.type === 'ASSET' || account.type === 'EXPENSE') {
-        balance = totalDebits - totalCredits
-      } else {
-        balance = totalCredits - totalDebits
-      }
+      const balance = accountBalance(account.type, totalDebits, totalCredits)
 
       if (account.type === 'ASSET') totalAssets += balance
       if (account.type === 'LIABILITY') totalLiabilities += balance

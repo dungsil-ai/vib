@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { accountBalance } from '@/lib/accounting'
+import { getBaseCurrencyEntrySumMap } from '@/lib/report-sums'
 
 export async function GET() {
   const session = await getServerSession(authOptions)
@@ -10,11 +12,6 @@ export async function GET() {
   }
 
   const userId = session.user.id
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { currency: true },
-  })
-  const baseCurrency = user?.currency ?? 'KRW'
 
   const accounts = await prisma.account.findMany({
     where: { userId, type: { in: ['ASSET', 'LIABILITY', 'EQUITY'] } },
@@ -24,33 +21,10 @@ export async function GET() {
 
   const accountIds = accounts.map(a => a.id)
 
-  const [debitSums, creditSums] = accountIds.length > 0
-    ? await Promise.all([
-        prisma.$queryRaw<Array<{ debitAccountId: string; total: string }>>`
-          SELECT e."debitAccountId", SUM(CASE WHEN e.currency IS NULL OR e.currency = ${baseCurrency} THEN e.amount ELSE e.amount * e."exchangeRate" END)::text AS total
-          FROM "Entry" e
-          JOIN "Transaction" t ON t.id = e."transactionId"
-          WHERE t."userId" = ${userId}
-            AND e."debitAccountId" = ANY(${accountIds}::text[])
-          GROUP BY e."debitAccountId"
-        `,
-        prisma.$queryRaw<Array<{ creditAccountId: string; total: string }>>`
-          SELECT e."creditAccountId", SUM(CASE WHEN e.currency IS NULL OR e.currency = ${baseCurrency} THEN e.amount ELSE e.amount * e."exchangeRate" END)::text AS total
-          FROM "Entry" e
-          JOIN "Transaction" t ON t.id = e."transactionId"
-          WHERE t."userId" = ${userId}
-            AND e."creditAccountId" = ANY(${accountIds}::text[])
-          GROUP BY e."creditAccountId"
-        `,
-      ])
-    : [[], []]
-
-  const debitByAccount = new Map(
-    debitSums.map(r => [r.debitAccountId, Number(r.total ?? 0)]),
-  )
-  const creditByAccount = new Map(
-    creditSums.map(r => [r.creditAccountId, Number(r.total ?? 0)]),
-  )
+  const [debitByAccount, creditByAccount] = await Promise.all([
+    getBaseCurrencyEntrySumMap({ accountIds, userId, side: 'debit' }),
+    getBaseCurrencyEntrySumMap({ accountIds, userId, side: 'credit' }),
+  ])
 
   let totalAssets = 0
   let totalLiabilities = 0
@@ -63,7 +37,7 @@ export async function GET() {
   for (const account of accounts) {
     const debit = debitByAccount.get(account.id) ?? 0
     const credit = creditByAccount.get(account.id) ?? 0
-    const balance = account.type === 'ASSET' ? debit - credit : credit - debit
+    const balance = accountBalance(account.type, debit, credit)
     const row = { id: account.id, code: account.code, name: account.name, balance }
 
     if (account.type === 'ASSET') { assets.push(row); totalAssets += balance }

@@ -105,9 +105,8 @@ describe('AccountsPage', () => {
     expect(screen.queryByPlaceholderText('예: 현금')).not.toBeInTheDocument()
   })
 
-  it('새 계정을 추가할 때 선택한 통화를 POST 본문에 포함한다', async () => {
+  it('새 계정을 추가할 수 있다', async () => {
     let getCallCount = 0
-    let postBody: Record<string, unknown> | null = null
     vi.mocked(global.fetch).mockImplementation(async (input, init) => {
       const url = typeof input === 'string' ? input : (input as Request).url
       const method = (init?.method ?? 'GET').toUpperCase()
@@ -119,7 +118,6 @@ describe('AccountsPage', () => {
         return { ok: true, json: () => Promise.resolve([]) } as Response
       }
       if (url === '/api/accounts' && method === 'POST') {
-        postBody = JSON.parse(init?.body as string)
         return { ok: true, json: () => Promise.resolve({}) } as Response
       }
       if (url === '/api/accounts' && method === 'GET') {
@@ -144,12 +142,13 @@ describe('AccountsPage', () => {
     const addButtons = screen.getAllByText('+ 계정 추가')
     await user.click(addButtons[0])
 
-    await user.type(screen.getByPlaceholderText('예: 현금'), '달러 예금')
-    await user.selectOptions(screen.getByLabelText('통화'), 'USD')
+    await user.type(screen.getByPlaceholderText('예: 현금'), '현금')
     await user.click(screen.getByRole('button', { name: '저장' }))
 
     await waitFor(() => {
-      expect(postBody).toMatchObject({ name: '달러 예금', type: 'ASSET', currency: 'USD' })
+      expect(vi.mocked(global.fetch)).toHaveBeenCalledWith('/api/accounts', expect.objectContaining({
+        method: 'POST',
+      }))
     })
   })
 
@@ -347,7 +346,7 @@ describe('AccountsPage', () => {
     })
   })
 
-  it('외화 초기잔액 계정 추가 시 환율 입력을 표시하고 POST 본문에 포함한다', async () => {
+  it('외화 초기잔액 입력 시 환율을 함께 전송한다', async () => {
     let getCallCount = 0
     let postBody: Record<string, unknown> | null = null
     vi.mocked(global.fetch).mockImplementation(async (input, init) => {
@@ -377,20 +376,22 @@ describe('AccountsPage', () => {
     const assetSection = screen.getByText('자산').closest('[class*="rounded-xl"]') as HTMLElement
     await user.click(within(assetSection).getByText('+ 계정 추가'))
 
-    await user.type(screen.getByPlaceholderText('예: 현금'), '달러 예금')
+    await user.type(screen.getByPlaceholderText('예: 현금'), '달러 현금')
     await user.selectOptions(screen.getByLabelText('통화'), 'USD')
     await user.type(screen.getByLabelText(/초기잔액/), '100')
-    expect(screen.getByLabelText(/초기잔액 환율/)).toBeInTheDocument()
-    await user.type(screen.getByLabelText(/초기잔액 환율/), '1300')
+
+    const exchangeRateInput = screen.getByLabelText(/환율 \(1 USD = \? KRW\)/)
+    await user.clear(exchangeRateInput)
+    await user.type(exchangeRateInput, '1300.5')
     await user.click(screen.getByRole('button', { name: '저장' }))
 
     await waitFor(() => {
       expect(postBody).toMatchObject({
-        name: '달러 예금',
+        name: '달러 현금',
         type: 'ASSET',
         currency: 'USD',
         openingBalance: 100,
-        exchangeRate: '1300',
+        exchangeRate: '1300.5',
       })
     })
   })

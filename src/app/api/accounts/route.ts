@@ -4,6 +4,7 @@ import type { Account } from '@prisma/client'
 import { CURRENCY_CODES } from '@/lib/currencies'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { accountBalance } from '@/lib/accounting'
 
 export async function GET() {
   const session = await getServerSession(authOptions)
@@ -34,17 +35,17 @@ export async function GET() {
     })
     const baseCurrency = user?.currency ?? 'KRW'
 
-    // 기준 통화 분개는 환율 입력값과 관계없이 원 금액으로, 외화 분개만 환율을 곱해 기준 통화 잔액을 계산합니다.
+    // Use raw SQL to compute balance in base currency: SUM(amount * exchangeRate)
     const [debitSums, creditSums] = accountIds.length > 0
       ? await Promise.all([
           prisma.$queryRaw<Array<{ debitAccountId: string; total: string }>>`
-            SELECT "debitAccountId", SUM(CASE WHEN currency IS NULL OR currency = ${baseCurrency} THEN amount ELSE amount * "exchangeRate" END)::text AS total
+            SELECT "debitAccountId", SUM(amount * "exchangeRate")::text AS total
             FROM "Entry"
             WHERE "debitAccountId" = ANY(${accountIds}::text[])
             GROUP BY "debitAccountId"
           `,
           prisma.$queryRaw<Array<{ creditAccountId: string; total: string }>>`
-            SELECT "creditAccountId", SUM(CASE WHEN currency IS NULL OR currency = ${baseCurrency} THEN amount ELSE amount * "exchangeRate" END)::text AS total
+            SELECT "creditAccountId", SUM(amount * "exchangeRate")::text AS total
             FROM "Entry"
             WHERE "creditAccountId" = ANY(${accountIds}::text[])
             GROUP BY "creditAccountId"
@@ -63,12 +64,7 @@ export async function GET() {
       const totalDebits = debitByAccount.get(account.id) ?? 0
       const totalCredits = creditByAccount.get(account.id) ?? 0
 
-      let balance = 0
-      if (account.type === 'ASSET' || account.type === 'EXPENSE') {
-        balance = totalDebits - totalCredits
-      } else {
-        balance = totalCredits - totalDebits
-      }
+      const balance = accountBalance(account.type, totalDebits, totalCredits)
 
       return { ...account, balance, baseCurrency }
     })
@@ -139,12 +135,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '지원하지 않는 통화 코드입니다.' }, { status: 400 })
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { currency: true },
-    })
-    const baseCurrency = user?.currency ?? 'KRW'
-    const finalCurrency = accountCurrency ?? baseCurrency
+    // If no currency specified, use user's base currency
+    let finalCurrency = accountCurrency
+    let baseCurrency: string | undefined
+    if (!finalCurrency) {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { currency: true },
+      })
+      baseCurrency = user?.currency ?? 'KRW'
+      finalCurrency = baseCurrency
+    }
 
     const openingBalanceRaw = (body as { openingBalance?: unknown }).openingBalance
     const openingBalance = openingBalanceRaw != null ? Number(openingBalanceRaw) : 0
@@ -160,34 +161,44 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const openingExchangeRateRaw = body.exchangeRate
-    let openingExchangeRate = '1'
-    if (openingBalance > 0 && finalCurrency !== baseCurrency) {
-      if (openingExchangeRateRaw === undefined || openingExchangeRateRaw === null) {
+    let openingBalanceExchangeRate = '1'
+    if (openingBalance > 0) {
+      if (!baseCurrency) {
+        const user = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { currency: true },
+        })
+        baseCurrency = user?.currency ?? 'KRW'
+      }
+
+      const exchangeRateRaw = body.exchangeRate
+      if (finalCurrency !== baseCurrency && (exchangeRateRaw === undefined || exchangeRateRaw === null || exchangeRateRaw === '')) {
         return NextResponse.json(
           { error: `외화(${finalCurrency}) 초기잔액에는 환율(exchangeRate)이 필요합니다.` },
           { status: 400 },
         )
       }
 
-      const rawRate = typeof openingExchangeRateRaw === 'number'
-        ? String(openingExchangeRateRaw)
-        : typeof openingExchangeRateRaw === 'string'
-          ? openingExchangeRateRaw.trim()
-          : null
+      if (exchangeRateRaw !== undefined && exchangeRateRaw !== null && exchangeRateRaw !== '') {
+        const exchangeRateText = typeof exchangeRateRaw === 'number'
+          ? String(exchangeRateRaw)
+          : typeof exchangeRateRaw === 'string'
+            ? exchangeRateRaw.trim()
+            : null
 
-      if (rawRate === null || !/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(rawRate)) {
-        return NextResponse.json({ error: '환율은 양의 숫자 형식이어야 합니다.' }, { status: 400 })
+        if (exchangeRateText === null) {
+          return NextResponse.json({ error: '환율(exchangeRate)은 문자열 또는 숫자여야 합니다.' }, { status: 400 })
+        }
+        if (!/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(exchangeRateText)) {
+          return NextResponse.json({ error: '환율은 양의 숫자 형식이어야 합니다.' }, { status: 400 })
+        }
+        const exchangeRate = Number(exchangeRateText)
+        if (!Number.isFinite(exchangeRate) || exchangeRate <= 0) {
+          return NextResponse.json({ error: '유효한 환율을 입력해주세요.' }, { status: 400 })
+        }
+        openingBalanceExchangeRate = exchangeRateText
       }
-
-      const rate = Number(rawRate)
-      if (!Number.isFinite(rate) || rate <= 0) {
-        return NextResponse.json({ error: '유효한 환율을 입력해주세요.' }, { status: 400 })
-      }
-
-      openingExchangeRate = rawRate
     }
-
     const prefix = String(TYPE_CODE_PREFIX[accountType]).slice(0, 1)
     const base = TYPE_CODE_PREFIX[accountType]
     const upperBound = base + 999
@@ -245,7 +256,7 @@ export async function POST(request: NextRequest) {
           })
           newAccountCode = String(secondFree)
         } else {
-          // 개시잔액 계정 생성에 사용할 다음 자본 계정 코드를 계산합니다.
+          // Compute next equity code (used only when creating the opening balance account)
           const existingEquityAccounts = await tx.account.findMany({
             where: { userId, code: { startsWith: equityPrefix } },
             select: { code: true },
@@ -263,7 +274,7 @@ export async function POST(request: NextRequest) {
             throw new AccountApiError('개시잔액 계정을 생성할 수 없습니다. 자본 계정 코드가 모두 사용되었습니다.', 409)
           }
 
-          // 개시잔액 계정이 아직 없으면 생성합니다.
+          // create opening balance account if it doesn't already exist
           openingEquityAccount = existingOpeningEquityAccount ?? await tx.account.create({
             data: {
               userId,
@@ -275,7 +286,7 @@ export async function POST(request: NextRequest) {
             },
           })
 
-          // 트랜잭션 안에서 새 계정 코드를 계산합니다.
+          // Compute code for the new account inside the transaction
           const existingAccounts = await tx.account.findMany({
             where: { userId, code: { startsWith: prefix } },
             select: { code: true },
@@ -307,8 +318,8 @@ export async function POST(request: NextRequest) {
           },
         })
 
-        // 차변 정상 잔액 유형(자산, 비용): 새 계정 차변 / 개시잔액 자본 대변
-        // 대변 정상 잔액 유형(부채, 자본, 수익): 개시잔액 자본 차변 / 새 계정 대변
+        // Debit-normal types (ASSET, EXPENSE): Dr. new account / Cr. opening equity
+        // Credit-normal types (LIABILITY, EQUITY, REVENUE): Dr. opening equity / Cr. new account
         const isDebitNormal = accountType === 'ASSET' || accountType === 'EXPENSE'
         const debitAccountId = isDebitNormal ? newAccount.id : openingEquityAccount.id
         const creditAccountId = isDebitNormal ? openingEquityAccount.id : newAccount.id
@@ -324,7 +335,7 @@ export async function POST(request: NextRequest) {
                 creditAccountId,
                 amount: openingBalance,
                 currency: finalCurrency,
-                exchangeRate: openingExchangeRate,
+                exchangeRate: openingBalanceExchangeRate,
                 description: OPENING_BALANCE_ENTRY_DESCRIPTION,
               }],
             },
