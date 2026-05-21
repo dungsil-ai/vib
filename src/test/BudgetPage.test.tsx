@@ -263,4 +263,63 @@ describe('BudgetPage', () => {
     })
     expect(deleteCalls).toHaveLength(0)
   })
+
+  it('거래가 100건을 초과할 때 모든 페이지를 순회하여 실제 지출을 계산한다', async () => {
+    const firstPageTransactions = Array.from({ length: 100 }, (_, i) => ({
+      id: `tx-${i + 1}`,
+      entries: [
+        {
+          amount: '1000',
+          debitAccount: { type: 'EXPENSE' },
+          debitAccountId: 'exp-1',
+          creditAccount: { type: 'ASSET' },
+          creditAccountId: 'asset-1',
+        },
+      ],
+    }))
+    const secondPageTransactions = [
+      {
+        id: 'tx-101',
+        entries: [
+          {
+            amount: '500',
+            debitAccount: { type: 'EXPENSE' },
+            debitAccountId: 'exp-1',
+            creditAccount: { type: 'ASSET' },
+            creditAccountId: 'asset-1',
+          },
+        ],
+      },
+    ]
+
+    vi.mocked(global.fetch).mockImplementation(async (input) => {
+      const url = typeof input === 'string' ? input : (input as Request).url
+      if (url === '/api/accounts') {
+        return { ok: true, json: () => Promise.resolve(mockAccounts) } as Response
+      }
+      if (url.startsWith('/api/budget')) {
+        return { ok: true, json: () => Promise.resolve({ data: mockBudgets }) } as Response
+      }
+      if (url.startsWith('/api/transactions')) {
+        const pageMatch = url.match(/[?&]page=(\d+)/)
+        const page = pageMatch ? parseInt(pageMatch[1]) : 1
+        if (page === 1) {
+          return { ok: true, json: () => Promise.resolve({ data: firstPageTransactions, total: 101, page: 1, pageSize: 100 }) } as Response
+        }
+        return { ok: true, json: () => Promise.resolve({ data: secondPageTransactions, total: 101, page: 2, pageSize: 100 }) } as Response
+      }
+      return { ok: true, json: () => Promise.resolve({}) } as Response
+    })
+
+    render(<BudgetPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('식비')).toBeInTheDocument()
+    })
+
+    const txCalls = vi.mocked(global.fetch).mock.calls.filter(([url]) =>
+      String(url).startsWith('/api/transactions'),
+    )
+    expect(txCalls.length).toBeGreaterThanOrEqual(2)
+  })
 })

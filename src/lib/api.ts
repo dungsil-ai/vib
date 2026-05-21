@@ -46,11 +46,14 @@ export function normalizeCurrencyCode(currency: unknown): ApiResult<string | und
 }
 
 export function parseStrictNumber(value: unknown, label: string): ApiResult<number> {
-  const raw = typeof value === 'number'
-    ? String(value)
-    : typeof value === 'string'
-      ? value.trim()
-      : null
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) {
+      return { ok: false, response: apiError(`유효한 ${label} 값을 입력해주세요.`) }
+    }
+    return { ok: true, value }
+  }
+
+  const raw = typeof value === 'string' ? value.trim() : null
 
   if (raw === null || raw === '' || !/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(raw)) {
     return { ok: false, response: apiError(`유효한 ${label} 값을 입력해주세요.`) }
@@ -65,11 +68,14 @@ export function parseStrictNumber(value: unknown, label: string): ApiResult<numb
 }
 
 export function parseStrictInteger(value: unknown, label: string): ApiResult<number> {
-  const raw = typeof value === 'number'
-    ? String(value)
-    : typeof value === 'string'
-      ? value.trim()
-      : null
+  if (typeof value === 'number') {
+    if (!Number.isSafeInteger(value) || value < 0) {
+      return { ok: false, response: apiError(`유효한 ${label} 값을 입력해주세요.`) }
+    }
+    return { ok: true, value }
+  }
+
+  const raw = typeof value === 'string' ? value.trim() : null
 
   if (raw === null || raw === '' || !/^\d+$/.test(raw)) {
     return { ok: false, response: apiError(`유효한 ${label} 값을 입력해주세요.`) }

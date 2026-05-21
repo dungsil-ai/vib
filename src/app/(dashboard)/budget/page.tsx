@@ -35,6 +35,13 @@ interface ApiData<T> {
   data: T
 }
 
+interface PaginatedApiData<T> {
+  data: T
+  total: number
+  page: number
+  pageSize: number
+}
+
 interface BudgetRow {
   account: Account
   budget: Budget | null
@@ -56,10 +63,19 @@ async function loadBudgetData(year: number, month: number) {
   const expenseAccounts = accs.filter(a => a.type === 'EXPENSE')
   const budgetMap = new Map(buds.map(b => [b.accountId, b]))
 
-  const txRes = await fetch(`/api/transactions?year=${year}&month=${month}`)
+  const txRes = await fetch(`/api/transactions?year=${year}&month=${month}&page=1&pageSize=100`)
   if (!txRes.ok) throw new Error(`거래 데이터를 불러오지 못했습니다. (${txRes.status})`)
-  const transactionBody: ApiData<Transaction[]> = await txRes.json()
-  const transactions = Array.isArray(transactionBody.data) ? transactionBody.data : []
+  const firstPage: PaginatedApiData<Transaction[]> = await txRes.json()
+  const transactions: Transaction[] = Array.isArray(firstPage.data) ? [...firstPage.data] : []
+
+  const { total, pageSize } = firstPage
+  const totalPages = pageSize > 0 ? Math.ceil(total / pageSize) : 1
+  for (let page = 2; page <= totalPages; page++) {
+    const res = await fetch(`/api/transactions?year=${year}&month=${month}&page=${page}&pageSize=100`)
+    if (!res.ok) throw new Error(`거래 데이터를 불러오지 못했습니다. (${res.status})`)
+    const body: PaginatedApiData<Transaction[]> = await res.json()
+    if (Array.isArray(body.data)) transactions.push(...body.data)
+  }
 
   const actuals: Record<string, number> = {}
   for (const tx of transactions) {
