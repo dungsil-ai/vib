@@ -1,6 +1,7 @@
 import { NextAuthOptions } from 'next-auth'
 import { getServerSession } from 'next-auth'
 import CredentialsProvider from 'next-auth/providers/credentials'
+import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { prisma } from './prisma'
 import bcrypt from 'bcryptjs'
@@ -84,16 +85,37 @@ interface RequireUserOptions {
   onUnauthenticated?: 'redirect' | 'throw'
 }
 
+const pendingRequireUserRequests = new Map<string, Promise<NonNullable<Awaited<ReturnType<typeof getServerSession>>['user']>>>()
+
 export async function requireUser(options: RequireUserOptions = {}) {
   const { onUnauthenticated = 'redirect' } = options
-  const session = await getServerSession(authOptions)
+  const requestHeaders = await headers()
+  const cacheKey = `${onUnauthenticated}:${requestHeaders.get('cookie') ?? ''}`
 
-  if (!session?.user?.id) {
-    if (onUnauthenticated === 'throw') {
-      throw new AuthenticationError()
-    }
-    redirect('/auth/login')
+  const pendingRequest = pendingRequireUserRequests.get(cacheKey)
+  if (pendingRequest) {
+    return pendingRequest
   }
 
-  return session.user
+  const request = (async () => {
+    const session = await getServerSession(authOptions)
+
+    if (!session?.user?.id) {
+      if (onUnauthenticated === 'throw') {
+        throw new AuthenticationError()
+      }
+      redirect('/auth/login')
+    }
+
+    return session.user
+  })()
+
+  pendingRequireUserRequests.set(cacheKey, request)
+  void request.finally(() => {
+    if (pendingRequireUserRequests.get(cacheKey) === request) {
+      pendingRequireUserRequests.delete(cacheKey)
+    }
+  })
+
+  return request
 }

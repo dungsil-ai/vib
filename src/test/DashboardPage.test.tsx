@@ -85,4 +85,35 @@ describe('DashboardPage', () => {
     expect(requireUser).toHaveBeenCalledTimes(1)
     expect(getDashboardData).toHaveBeenCalledWith('user-1')
   })
+
+  it('순자산이 음수이면 빨간색으로 표시한다', async () => {
+    vi.mocked(getDashboardData).mockResolvedValue({
+      ...mockDashboardData,
+      netWorth: -100000,
+    })
+
+    render(await DashboardPage())
+
+    expect(screen.getByText('-₩100,000')).toHaveClass('text-red-500')
+  })
+
+  it('예산을 초과하면 금액과 진행 막대를 빨간색으로 표시한다', async () => {
+    vi.mocked(getDashboardData).mockResolvedValue({
+      ...mockDashboardData,
+      budgetOverview: [
+        {
+          accountId: 'acc-1',
+          name: '식비',
+          code: '501',
+          budget: 500000,
+          actual: 650000,
+        },
+      ],
+    })
+
+    const { container } = render(await DashboardPage())
+
+    expect(screen.getByText('₩650,000 / ₩500,000')).toHaveClass('text-red-500')
+    expect(container.querySelector('.bg-red-500')).toBeInTheDocument()
+  })
 })

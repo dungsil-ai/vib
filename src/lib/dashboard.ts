@@ -29,7 +29,14 @@ export interface DashboardData {
   }>
 }
 
-export async function getDashboardData(userId: string): Promise<DashboardData> {
+interface GetDashboardDataOptions {
+  serialize?: boolean
+}
+
+export async function getDashboardData(
+  userId: string,
+  options: GetDashboardDataOptions = {},
+): Promise<DashboardData> {
   const now = new Date()
   const year = now.getFullYear()
   const month = now.getMonth() + 1
@@ -153,13 +160,22 @@ export async function getDashboardData(userId: string): Promise<DashboardData> {
     actual: expenseByAccount.get(b.accountId) ?? 0,
   }))
 
-  return serializeData({
+  const data = {
     totalAssets,
     totalLiabilities,
     totalEquity,
     netWorth: totalAssets - totalLiabilities,
     baseCurrency,
-    recentTransactions,
+    recentTransactions: recentTransactions.map(tx => ({
+      ...tx,
+      entries: tx.entries.map(entry => ({
+        ...entry,
+        amount: Number(entry.amount),
+        exchangeRate: Number(entry.exchangeRate),
+      })),
+    })),
     budgetOverview,
-  })
+  }
+
+  return options.serialize ? serializeData(data) : data
 }
