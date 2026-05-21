@@ -566,5 +566,10 @@ describe('POST /api/transactions', () => {
     })
     const res = await POST(req)
     expect(res.status).toBe(201)
+    const createCalls = vi.mocked(prisma.transaction.create).mock.calls
+    const createdEntries = createCalls[0][0]?.data?.entries?.create
+    expect(Array.isArray(createdEntries)).toBe(true)
+    if (!Array.isArray(createdEntries)) throw new Error('entries.create should be an array')
+    expect(createdEntries[0]?.exchangeRate).toBe('0.0000001')
   })
 })

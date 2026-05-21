@@ -321,5 +321,6 @@ describe('BudgetPage', () => {
       String(url).startsWith('/api/transactions'),
     )
     expect(txCalls.length).toBeGreaterThanOrEqual(2)
+    expect(screen.getByText('₩100,500')).toBeInTheDocument()
   })
 })

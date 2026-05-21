@@ -33,6 +33,16 @@ function parseExchangeRateInternal(exchangeRate: unknown) {
     return { ok: false as const, response: apiError('유효한 환율을 입력해주세요.') }
   }
 
+  if (typeof exchangeRate === 'number') {
+    return {
+      ok: true as const,
+      exchangeRate: parsed.value.toLocaleString('en-US', {
+        useGrouping: false,
+        maximumSignificantDigits: 21,
+      }),
+    }
+  }
+
   return { ok: true as const, exchangeRate: String(exchangeRate).trim() }
 }
 
