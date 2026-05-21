@@ -4,18 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { serializeData } from '@/lib/serialize'
 import { accountBalance } from '@/lib/accounting'
-
-export function getUtcMonthRange(now: Date) {
-  const year = now.getUTCFullYear()
-  const month = now.getUTCMonth() + 1
-
-  return {
-    year,
-    month,
-    startOfMonth: new Date(Date.UTC(year, month - 1, 1)),
-    nextMonthStart: new Date(Date.UTC(year, month, 1)),
-  }
-}
+import { getUtcMonthRange } from '@/lib/date-range'
 
 export async function GET() {
   const session = await getServerSession(authOptions)

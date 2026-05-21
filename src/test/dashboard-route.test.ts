@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getUtcMonthRange } from '@/app/api/dashboard/route'
+import { getUtcMonthRange } from '@/lib/date-range'
 
 describe('getUtcMonthRange', () => {
   it('UTC 반개구간 경계를 반환한다', () => {
