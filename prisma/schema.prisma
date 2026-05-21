@@ -82,6 +82,8 @@ model Entry {
   @@index([transactionId, creditAccountId], map: "Entry_transactionId_creditAccountId_idx")
   @@index([debitAccountId])
   @@index([creditAccountId])
+  @@index([debitAccountId, transactionId])
+  @@index([creditAccountId, transactionId])
 }
 
 model Budget {
