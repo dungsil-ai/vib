@@ -35,6 +35,11 @@ export async function GET(request: NextRequest) {
   }
 
   const userId = session.user.id
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { currency: true },
+  })
+  const baseCurrency = user?.currency ?? 'KRW'
   const { searchParams } = new URL(request.url)
   const yearParam = searchParams.get('year')
 
@@ -76,7 +81,10 @@ export async function GET(request: NextRequest) {
     : await prisma.$queryRaw<MonthlySummaryRow[]>`
         WITH monthly_entries AS (
           SELECT EXTRACT(MONTH FROM t.date)::int AS month,
-                 e.amount * e."exchangeRate" AS base_amount,
+                 CASE
+                   WHEN e.currency IS NULL OR e.currency = ${baseCurrency} THEN e.amount
+                   ELSE e.amount * e."exchangeRate"
+                 END AS base_amount,
                  e."debitAccountId",
                  e."creditAccountId"
           FROM "Entry" e

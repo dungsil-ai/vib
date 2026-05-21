@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { getBaseCurrencyEntrySumMap } from '@/lib/report-sums'
+import { parseUTCDateOnly, parseUTCEndOfDay } from '@/lib/date-range'
 import { serializeData } from '@/lib/serialize'
+import { accountBalance, isDebitNormalAccount } from '@/lib/accounting'
 
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -33,18 +36,17 @@ export async function GET(request: NextRequest) {
   let endDate: Date | undefined
 
   if (startDateParam) {
-    const d = new Date(startDateParam)
-    if (isNaN(d.getTime())) {
+    const d = parseUTCDateOnly(startDateParam)
+    if (!d) {
       return NextResponse.json({ error: '유효한 startDate를 입력해주세요.' }, { status: 400 })
     }
     startDate = d
   }
   if (endDateParam) {
-    const d = new Date(endDateParam)
-    if (isNaN(d.getTime())) {
+    const d = parseUTCEndOfDay(endDateParam)
+    if (!d) {
       return NextResponse.json({ error: '유효한 endDate를 입력해주세요.' }, { status: 400 })
     }
-    d.setHours(23, 59, 59, 999)
     endDate = d
   }
 
@@ -55,34 +57,28 @@ export async function GET(request: NextRequest) {
     )
   }
 
-  // Compute opening balance (entries before startDate)
+  // 시작일 이전 분개의 기초 잔액을 계산합니다.
   let openingBalance = 0
   if (startDate) {
-    const [priorDebitSumResult, priorCreditSumResult] = await Promise.all([
-      prisma.entry.aggregate({
-        where: {
-          debitAccountId: accountId,
-          transaction: { userId, date: { lt: startDate } },
-        },
-        _sum: { amount: true },
+    const [priorDebitSumMap, priorCreditSumMap] = await Promise.all([
+      getBaseCurrencyEntrySumMap({
+        accountIds: [accountId],
+        userId,
+        side: 'debit',
+        dateFilter: { lt: startDate },
       }),
-      prisma.entry.aggregate({
-        where: {
-          creditAccountId: accountId,
-          transaction: { userId, date: { lt: startDate } },
-        },
-        _sum: { amount: true },
+      getBaseCurrencyEntrySumMap({
+        accountIds: [accountId],
+        userId,
+        side: 'credit',
+        dateFilter: { lt: startDate },
       }),
     ])
 
-    const priorDebitSum = Number(priorDebitSumResult._sum.amount ?? 0)
-    const priorCreditSum = Number(priorCreditSumResult._sum.amount ?? 0)
+    const priorDebitSum = priorDebitSumMap.get(accountId) ?? 0
+    const priorCreditSum = priorCreditSumMap.get(accountId) ?? 0
 
-    if (account.type === 'ASSET' || account.type === 'EXPENSE') {
-      openingBalance = priorDebitSum - priorCreditSum
-    } else {
-      openingBalance = priorCreditSum - priorDebitSum
-    }
+    openingBalance = accountBalance(account.type, priorDebitSum, priorCreditSum)
   }
 
   const txFilter: { userId: string; date?: { gte?: Date; lte?: Date } } = { userId }
@@ -112,16 +108,16 @@ export async function GET(request: NextRequest) {
   let balance = openingBalance
   const entriesWithBalance = entries.map(e => {
     const isDebit = e.debitAccountId === accountId
-    const amount = Number(e.amount)
+    const amount = Number(e.amount) * Number(e.exchangeRate ?? 1)
     let debit = 0
     let credit = 0
 
-    if (account.type === 'ASSET' || account.type === 'EXPENSE') {
-      if (isDebit) { debit = amount; balance += amount }
-      else { credit = amount; balance -= amount }
+    if (isDebit) {
+      debit = amount
+      balance += isDebitNormalAccount(account.type) ? amount : -amount
     } else {
-      if (isDebit) { debit = amount; balance -= amount }
-      else { credit = amount; balance += amount }
+      credit = amount
+      balance += isDebitNormalAccount(account.type) ? -amount : amount
     }
 
     return {

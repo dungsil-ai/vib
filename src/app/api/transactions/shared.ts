@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { CURRENCY_CODES } from '@/lib/currencies'
+import { AccountOwnershipError, assertAccountsOwned } from '@/lib/accounting'
 
 export type TransactionEntryInput = {
   debitAccountId: string
@@ -157,25 +158,29 @@ export async function validateTransactionPayload(userId: string, body: unknown) 
     ]),
   )
 
-  const [ownedAccounts, userRecord] = await Promise.all([
-    prisma.account.findMany({
-      where: { id: { in: accountIds }, userId },
-      select: { id: true },
-    }),
+  const [ownershipResult, userRecord] = await Promise.allSettled([
+    assertAccountsOwned(userId, accountIds),
     prisma.user.findUnique({
       where: { id: userId },
       select: { currency: true },
     }),
   ])
 
-  if (ownedAccounts.length !== accountIds.length) {
-    return {
-      ok: false as const,
-      response: errorResponse('잘못된 계정이 포함되어 있습니다.', 403),
+  if (ownershipResult.status === 'rejected') {
+    if (ownershipResult.reason instanceof AccountOwnershipError) {
+      return {
+        ok: false as const,
+        response: errorResponse(ownershipResult.reason.message, 403),
+      }
     }
+    throw ownershipResult.reason
   }
 
-  const baseCurrency = userRecord?.currency ?? 'KRW'
+  if (userRecord.status === 'rejected') {
+    throw userRecord.reason
+  }
+
+  const baseCurrency = userRecord.value?.currency ?? 'KRW'
 
   for (const entry of normalizedEntries) {
     const entryCurrency = entry.currency ?? baseCurrency
@@ -184,6 +189,10 @@ export async function validateTransactionPayload(userId: string, body: unknown) 
         ok: false as const,
         response: errorResponse(`외화(${entryCurrency}) 분개에는 환율(exchangeRate)이 필요합니다.`),
       }
+    }
+
+    if (entryCurrency === baseCurrency) {
+      entry.exchangeRate = '1'
     }
   }
 

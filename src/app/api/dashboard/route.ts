@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { serializeData } from '@/lib/serialize'
+import { accountBalance } from '@/lib/accounting'
 
 export async function GET() {
   const session = await getServerSession(authOptions)
@@ -34,7 +35,7 @@ export async function GET() {
     const [debitSums, creditSums] = await Promise.all([
       accountIds.length > 0
         ? prisma.$queryRaw<Array<{ debitAccountId: string; total: string }>>`
-            SELECT "debitAccountId", SUM(amount * "exchangeRate")::text AS total
+            SELECT "debitAccountId", SUM(CASE WHEN currency IS NULL OR currency = ${baseCurrency} THEN amount ELSE amount * "exchangeRate" END)::text AS total
             FROM "Entry"
             WHERE "debitAccountId" = ANY(${accountIds}::text[])
             GROUP BY "debitAccountId"
@@ -42,7 +43,7 @@ export async function GET() {
         : Promise.resolve([]),
       accountIds.length > 0
         ? prisma.$queryRaw<Array<{ creditAccountId: string; total: string }>>`
-            SELECT "creditAccountId", SUM(amount * "exchangeRate")::text AS total
+            SELECT "creditAccountId", SUM(CASE WHEN currency IS NULL OR currency = ${baseCurrency} THEN amount ELSE amount * "exchangeRate" END)::text AS total
             FROM "Entry"
             WHERE "creditAccountId" = ANY(${accountIds}::text[])
             GROUP BY "creditAccountId"
@@ -64,12 +65,7 @@ export async function GET() {
     for (const account of accounts) {
       const totalDebits = debitByAccount.get(account.id) ?? 0
       const totalCredits = creditByAccount.get(account.id) ?? 0
-      let balance = 0
-      if (account.type === 'ASSET' || account.type === 'EXPENSE') {
-        balance = totalDebits - totalCredits
-      } else {
-        balance = totalCredits - totalDebits
-      }
+      const balance = accountBalance(account.type, totalDebits, totalCredits)
 
       if (account.type === 'ASSET') totalAssets += balance
       if (account.type === 'LIABILITY') totalLiabilities += balance
@@ -115,7 +111,7 @@ export async function GET() {
       expenseAccountIds.length === 0
         ? Promise.resolve([] as Array<{ debitAccountId: string; total: string }>)
         : prisma.$queryRaw<Array<{ debitAccountId: string; total: string }>>`
-            SELECT e."debitAccountId", SUM(e.amount * e."exchangeRate")::text AS total
+            SELECT e."debitAccountId", SUM(CASE WHEN e.currency IS NULL OR e.currency = ${baseCurrency} THEN e.amount ELSE e.amount * e."exchangeRate" END)::text AS total
             FROM "Entry" e
             JOIN "Transaction" t ON e."transactionId" = t.id
             WHERE t."userId" = ${userId}
