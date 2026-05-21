@@ -68,9 +68,19 @@ const isSavedEntryFormPristine = ({
   baseCurrency: string
 }) => description === '' && entryCount === 1 && isEntryEmpty(firstEntry, baseCurrency)
 
-const calculateBaseAmount = (entry: { amount: string; exchangeRate?: string }) => (
-  (Number(entry.amount) || 0) * (Number(entry.exchangeRate) || 1)
-)
+const calculateBaseAmount = (
+  entry: { amount: string; currency?: string; exchangeRate?: string },
+  baseCurrency: string,
+) => {
+  const amount = Number(entry.amount) || 0
+  const currency = entry.currency || baseCurrency
+
+  if (currency === baseCurrency) {
+    return amount
+  }
+
+  return amount * (Number(entry.exchangeRate) || 1)
+}
 
 const formatEntryAmount = (entry: { amount: string; currency?: string; exchangeRate?: string }, baseCurrency: string) => {
   const currency = entry.currency || baseCurrency
@@ -80,7 +90,7 @@ const formatEntryAmount = (entry: { amount: string; currency?: string; exchangeR
     return formatCurrency(amount, baseCurrency)
   }
 
-  return `${formatCurrency(amount, currency)} (${formatCurrency(calculateBaseAmount(entry), baseCurrency)})`
+  return `${formatCurrency(amount, currency)} (${formatCurrency(calculateBaseAmount(entry, baseCurrency), baseCurrency)})`
 }
 
 const isTransactionFormPristine = ({
@@ -1257,7 +1267,7 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
     })
   }
 
-  const formTotal = entries.reduce((sum, e) => sum + calculateBaseAmount(e), 0)
+  const formTotal = entries.reduce((sum, e) => sum + calculateBaseAmount(e, baseCurrency), 0)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -1672,7 +1682,7 @@ function RecurringTransactionsTab({ accounts, accountsLoading, accountsError, ba
                 </thead>
                 <tbody className="divide-y dark:divide-gray-700">
                   {recurringList.map(r => {
-                    const total = r.entries.reduce((sum, e) => sum + calculateBaseAmount(e), 0)
+                    const total = r.entries.reduce((sum, e) => sum + calculateBaseAmount(e, baseCurrency), 0)
                     const isExpanded = expandedId === r.id
                     return (
                       <React.Fragment key={r.id}>
@@ -1872,7 +1882,7 @@ function TemplatesTab({ accounts, accountsLoading, accountsError, baseCurrency }
     })
   }
 
-  const formTotal = entries.reduce((sum, e) => sum + calculateBaseAmount(e), 0)
+  const formTotal = entries.reduce((sum, e) => sum + calculateBaseAmount(e, baseCurrency), 0)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -2166,7 +2176,7 @@ function TemplatesTab({ accounts, accountsLoading, accountsError, baseCurrency }
                 </thead>
                 <tbody className="divide-y dark:divide-gray-700">
                   {templateList.map(t => {
-                    const total = t.entries.reduce((sum, e) => sum + calculateBaseAmount(e), 0)
+                    const total = t.entries.reduce((sum, e) => sum + calculateBaseAmount(e, baseCurrency), 0)
                     const isExpanded = expandedId === t.id
                     return (
                       <React.Fragment key={t.id}>

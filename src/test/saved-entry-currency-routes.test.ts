@@ -87,6 +87,32 @@ describe('저장된 분개 통화/환율 처리', () => {
   })
 
   it.each([
+    ['템플릿', createTemplate, '/api/templates', { description: '기준 통화 템플릿' }, () => prisma.transactionTemplate.create],
+    ['반복 거래', createRecurring, '/api/recurring-transactions', {
+      description: '기준 통화 반복 거래',
+      frequency: 'MONTHLY',
+      dayOfMonth: 25,
+      startDate: '2024-01-01',
+    }, () => prisma.recurringTransaction.create],
+  ])('%s 생성 시 기준 통화 분개의 환율은 항상 1로 저장한다', async (_label, handler, path, baseBody, getCreateMock) => {
+    vi.mocked(getCreateMock()).mockResolvedValue({ id: 'saved-entry-1', entries: [] } as never)
+
+    const res = await handler(postRequest(path, {
+      ...baseBody,
+      entries: [{ debitAccountId: 'acc-1', creditAccountId: 'acc-2', amount: '10', currency: 'KRW', exchangeRate: '1300.50' }],
+    }))
+
+    expect(res.status).toBe(201)
+    expect(getCreateMock()).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        entries: {
+          create: [expect.objectContaining({ currency: 'KRW', exchangeRate: '1' })],
+        },
+      }),
+    }))
+  })
+
+  it.each([
     ['템플릿', createTemplate, '/api/templates', { description: '외화 템플릿' }],
     ['반복 거래', createRecurring, '/api/recurring-transactions', {
       description: '외화 반복 거래',

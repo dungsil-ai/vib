@@ -138,11 +138,17 @@ export async function POST(request: NextRequest) {
   }
 
   const baseCurrency = userRecord?.currency ?? 'KRW'
+  const persistedEntries: RecurringEntryInput[] = []
   for (const entry of normalizedEntries) {
     const entryCurrency = entry.currency ?? baseCurrency
     if (entryCurrency !== baseCurrency && (entry.exchangeRate === undefined || entry.exchangeRate === null)) {
       return NextResponse.json({ error: `외화(${entryCurrency}) 분개에는 환율(exchangeRate)이 필요합니다.` }, { status: 400 })
     }
+    persistedEntries.push({
+      ...entry,
+      currency: entryCurrency,
+      exchangeRate: entryCurrency === baseCurrency ? '1' : (entry.exchangeRate ?? '1'),
+    })
   }
 
   // Compute initial nextRunAt: first occurrence on or after startDate with the given day settings
@@ -180,12 +186,12 @@ export async function POST(request: NextRequest) {
         endDate: endDate ? new Date(endDate) : null,
         nextRunAt,
         entries: {
-          create: normalizedEntries.map(entry => ({
+          create: persistedEntries.map(entry => ({
             debitAccountId: entry.debitAccountId,
             creditAccountId: entry.creditAccountId,
             amount: String(entry.amount),
-            currency: entry.currency ?? baseCurrency,
-            exchangeRate: entry.exchangeRate ?? '1',
+            currency: entry.currency,
+            exchangeRate: entry.exchangeRate,
             description: entry.description,
           })),
         },

@@ -160,6 +160,23 @@ describe('TemplatesTab (템플릿 탭)', () => {
     })
   })
 
+  it('템플릿 목록은 기준 통화 분개의 잘못된 환율을 무시하고 표시한다', async () => {
+    setupFetchMock({
+      templates: {
+        ok: true,
+        json: () => Promise.resolve([{ ...mockTemplates[0], entries: [{ ...mockTemplates[0].entries[0], amount: '10', currency: 'KRW', exchangeRate: '1300.50' }] }]),
+      } as Response,
+    })
+    const user = userEvent.setup()
+    render(<TransactionsPage />)
+
+    await user.click(screen.getByRole('button', { name: '템플릿' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('₩10')).toBeInTheDocument()
+    })
+  })
+
   it('다중 항목 템플릿에 항목 수 배지를 표시한다', async () => {
     setupFetchMock()
     const user = userEvent.setup()
